@@ -1,7 +1,6 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
 @layer base {
   :root {
     /* Core Colors */
@@ -39,7 +38,6 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
-  
   .dark {
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
@@ -74,116 +72,44 @@
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
-  
   * {
     @apply border-border;
   }
-  
   html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  
   body {
     @apply bg-background text-foreground;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     text-rendering: optimizeLegibility;
   }
 }
-
 @layer components {
-  /* Button System */
-  .btn {
-    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50;
+  /* Kid Playful Button System */
+  .btn-kid {
+    @apply inline-flex items-center justify-center px-6 py-3 text-base font-bold transition-all duration-150 rounded-2xl border-b-4 active:border-b-0 active:translate-y-1 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50;
   }
-  
-  .btn-gradient {
-    @apply btn text-white shadow-primary hover:shadow-glow hover:scale-105 active:scale-95;
-    background: linear-gradient(135deg, #F38020 0%, #E55A1B 100%);
+  .btn-kid-primary {
+    @apply btn-kid bg-energy text-energy-dark border-energy-dark hover:bg-energy-light hover:scale-[1.02];
   }
-  
-  /* Gradient System */
-  .bg-gradient-primary {
-    background: linear-gradient(135deg, #F38020 0%, #E55A1B 50%, #D14615 100%);
+  .btn-kid-secondary {
+    @apply btn-kid bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:scale-[1.02];
   }
-  
-  .bg-gradient-rainbow {
-    background: linear-gradient(135deg, #F38020 0%, #E55A1B 25%, #D14615 50%, #ff6b35 100%);
+  .btn-kid-action {
+    @apply btn-kid bg-kick-blue text-white border-blue-700 hover:bg-blue-500 hover:scale-[1.02];
   }
-  
+  /* Card System */
+  .card-kid {
+    @apply bg-white rounded-3xl border-4 border-slate-100 shadow-sm p-6;
+  }
   /* Text System */
-  .text-gradient {
-    background: linear-gradient(90deg, #F38020 0%, #E55A1B 50%, #D14615 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  
-  .text-pretty {
-    text-wrap: pretty;
-  }
-  
-  /* Glass Morphism */
-  .glass {
-    @apply bg-white/10 backdrop-blur-md border border-white/20 shadow-glass;
-  }
-  
-  .glass-dark {
-    @apply bg-black/10 backdrop-blur-md border border-white/10 shadow-glass;
-  }
-  
-  /* Interactive Effects */
-  .floating {
-    animation: float 2s ease-in-out infinite;
-  }
-  
-  .rotating {
-    animation: rotate 2s ease-in-out infinite;
-  }
-  
-  @keyframes float {
-    0%, 100% { 
-      transform: translateY(-4px);
-    }
-    50% { 
-      transform: translateY(4px);
-    }
-  }
-  
-  @keyframes rotate {
-    0% { 
-      transform: rotate(0deg);
-    }
-    100% { 
-      transform: rotate(360deg);
-    }
-  }
-  
-  .shimmer-bg {
-    @apply relative overflow-hidden;
-  }
-  
-  .shimmer-bg::before {
-    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent;
-    content: '';
-  }
-  
-  /* Layout Utilities */
-  .center {
-    @apply flex items-center justify-center;
-  }
-  
-  .center-col {
-    @apply flex flex-col items-center justify-center;
-  }
-  
-  /* Responsive Typography */
   .text-display {
-    @apply text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-display font-bold leading-tight;
+    @apply font-display font-bold tracking-tight;
   }
-  
-  .text-body {
-    @apply text-base sm:text-lg text-muted-foreground leading-relaxed;
+  /* Game Canvas Container */
+  .game-container {
+    @apply relative w-full aspect-video bg-grass-dark rounded-xl overflow-hidden border-4 border-white/20 shadow-inner;
   }
 }

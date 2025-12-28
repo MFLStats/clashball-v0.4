@@ -1,148 +1,105 @@
-// Home page of the app, Currently a demo page for demonstration.
-// Please rewrite this file to implement your own logic. Do not replace or delete it, simply rewrite this HomePage.tsx file.
-import { useEffect } from 'react'
-import { Sparkles } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { Toaster, toast } from '@/components/ui/sonner'
-import { create } from 'zustand'
-import { useShallow } from 'zustand/react/shallow'
-import { AppLayout } from '@/components/layout/AppLayout'
-
-// Timer store: independent slice with a clear, minimal API, for demonstration
-type TimerState = {
-  isRunning: boolean;
-  elapsedMs: number;
-  start: () => void;
-  pause: () => void;
-  reset: () => void;
-  tick: (deltaMs: number) => void;
-}
-
-const useTimerStore = create<TimerState>((set) => ({
-  isRunning: false,
-  elapsedMs: 0,
-  start: () => set({ isRunning: true }),
-  pause: () => set({ isRunning: false }),
-  reset: () => set({ elapsedMs: 0, isRunning: false }),
-  tick: (deltaMs) => set((s) => ({ elapsedMs: s.elapsedMs + deltaMs })),
-}))
-
-// Counter store: separate slice to showcase multiple stores without coupling
-type CounterState = {
-  count: number;
-  inc: () => void;
-  reset: () => void;
-}
-
-const useCounterStore = create<CounterState>((set) => ({
-  count: 0,
-  inc: () => set((s) => ({ count: s.count + 1 })),
-  reset: () => set({ count: 0 }),
-}))
-
-function formatDuration(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000))
-  const m = Math.floor(total / 60)
-  const s = total % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
+import React, { useState } from 'react';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { GameCanvas } from '@/components/game/GameCanvas';
+import { Dashboard } from '@/components/ranked/Dashboard';
+import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { Play, Trophy, Users, ArrowLeft } from 'lucide-react';
+import { cn } from '@/lib/utils';
+type ViewState = 'lobby' | 'game' | 'ranked';
 export function HomePage() {
-  // Select only what is needed to avoid unnecessary re-renders
-  const { isRunning, elapsedMs } = useTimerStore(
-    useShallow((s) => ({ isRunning: s.isRunning, elapsedMs: s.elapsedMs })),
-  )
-  const start = useTimerStore((s) => s.start)
-  const pause = useTimerStore((s) => s.pause)
-  const resetTimer = useTimerStore((s) => s.reset)
-  const count = useCounterStore((s) => s.count)
-  const inc = useCounterStore((s) => s.inc)
-  const resetCount = useCounterStore((s) => s.reset)
-
-  // Drive the timer only while running; avoid update-depth issues with a scoped RAF
-  useEffect(() => {
-    if (!isRunning) return
-    let raf = 0
-    let last = performance.now()
-    const loop = () => {
-      const now = performance.now()
-      const delta = now - last
-      last = now
-      // Read store API directly to keep effect deps minimal and stable
-      useTimerStore.getState().tick(delta)
-      raf = requestAnimationFrame(loop)
+  const [view, setView] = useState<ViewState>('lobby');
+  const renderContent = () => {
+    switch (view) {
+      case 'game':
+        return (
+          <div className="animate-fade-in space-y-6">
+            <div className="flex items-center justify-between">
+              <Button 
+                variant="ghost" 
+                onClick={() => setView('lobby')}
+                className="hover:bg-slate-100 rounded-xl"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Lobby
+              </Button>
+              <h2 className="text-xl font-display font-bold text-slate-800">Practice Match</h2>
+              <div className="w-24" /> {/* Spacer */}
+            </div>
+            <GameCanvas />
+          </div>
+        );
+      case 'ranked':
+        return (
+          <div className="animate-fade-in space-y-6">
+            <div className="flex items-center justify-between">
+              <Button 
+                variant="ghost" 
+                onClick={() => setView('lobby')}
+                className="hover:bg-slate-100 rounded-xl"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Lobby
+              </Button>
+              <h2 className="text-xl font-display font-bold text-slate-800">Ranked Progression</h2>
+              <div className="w-24" /> {/* Spacer */}
+            </div>
+            <Dashboard />
+          </div>
+        );
+      case 'lobby':
+      default:
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-12 animate-slide-up">
+            {/* Logo Area */}
+            <div className="text-center space-y-4">
+              <div className="inline-block p-6 rounded-[2rem] bg-gradient-to-br from-energy to-energy-dark shadow-kid rotate-3 hover:rotate-6 transition-transform duration-300">
+                <Trophy className="w-16 h-16 text-white drop-shadow-md" />
+              </div>
+              <h1 className="text-5xl md:text-7xl font-display font-bold text-slate-800 tracking-tight">
+                KickStar <span className="text-kick-blue">League</span>
+              </h1>
+              <p className="text-xl text-slate-500 font-medium max-w-md mx-auto">
+                Physics-based competitive soccer. Climb the ranks and become a Master!
+              </p>
+            </div>
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-6 w-full max-w-md">
+              <button 
+                onClick={() => setView('game')}
+                className="btn-kid-primary flex-1 flex items-center justify-center gap-3 text-lg group"
+              >
+                <Play className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
+                Play Now
+              </button>
+              <button 
+                onClick={() => setView('ranked')}
+                className="btn-kid-secondary flex-1 flex items-center justify-center gap-3 text-lg"
+              >
+                <Users className="w-6 h-6" />
+                Ranked
+              </button>
+            </div>
+            {/* Footer Info */}
+            <div className="flex gap-8 text-sm font-bold text-slate-400">
+              <span className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-400" />
+                1,240 Online
+              </span>
+              <span>v0.1.0 Alpha</span>
+            </div>
+          </div>
+        );
     }
-    raf = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(raf)
-  }, [isRunning])
-
-  const onPleaseWait = () => {
-    inc()
-    if (!isRunning) {
-      start()
-      toast.success('Building your app…', {
-        description: 'Hang tight, we\'re setting everything up.',
-      })
-    } else {
-      pause()
-      toast.info('Taking a short pause', {
-        description: 'We\'ll continue shortly.',
-      })
-    }
-  }
-
-  const formatted = formatDuration(elapsedMs)
-
+  };
   return (
-    <AppLayout>
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-4 overflow-hidden relative">
-        <ThemeToggle />
-        <div className="absolute inset-0 bg-gradient-rainbow opacity-10 dark:opacity-20 pointer-events-none" />
-        <div className="text-center space-y-8 relative z-10 animate-fade-in">
-          <div className="flex justify-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-primary floating">
-              <Sparkles className="w-8 h-8 text-white rotating" />
-            </div>
-          </div>
-          <h1 className="text-5xl md:text-7xl font-display font-bold text-balance leading-tight">
-            Creating your <span className="text-gradient">app</span>
-          </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-xl mx-auto text-pretty">
-            Your application would be ready soon.
-          </p>
-          <div className="flex justify-center gap-4">
-            <Button 
-              size="lg"
-              onClick={onPleaseWait}
-              className="btn-gradient px-8 py-4 text-lg font-semibold hover:-translate-y-0.5 transition-all duration-200"
-              aria-live="polite"
-            >
-              Please Wait
-            </Button>
-          </div>
-          <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
-            <div>
-              Time elapsed: <span className="font-medium tabular-nums text-foreground">{formatted}</span>
-            </div>
-            <div>
-              Coins: <span className="font-medium tabular-nums text-foreground">{count}</span>
-            </div>
-          </div>
-          <div className="flex justify-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => { resetTimer(); resetCount(); toast('Reset complete') }}>
-              Reset
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => { inc(); toast('Coin added') }}>
-              Add Coin
-            </Button>
-          </div>
+    <AppLayout container contentClassName="py-8">
+      <div className="min-h-screen bg-slate-50/50 -m-8 p-8">
+        <div className="absolute top-4 right-4 z-50">
+          <ThemeToggle />
         </div>
-        <footer className="absolute bottom-8 text-center text-muted-foreground/80">
-          <p>Powered by Cloudflare</p>
-        </footer>
-        <Toaster richColors closeButton />
+        <div className="max-w-5xl mx-auto">
+          {renderContent()}
+        </div>
       </div>
     </AppLayout>
-  )
+  );
 }

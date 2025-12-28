@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { PhysicsEngine, GameState, PHYSICS_CONFIG } from '@/lib/physics';
+import { PhysicsEngine, GameState } from '@/lib/physics';
 import confetti from 'canvas-confetti';
 import { Button } from '@/components/ui/button';
-import { Play, RotateCcw } from 'lucide-react';
+import { Play, RotateCcw, Trophy } from 'lucide-react';
 interface GameCanvasProps {
   onGameEnd?: (winner: 'red' | 'blue') => void;
+  winningScore?: number;
 }
-export function GameCanvas({ onGameEnd }: GameCanvasProps) {
+export function GameCanvas({ onGameEnd, winningScore = 3 }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
@@ -14,9 +15,11 @@ export function GameCanvas({ onGameEnd }: GameCanvasProps) {
   const keysRef = useRef<Record<string, boolean>>({});
   const [score, setScore] = useState({ red: 0, blue: 0 });
   const [isPaused, setIsPaused] = useState(false);
+  const [gameOver, setGameOver] = useState<'red' | 'blue' | null>(null);
   // Input Handling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (gameOver) return;
       keysRef.current[e.code] = true;
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -28,15 +31,15 @@ export function GameCanvas({ onGameEnd }: GameCanvasProps) {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [gameOver]);
   // Game Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
     const loop = () => {
-      if (isPaused) {
-        requestRef.current = requestAnimationFrame(loop);
+      if (isPaused || gameOver) {
+        if (!gameOver) requestRef.current = requestAnimationFrame(loop);
         return;
       }
       // 1. Process Input for Local Player (P1)
@@ -46,18 +49,15 @@ export function GameCanvas({ onGameEnd }: GameCanvasProps) {
       if (keysRef.current['ArrowLeft'] || keysRef.current['KeyA']) p1Input.move.x -= 1;
       if (keysRef.current['ArrowRight'] || keysRef.current['KeyD']) p1Input.move.x += 1;
       if (keysRef.current['Space'] || keysRef.current['KeyX']) p1Input.kick = true;
-      // Update P1 Input in State
       gameStateRef.current.players[0].input = p1Input;
       // Simple Bot Logic for P2
       const ball = gameStateRef.current.ball;
       const p2 = gameStateRef.current.players[1];
       const dx = ball.pos.x - p2.pos.x;
       const dy = ball.pos.y - p2.pos.y;
-      // Simple follow ball
       const botMove = { x: 0, y: 0 };
       if (Math.abs(dx) > 10) botMove.x = Math.sign(dx);
       if (Math.abs(dy) > 10) botMove.y = Math.sign(dy);
-      // Bot kick if close
       const dist = Math.sqrt(dx*dx + dy*dy);
       const botKick = dist < 30 && Math.random() < 0.05;
       gameStateRef.current.players[1].input = { move: botMove, kick: botKick };
@@ -65,15 +65,23 @@ export function GameCanvas({ onGameEnd }: GameCanvasProps) {
       const prevState = gameStateRef.current;
       const newState = PhysicsEngine.update(prevState);
       gameStateRef.current = newState;
-      // Check for score change to trigger React state update & effects
+      // Check for score change
       if (newState.score.red !== score.red || newState.score.blue !== score.blue) {
         setScore(newState.score);
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: newState.score.red > score.red ? ['#ef233c'] : ['#3a86ff']
-        });
+        // Check Win Condition
+        if (newState.score.red >= winningScore) {
+          handleGameOver('red');
+        } else if (newState.score.blue >= winningScore) {
+          handleGameOver('blue');
+        } else {
+          // Goal Celebration
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: newState.score.red > score.red ? ['#ef233c'] : ['#3a86ff']
+          });
+        }
       }
       // 3. Render
       render(ctx, newState);
@@ -81,7 +89,17 @@ export function GameCanvas({ onGameEnd }: GameCanvasProps) {
     };
     requestRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(requestRef.current);
-  }, [score, isPaused]); // Re-bind if score changes to keep local state sync, though ref handles logic
+  }, [score, isPaused, gameOver, winningScore]);
+  const handleGameOver = (winner: 'red' | 'blue') => {
+    setGameOver(winner);
+    confetti({
+      particleCount: 200,
+      spread: 100,
+      origin: { y: 0.6 },
+      colors: winner === 'red' ? ['#ef233c'] : ['#3a86ff']
+    });
+    if (onGameEnd) onGameEnd(winner);
+  };
   const render = (ctx: CanvasRenderingContext2D, state: GameState) => {
     const { width, height } = ctx.canvas;
     const scaleX = width / state.field.width;
@@ -95,20 +113,16 @@ export function GameCanvas({ onGameEnd }: GameCanvasProps) {
     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
     ctx.lineWidth = 4;
     ctx.beginPath();
-    // Center Line
     ctx.moveTo(width/2, 0);
     ctx.lineTo(width/2, height);
-    // Center Circle
     ctx.moveTo(width/2 + 50 * scaleX, height/2);
     ctx.arc(width/2, height/2, 50 * scaleX, 0, Math.PI * 2);
     ctx.stroke();
     // Draw Goals
     const goalH = state.field.goalHeight * scaleY;
     const goalTop = (height - goalH) / 2;
-    // Left Goal Area
     ctx.fillStyle = 'rgba(58, 134, 255, 0.2)';
     ctx.fillRect(0, goalTop, 40 * scaleX, goalH);
-    // Right Goal Area
     ctx.fillStyle = 'rgba(239, 35, 60, 0.2)';
     ctx.fillRect(width - 40 * scaleX, goalTop, 40 * scaleX, goalH);
     // Draw Players
@@ -155,6 +169,7 @@ export function GameCanvas({ onGameEnd }: GameCanvasProps) {
   const handleReset = () => {
     gameStateRef.current = PhysicsEngine.createInitialState();
     setScore({ red: 0, blue: 0 });
+    setGameOver(null);
     setIsPaused(false);
   };
   return (
@@ -165,7 +180,9 @@ export function GameCanvas({ onGameEnd }: GameCanvasProps) {
           <div className="w-4 h-4 rounded-full bg-red-500" />
           <span className="text-3xl font-display font-bold text-slate-800">{score.red}</span>
         </div>
-        <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">Time: 00:00</div>
+        <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">
+            {gameOver ? 'MATCH ENDED' : `First to ${winningScore}`}
+        </div>
         <div className="flex items-center gap-4">
           <span className="text-3xl font-display font-bold text-slate-800">{score.blue}</span>
           <div className="w-4 h-4 rounded-full bg-blue-500" />
@@ -179,15 +196,30 @@ export function GameCanvas({ onGameEnd }: GameCanvasProps) {
           height={400}
           className="w-full h-full object-contain"
         />
+        {/* Game Over Overlay */}
+        {gameOver && (
+            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center animate-fade-in backdrop-blur-sm z-10">
+                <Trophy className={`w-16 h-16 mb-4 ${gameOver === 'red' ? 'text-red-500' : 'text-blue-500'}`} />
+                <h2 className="text-4xl font-display font-bold text-white mb-2">
+                    {gameOver === 'red' ? 'VICTORY!' : 'DEFEAT'}
+                </h2>
+                <p className="text-white/80 mb-6">Match results are being processed...</p>
+                <Button onClick={handleReset} variant="secondary" className="btn-kid-secondary">
+                    Play Again
+                </Button>
+            </div>
+        )}
         {/* Controls Overlay (Visible on Hover/Pause) */}
-        <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-           <Button size="icon" variant="secondary" onClick={handleReset}>
-             <RotateCcw className="w-4 h-4" />
-           </Button>
-           <Button size="icon" variant="secondary" onClick={() => setIsPaused(!isPaused)}>
-             <Play className="w-4 h-4" />
-           </Button>
-        </div>
+        {!gameOver && (
+            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button size="icon" variant="secondary" onClick={handleReset}>
+                <RotateCcw className="w-4 h-4" />
+            </Button>
+            <Button size="icon" variant="secondary" onClick={() => setIsPaused(!isPaused)}>
+                <Play className="w-4 h-4" />
+            </Button>
+            </div>
+        )}
       </div>
       <div className="text-sm text-slate-500 font-medium">
         Controls: WASD to Move • SPACE to Kick

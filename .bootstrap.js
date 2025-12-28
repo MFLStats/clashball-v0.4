@@ -77,7 +77,10 @@ function updateWranglerJsonc() {
 }
 
 function runSetupCommands() {
-    const commands = [];
+    const commands = [
+    "bun add canvas-confetti@^1.9.0",
+    "bun add -d @types/canvas-confetti@^1.6.0"
+];
     
     if (commands.length === 0) {
         console.log('⊘ No setup commands to run');

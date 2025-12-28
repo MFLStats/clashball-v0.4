@@ -8,8 +8,15 @@ interface GameCanvasProps {
   winningScore?: number;
   externalState?: GameState | null;
   onInput?: (input: { move: { x: number; y: number }; kick: boolean }) => void;
+  botDifficulty?: 'easy' | 'medium' | 'hard';
 }
-export function GameCanvas({ onGameEnd, winningScore = 3, externalState, onInput }: GameCanvasProps) {
+export function GameCanvas({ 
+  onGameEnd, 
+  winningScore = 3, 
+  externalState, 
+  onInput,
+  botDifficulty = 'medium'
+}: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
@@ -68,16 +75,29 @@ export function GameCanvas({ onGameEnd, winningScore = 3, externalState, onInput
       } else {
         // Local Mode: Update local ref
         gameStateRef.current.players[0].input = p1Input;
-        // Simple Bot Logic for P2 (Local only)
+        // Bot Logic for P2 (Local only)
         const ball = gameStateRef.current.ball;
         const p2 = gameStateRef.current.players[1];
         const dx = ball.pos.x - p2.pos.x;
         const dy = ball.pos.y - p2.pos.y;
-        const botMove = { x: 0, y: 0 };
-        if (Math.abs(dx) > 10) botMove.x = Math.sign(dx);
-        if (Math.abs(dy) > 10) botMove.y = Math.sign(dy);
         const dist = Math.sqrt(dx*dx + dy*dy);
-        const botKick = dist < 30 && Math.random() < 0.05;
+        // Difficulty Settings
+        let reactionDist = 400;
+        let kickChance = 0.05;
+        if (botDifficulty === 'easy') {
+            reactionDist = 200;
+            kickChance = 0.02;
+        } else if (botDifficulty === 'hard') {
+            reactionDist = 1000; // Always tracks
+            kickChance = 0.15;
+        }
+        const botMove = { x: 0, y: 0 };
+        // Only move if ball is within reaction distance
+        if (dist < reactionDist) {
+            if (Math.abs(dx) > 10) botMove.x = Math.sign(dx);
+            if (Math.abs(dy) > 10) botMove.y = Math.sign(dy);
+        }
+        const botKick = dist < 30 && Math.random() < kickChance;
         gameStateRef.current.players[1].input = { move: botMove, kick: botKick };
       }
       // 2. State Update
@@ -116,7 +136,7 @@ export function GameCanvas({ onGameEnd, winningScore = 3, externalState, onInput
     };
     requestRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(requestRef.current);
-  }, [score, isPaused, gameOver, winningScore, externalState, onInput, handleGameOver]);
+  }, [score, isPaused, gameOver, winningScore, externalState, onInput, handleGameOver, botDifficulty]);
   const render = (ctx: CanvasRenderingContext2D, state: GameState) => {
     const { width, height } = ctx.canvas;
     const scaleX = width / state.field.width;

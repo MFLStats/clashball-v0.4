@@ -61,7 +61,7 @@ export class GlobalDurableObject extends DurableObject {
             case 'leave_queue':
                 this.removeFromQueue(ws);
                 break;
-            case 'input':
+            case 'input': {
                 const session = this.sessions.get(ws);
                 if (session && session.matchId) {
                     const match = this.matches.get(session.matchId);
@@ -70,6 +70,7 @@ export class GlobalDurableObject extends DurableObject {
                     }
                 }
                 break;
+            }
             case 'ping':
                 ws.send(JSON.stringify({ type: 'pong' }));
                 break;

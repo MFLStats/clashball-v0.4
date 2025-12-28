@@ -3,14 +3,15 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { GameCanvas } from '@/components/game/GameCanvas';
 import { Dashboard } from '@/components/ranked/Dashboard';
 import { OnlineGameManager } from '@/components/game/OnlineGameManager';
+import { TournamentManager } from '@/components/tournament/TournamentManager';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { Play, Trophy, Users, ArrowLeft, Globe, Monitor } from 'lucide-react';
+import { Play, Trophy, Users, ArrowLeft, Globe, Monitor, Crown } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { GameMode } from '@shared/types';
-type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'ranked';
+type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'ranked' | 'tournament';
 export function HomePage() {
   const [view, setView] = useState<ViewState>('lobby');
   const [selectedMode, setSelectedMode] = useState<GameMode>('1v1');
@@ -110,6 +111,10 @@ export function HomePage() {
         return (
             <OnlineGameManager mode={selectedMode} onExit={() => setView('lobby')} />
         );
+      case 'tournament':
+        return (
+            <TournamentManager onExit={() => setView('lobby')} />
+        );
       case 'ranked':
         return (
           <div className="animate-fade-in space-y-6">
@@ -160,6 +165,13 @@ export function HomePage() {
                 <Globe className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
                 Play Online
               </button>
+              <button
+                onClick={() => setView('tournament')}
+                className="btn-kid-action flex items-center justify-center gap-3 text-lg group w-full"
+              >
+                <Crown className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
+                Tournament Mode
+              </button>
               <div className="flex gap-4">
                 <button
                     onClick={() => setView('local_game')}
@@ -183,7 +195,7 @@ export function HomePage() {
                 <div className="w-2 h-2 rounded-full bg-green-400" />
                 Online
               </span>
-              <span>v0.3.0 Beta</span>
+              <span>v0.4.0 Beta</span>
             </div>
           </div>
         );

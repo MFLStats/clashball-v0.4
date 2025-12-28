@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameCanvas } from './GameCanvas';
 import { GameState } from '@shared/physics';
 import { WSMessage, GameMode } from '@shared/types';
@@ -15,7 +15,42 @@ export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
   const [status, setStatus] = useState<'connecting' | 'searching' | 'playing' | 'error'>('connecting');
   const [gameState, setGameState] = useState<GameState | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  // Use refs to access latest state in callbacks without triggering re-renders or effect re-runs
+  const matchInfoRef = useRef<{ matchId: string; team: 'red' | 'blue' } | null>(null);
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' } | null>(null);
+  // Sync ref with state
+  useEffect(() => {
+    matchInfoRef.current = matchInfo;
+  }, [matchInfo]);
+  const handleMessage = useCallback((msg: WSMessage) => {
+    switch (msg.type) {
+      case 'match_found':
+        const info = { matchId: msg.matchId, team: msg.team };
+        setMatchInfo(info);
+        matchInfoRef.current = info; // Update ref immediately for subsequent messages in same tick
+        setStatus('playing');
+        toast.success(`Match Found! You are Team ${msg.team.toUpperCase()}`);
+        break;
+      case 'game_state':
+        setGameState(msg.state);
+        break;
+      case 'game_over':
+        const currentTeam = matchInfoRef.current?.team;
+        toast(msg.winner === currentTeam ? 'VICTORY!' : 'DEFEAT', {
+          description: `Winner: ${msg.winner.toUpperCase()}`
+        });
+        setTimeout(() => {
+            onExit();
+        }, 3000);
+        break;
+      case 'error':
+        toast.error(msg.message);
+        break;
+      case 'ping':
+        wsRef.current?.send(JSON.stringify({ type: 'pong' }));
+        break;
+    }
+  }, [onExit]);
   useEffect(() => {
     if (!profile) return;
     // Connect to WebSocket
@@ -42,45 +77,21 @@ export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
       }
     };
     ws.onclose = () => {
-      if (status !== 'error') {
-        // toast.error('Disconnected from server');
-        // onExit();
-      }
+      // If we were searching and component unmounts/closes, we might want to handle that
+      // But here we just check if it was an error close
     };
     ws.onerror = () => {
       setStatus('error');
       toast.error('Connection error');
     };
     return () => {
-      ws.close();
+      // Cleanup: Leave queue if searching
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'leave_queue' } satisfies WSMessage));
+        ws.close();
+      }
     };
-  }, [profile, mode]);
-  const handleMessage = (msg: WSMessage) => {
-    switch (msg.type) {
-      case 'match_found':
-        setMatchInfo({ matchId: msg.matchId, team: msg.team });
-        setStatus('playing');
-        toast.success(`Match Found! You are Team ${msg.team.toUpperCase()}`);
-        break;
-      case 'game_state':
-        setGameState(msg.state);
-        break;
-      case 'game_over':
-        toast(msg.winner === matchInfo?.team ? 'VICTORY!' : 'DEFEAT', {
-          description: `Winner: ${msg.winner.toUpperCase()}`
-        });
-        setTimeout(() => {
-            onExit();
-        }, 3000);
-        break;
-      case 'error':
-        toast.error(msg.message);
-        break;
-      case 'ping':
-        wsRef.current?.send(JSON.stringify({ type: 'pong' }));
-        break;
-    }
-  };
+  }, [profile, mode, handleMessage]);
   const handleInput = (input: { move: { x: number; y: number }; kick: boolean }) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({

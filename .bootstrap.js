@@ -79,8 +79,9 @@ function updateWranglerJsonc() {
 function runSetupCommands() {
     const commands = [
     "bun add canvas-confetti@^1.9.0",
-    "bun add -d @types/canvas-confetti@^1.6.0",
-    "bun add canvas-confetti @types/canvas-confetti"
+    "bun add -d @types/uuid",
+    "bun add canvas-confetti @types/canvas-confetti",
+    "bun add uuid"
 ];
     
     if (commands.length === 0) {

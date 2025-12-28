@@ -34,3 +34,15 @@ export interface MatchResponse {
   newTier: Tier;
   newDivision: 1 | 2 | 3;
 }
+// --- Multiplayer Types ---
+export type GameMode = '1v1' | '2v2' | '3v3' | '4v4';
+export type WSMessage =
+  | { type: 'join_queue'; mode: GameMode; userId: string; username: string }
+  | { type: 'leave_queue' }
+  | { type: 'input'; move: { x: number; y: number }; kick: boolean }
+  | { type: 'match_found'; matchId: string; team: 'red' | 'blue'; opponent?: string }
+  | { type: 'game_state'; state: any } // Typed as 'any' here to avoid circular dependency, but effectively GameState
+  | { type: 'game_over'; winner: 'red' | 'blue' }
+  | { type: 'error'; message: string }
+  | { type: 'ping' }
+  | { type: 'pong' };

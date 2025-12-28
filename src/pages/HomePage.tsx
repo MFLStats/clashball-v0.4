@@ -2,15 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { GameCanvas } from '@/components/game/GameCanvas';
 import { Dashboard } from '@/components/ranked/Dashboard';
+import { OnlineGameManager } from '@/components/game/OnlineGameManager';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { Play, Trophy, Users, ArrowLeft, Loader2 } from 'lucide-react';
-import { useUserStore } from '@/src/store/useUserStore';
+import { Play, Trophy, Users, ArrowLeft, Globe, Monitor } from 'lucide-react';
+import { useUserStore } from '@/store/useUserStore';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
-type ViewState = 'lobby' | 'game' | 'ranked';
+import { GameMode } from '@shared/types';
+type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'ranked';
 export function HomePage() {
   const [view, setView] = useState<ViewState>('lobby');
+  const [selectedMode, setSelectedMode] = useState<GameMode>('1v1');
   // STRICT ZUSTAND RULE: Select primitives individually
   const profile = useUserStore(s => s.profile);
   const initUser = useUserStore(s => s.initUser);
@@ -19,13 +22,12 @@ export function HomePage() {
   useEffect(() => {
     initUser();
   }, [initUser]);
-  const handleGameEnd = async (winner: 'red' | 'blue') => {
+  const handleLocalGameEnd = async (winner: 'red' | 'blue') => {
     if (!profile || isProcessing) return;
     setIsProcessing(true);
     try {
       // Red is Local Player, Blue is Bot
       const result = winner === 'red' ? 'win' : 'loss';
-      // Simulate opponent rating (Bot is ~1200 MMR)
       const opponentRating = 1200;
       const response = await api.reportMatch({
         userId: profile.id,
@@ -38,7 +40,6 @@ export function HomePage() {
         { description: `New Rank: ${response.newTier} ${response.newDivision}` }
       );
       await refreshProfile();
-      // Delay return to lobby slightly to let user see victory screen
       setTimeout(() => {
         setView('lobby');
         setIsProcessing(false);
@@ -48,9 +49,13 @@ export function HomePage() {
       setIsProcessing(false);
     }
   };
+  const startOnlineGame = (mode: GameMode) => {
+    setSelectedMode(mode);
+    setView('online_game');
+  };
   const renderContent = () => {
     switch (view) {
-      case 'game':
+      case 'local_game':
         return (
           <div className="animate-fade-in space-y-6">
             <div className="flex items-center justify-between">
@@ -63,12 +68,47 @@ export function HomePage() {
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Lobby
               </Button>
               <h2 className="text-xl font-display font-bold text-slate-800">
-                Ranked Match vs Bot (1200 MMR)
+                Practice vs Bot (1200 MMR)
               </h2>
               <div className="w-24" />
             </div>
-            <GameCanvas onGameEnd={handleGameEnd} winningScore={3} />
+            <GameCanvas onGameEnd={handleLocalGameEnd} winningScore={3} />
           </div>
+        );
+      case 'online_select':
+        return (
+          <div className="animate-fade-in space-y-8">
+             <div className="flex items-center justify-between">
+              <Button
+                variant="ghost"
+                onClick={() => setView('lobby')}
+                className="hover:bg-slate-100 rounded-xl"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Lobby
+              </Button>
+              <h2 className="text-xl font-display font-bold text-slate-800">Select Game Mode</h2>
+              <div className="w-24" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+                {(['1v1', '2v2', '3v3', '4v4'] as GameMode[]).map((mode) => (
+                    <button
+                        key={mode}
+                        onClick={() => startOnlineGame(mode)}
+                        className="group relative overflow-hidden p-8 rounded-3xl bg-white border-4 border-slate-100 hover:border-blue-400 hover:shadow-lg transition-all duration-300 text-left"
+                    >
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <Globe className="w-24 h-24" />
+                        </div>
+                        <h3 className="text-3xl font-display font-bold text-slate-800 mb-2">{mode}</h3>
+                        <p className="text-slate-500 font-medium">Ranked Competitive</p>
+                    </button>
+                ))}
+            </div>
+          </div>
+        );
+      case 'online_game':
+        return (
+            <OnlineGameManager mode={selectedMode} onExit={() => setView('lobby')} />
         );
       case 'ranked':
         return (
@@ -112,21 +152,30 @@ export function HomePage() {
               )}
             </div>
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-6 w-full max-w-md">
+            <div className="flex flex-col gap-4 w-full max-w-md">
               <button
-                onClick={() => setView('game')}
-                className="btn-kid-primary flex-1 flex items-center justify-center gap-3 text-lg group"
+                onClick={() => setView('online_select')}
+                className="btn-kid-primary flex items-center justify-center gap-3 text-lg group w-full"
               >
-                <Play className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
-                Play Ranked
+                <Globe className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
+                Play Online
               </button>
-              <button
-                onClick={() => setView('ranked')}
-                className="btn-kid-secondary flex-1 flex items-center justify-center gap-3 text-lg"
-              >
-                <Users className="w-6 h-6" />
-                My Stats
-              </button>
+              <div className="flex gap-4">
+                <button
+                    onClick={() => setView('local_game')}
+                    className="btn-kid-secondary flex-1 flex items-center justify-center gap-3 text-lg"
+                >
+                    <Monitor className="w-6 h-6" />
+                    Practice
+                </button>
+                <button
+                    onClick={() => setView('ranked')}
+                    className="btn-kid-secondary flex-1 flex items-center justify-center gap-3 text-lg"
+                >
+                    <Users className="w-6 h-6" />
+                    Stats
+                </button>
+              </div>
             </div>
             {/* Footer Info */}
             <div className="flex gap-8 text-sm font-bold text-slate-400">
@@ -134,7 +183,7 @@ export function HomePage() {
                 <div className="w-2 h-2 rounded-full bg-green-400" />
                 Online
               </span>
-              <span>v0.2.0 Beta</span>
+              <span>v0.3.0 Beta</span>
             </div>
           </div>
         );

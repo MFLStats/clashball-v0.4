@@ -3,7 +3,7 @@ import { RankBadge, Tier } from './RankBadge';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
 import { Trophy, TrendingUp, Loader2 } from 'lucide-react';
-import { useUserStore } from '@/src/store/useUserStore';
+import { useUserStore } from '@/store/useUserStore';
 export function Dashboard() {
   // STRICT ZUSTAND RULE: Select primitives individually
   const profile = useUserStore(s => s.profile);
@@ -20,9 +20,6 @@ export function Dashboard() {
     );
   }
   // Calculate progress to next tier
-  // Simplified logic: Each tier is 300 points wide (e.g. Silver 900-1200)
-  // Each division is 100 points.
-  // We just show progress within the current 100-point chunk for visual simplicity
   const currentRating = profile.rating;
   const progress = (currentRating % 100);
   const nextMilestone = Math.ceil((currentRating + 1) / 100) * 100;

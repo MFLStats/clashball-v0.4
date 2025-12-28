@@ -1,13 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { PhysicsEngine, GameState } from '@/lib/physics';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { PhysicsEngine, GameState } from '@shared/physics';
 import confetti from 'canvas-confetti';
 import { Button } from '@/components/ui/button';
 import { Play, RotateCcw, Trophy } from 'lucide-react';
 interface GameCanvasProps {
   onGameEnd?: (winner: 'red' | 'blue') => void;
   winningScore?: number;
+  externalState?: GameState | null;
+  onInput?: (input: { move: { x: number; y: number }; kick: boolean }) => void;
 }
-export function GameCanvas({ onGameEnd, winningScore = 3 }: GameCanvasProps) {
+export function GameCanvas({ onGameEnd, winningScore = 3, externalState, onInput }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
@@ -16,6 +18,17 @@ export function GameCanvas({ onGameEnd, winningScore = 3 }: GameCanvasProps) {
   const [score, setScore] = useState({ red: 0, blue: 0 });
   const [isPaused, setIsPaused] = useState(false);
   const [gameOver, setGameOver] = useState<'red' | 'blue' | null>(null);
+  // Handle Game Over Logic
+  const handleGameOver = useCallback((winner: 'red' | 'blue') => {
+    setGameOver(winner);
+    confetti({
+      particleCount: 200,
+      spread: 100,
+      origin: { y: 0.6 },
+      colors: winner === 'red' ? ['#ef233c'] : ['#3a86ff']
+    });
+    if (onGameEnd) onGameEnd(winner);
+  }, [onGameEnd]);
   // Input Handling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -42,64 +55,68 @@ export function GameCanvas({ onGameEnd, winningScore = 3 }: GameCanvasProps) {
         if (!gameOver) requestRef.current = requestAnimationFrame(loop);
         return;
       }
-      // 1. Process Input for Local Player (P1)
+      // 1. Process Input
       const p1Input = { move: { x: 0, y: 0 }, kick: false };
       if (keysRef.current['ArrowUp'] || keysRef.current['KeyW']) p1Input.move.y -= 1;
       if (keysRef.current['ArrowDown'] || keysRef.current['KeyS']) p1Input.move.y += 1;
       if (keysRef.current['ArrowLeft'] || keysRef.current['KeyA']) p1Input.move.x -= 1;
       if (keysRef.current['ArrowRight'] || keysRef.current['KeyD']) p1Input.move.x += 1;
       if (keysRef.current['Space'] || keysRef.current['KeyX']) p1Input.kick = true;
-      gameStateRef.current.players[0].input = p1Input;
-      // Simple Bot Logic for P2
-      const ball = gameStateRef.current.ball;
-      const p2 = gameStateRef.current.players[1];
-      const dx = ball.pos.x - p2.pos.x;
-      const dy = ball.pos.y - p2.pos.y;
-      const botMove = { x: 0, y: 0 };
-      if (Math.abs(dx) > 10) botMove.x = Math.sign(dx);
-      if (Math.abs(dy) > 10) botMove.y = Math.sign(dy);
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      const botKick = dist < 30 && Math.random() < 0.05;
-      gameStateRef.current.players[1].input = { move: botMove, kick: botKick };
-      // 2. Physics Update
-      const prevState = gameStateRef.current;
-      const newState = PhysicsEngine.update(prevState);
-      gameStateRef.current = newState;
-      // Check for score change
-      if (newState.score.red !== score.red || newState.score.blue !== score.blue) {
-        setScore(newState.score);
-        // Check Win Condition
-        if (newState.score.red >= winningScore) {
-          handleGameOver('red');
-        } else if (newState.score.blue >= winningScore) {
-          handleGameOver('blue');
-        } else {
-          // Goal Celebration
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: newState.score.red > score.red ? ['#ef233c'] : ['#3a86ff']
-          });
+      if (onInput) {
+        // Online Mode: Send input to server
+        onInput(p1Input);
+      } else {
+        // Local Mode: Update local ref
+        gameStateRef.current.players[0].input = p1Input;
+        // Simple Bot Logic for P2 (Local only)
+        const ball = gameStateRef.current.ball;
+        const p2 = gameStateRef.current.players[1];
+        const dx = ball.pos.x - p2.pos.x;
+        const dy = ball.pos.y - p2.pos.y;
+        const botMove = { x: 0, y: 0 };
+        if (Math.abs(dx) > 10) botMove.x = Math.sign(dx);
+        if (Math.abs(dy) > 10) botMove.y = Math.sign(dy);
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const botKick = dist < 30 && Math.random() < 0.05;
+        gameStateRef.current.players[1].input = { move: botMove, kick: botKick };
+      }
+      // 2. State Update
+      let currentState: GameState;
+      if (externalState) {
+        // Online Mode: Use server state
+        currentState = externalState;
+      } else {
+        // Local Mode: Run physics
+        const newState = PhysicsEngine.update(gameStateRef.current);
+        gameStateRef.current = newState;
+        currentState = newState;
+      }
+      // Check for score change (Visual only for online, authoritative for local)
+      if (currentState.score.red !== score.red || currentState.score.blue !== score.blue) {
+        setScore(currentState.score);
+        // Only trigger local win condition if not online (server sends game_over)
+        if (!externalState) {
+            if (currentState.score.red >= winningScore) {
+                handleGameOver('red');
+            } else if (currentState.score.blue >= winningScore) {
+                handleGameOver('blue');
+            } else {
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 },
+                    colors: currentState.score.red > score.red ? ['#ef233c'] : ['#3a86ff']
+                });
+            }
         }
       }
       // 3. Render
-      render(ctx, newState);
+      render(ctx, currentState);
       requestRef.current = requestAnimationFrame(loop);
     };
     requestRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(requestRef.current);
-  }, [score, isPaused, gameOver, winningScore]);
-  const handleGameOver = (winner: 'red' | 'blue') => {
-    setGameOver(winner);
-    confetti({
-      particleCount: 200,
-      spread: 100,
-      origin: { y: 0.6 },
-      colors: winner === 'red' ? ['#ef233c'] : ['#3a86ff']
-    });
-    if (onGameEnd) onGameEnd(winner);
-  };
+  }, [score, isPaused, gameOver, winningScore, externalState, onInput, handleGameOver]);
   const render = (ctx: CanvasRenderingContext2D, state: GameState) => {
     const { width, height } = ctx.canvas;
     const scaleX = width / state.field.width;
@@ -210,7 +227,7 @@ export function GameCanvas({ onGameEnd, winningScore = 3 }: GameCanvasProps) {
             </div>
         )}
         {/* Controls Overlay (Visible on Hover/Pause) */}
-        {!gameOver && (
+        {!gameOver && !externalState && (
             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button size="icon" variant="secondary" onClick={handleReset}>
                 <RotateCcw className="w-4 h-4" />

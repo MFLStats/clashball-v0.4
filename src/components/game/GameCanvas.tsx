@@ -230,6 +230,31 @@ export function GameCanvas({
     ctx.lineTo(width, goalTop + goalH);
     ctx.lineTo(width - 5, goalTop + goalH);
     ctx.stroke();
+
+    // --- 3b. Draw Goal Posts & Line ---
+    if (state.field.goalPosts && state.field.goalPosts.length === 4) {
+        // Goal Line (White)
+        ctx.beginPath();
+        ctx.moveTo(0, state.field.goalPosts[0].pos.y * scaleY);
+        ctx.lineTo(0, state.field.goalPosts[1].pos.y * scaleY);
+        ctx.moveTo(width, state.field.goalPosts[2].pos.y * scaleY);
+        ctx.lineTo(width, state.field.goalPosts[3].pos.y * scaleY);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Posts (Circles)
+        state.field.goalPosts.forEach(post => {
+            ctx.beginPath();
+            ctx.arc(post.pos.x * scaleX, post.pos.y * scaleY, post.radius * scaleX, 0, Math.PI * 2);
+            ctx.fillStyle = '#e2e8f0'; // Slate-200
+            ctx.fill();
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        });
+    }
+
     // --- 4. Draw Players ---
     state.players.forEach(p => {
       const x = p.pos.x * scaleX;

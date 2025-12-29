@@ -73,7 +73,6 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
     if (!profile) return;
     const socket = new GameSocket();
     socketRef.current = socket;
-    // Define Handlers
     const onLobbyUpdate = (msg: WSMessage) => {
         if (msg.type === 'lobby_update') {
             setLobbyState(msg.state);
@@ -139,7 +138,6 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
             setIsConnecting(false);
         }
     };
-    // Register Listeners
     socket.on('lobby_update', onLobbyUpdate);
     socket.on('match_started', onMatchStarted);
     socket.on('match_found', onMatchStarted);
@@ -153,13 +151,11 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
         socket.disconnect();
     };
   }, [profile]);
-  // Connection Helper
   const ensureConnection = useCallback(async () => {
       if (!socketRef.current || !profile) return false;
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host;
       const wsUrl = `${protocol}//${host}/api/ws`;
-      // Connect if not already connected
       socketRef.current.connect(wsUrl, profile.id, profile.username);
       return true;
   }, [profile]);
@@ -170,7 +166,6 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
     }
     setIsConnecting(true);
     await ensureConnection();
-    // Small delay to ensure connection is open if it wasn't
     setTimeout(() => {
         socketRef.current?.send({
             type: 'create_lobby',
@@ -364,7 +359,7 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                         </div>
                                         <div className="text-xs text-slate-500 uppercase font-bold">Players</div>
                                     </div>
-                                    <Button 
+                                    <Button
                                         onClick={() => joinLobby(lobby.code)}
                                         disabled={isConnecting || lobby.playerCount >= lobby.maxPlayers}
                                         className="bg-purple-600 hover:bg-purple-500 text-white"
@@ -421,8 +416,8 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                   {redPlayers.length} / {maxPerTeam}
                               </span>
                           </div>
-                          <Button 
-                              size="sm" 
+                          <Button
+                              size="sm"
                               className="w-full mt-2 bg-red-600 hover:bg-red-500 text-white border border-red-400/20"
                               disabled={myTeam === 'red' || redPlayers.length >= maxPerTeam}
                               onClick={() => switchTeam('red')}
@@ -466,8 +461,8 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                       {spectators.length}
                                   </span>
                               </div>
-                              <Button 
-                                  size="sm" 
+                              <Button
+                                  size="sm"
                                   variant="secondary"
                                   className="w-full mt-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
                                   disabled={myTeam === 'spectator'}
@@ -538,8 +533,8 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                   {bluePlayers.length} / {maxPerTeam}
                               </span>
                           </div>
-                          <Button 
-                              size="sm" 
+                          <Button
+                              size="sm"
                               className="w-full mt-2 bg-blue-600 hover:bg-blue-500 text-white border border-blue-400/20"
                               disabled={myTeam === 'blue' || bluePlayers.length >= maxPerTeam}
                               onClick={() => switchTeam('blue')}
@@ -603,9 +598,9 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                   />
                               ) : (
                                   <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                      <div 
-                                          className="h-full bg-slate-600" 
-                                          style={{ width: `${(lobbyState.settings.scoreLimit / 10) * 100}%` }} 
+                                      <div
+                                          className="h-full bg-slate-600"
+                                          style={{ width: `${(lobbyState.settings.scoreLimit / 10) * 100}%` }}
                                       />
                                   </div>
                               )}
@@ -632,9 +627,9 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                   />
                               ) : (
                                   <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                      <div 
-                                          className="h-full bg-slate-600" 
-                                          style={{ width: `${(lobbyState.settings.timeLimit / 600) * 100}%` }} 
+                                      <div
+                                          className="h-full bg-slate-600"
+                                          style={{ width: `${(lobbyState.settings.timeLimit / 600) * 100}%` }}
                                       />
                                   </div>
                               )}
@@ -651,8 +646,8 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                   </span>
                               </div>
                               {isHost ? (
-                                  <Tabs 
-                                      value={lobbyState.settings.fieldSize || 'medium'} 
+                                  <Tabs
+                                      value={lobbyState.settings.fieldSize || 'medium'}
                                       onValueChange={(val) => updateSettings({ fieldSize: val as any })}
                                       className="w-full"
                                   >
@@ -674,9 +669,9 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
           </div>
       );
   }
-  // Game View (Reusing GameCanvas logic)
+  // Game View
   return (
-    <div className="space-y-4 animate-fade-in relative">
+    <div className="flex flex-col gap-4 animate-fade-in max-w-4xl mx-auto w-full">
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={() => setView('lobby')} className="text-slate-300 hover:bg-white/10">
           <ArrowLeft className="mr-2 h-4 w-4" /> Return to Lobby
@@ -702,37 +697,37 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
             currentUserId={profile?.id}
             onLeave={handleLeaveGame}
         />
-        {/* Chat Overlay */}
-        <div className="absolute bottom-4 left-4 w-80 max-h-64 flex flex-col gap-2 z-20">
-            <div className="flex-1 overflow-y-auto bg-black/60 backdrop-blur-md rounded-lg p-3 space-y-2 scrollbar-hide border border-white/10 shadow-xl">
-                {chatMessages.map(msg => (
-                    <div key={msg.id} className="text-sm text-white drop-shadow-md">
-                        <span className={cn("font-bold mr-2",
-                            msg.team === 'red' ? 'text-red-400' :
-                            msg.team === 'blue' ? 'text-blue-400' : 'text-slate-400'
-                        )}>
-                            {msg.sender}:
-                        </span>
-                        <span className="text-slate-200">{msg.message}</span>
-                    </div>
-                ))}
-                <div ref={chatEndRef} />
-            </div>
-            <div className="flex flex-col gap-2">
-                <QuickChat onSelect={handleQuickChat} />
-                <form onSubmit={sendChat} className="flex gap-2">
-                    <Input
-                        value={chatInput}
-                        onChange={e => setChatInput(e.target.value)}
-                        placeholder="Type a message..."
-                        className="bg-black/60 border-white/20 text-white placeholder:text-white/50 h-9 text-sm backdrop-blur-md focus:bg-black/80 transition-colors"
-                    />
-                    <Button type="submit" size="sm" className="h-9 w-9 p-0 bg-white/10 hover:bg-white/20 border border-white/10">
-                        <Send className="w-4 h-4" />
-                    </Button>
-                </form>
-            </div>
-        </div>
+      </div>
+      {/* Chat Section - Moved Below Canvas */}
+      <div className="w-full bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col gap-3 shadow-lg">
+          <div className="h-32 overflow-y-auto bg-black/30 rounded-lg p-2 space-y-1 scrollbar-hide border border-white/5">
+              {chatMessages.map(msg => (
+                  <div key={msg.id} className="text-sm text-slate-200">
+                      <span className={cn("font-bold mr-2",
+                          msg.team === 'red' ? 'text-red-400' :
+                          msg.team === 'blue' ? 'text-blue-400' : 'text-slate-400'
+                      )}>
+                          {msg.sender}:
+                      </span>
+                      <span>{msg.message}</span>
+                  </div>
+              ))}
+              <div ref={chatEndRef} />
+          </div>
+          <div className="flex flex-col gap-2">
+              <QuickChat onSelect={handleQuickChat} />
+              <form onSubmit={sendChat} className="flex gap-2">
+                  <Input
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      placeholder="Type a message..."
+                      className="bg-slate-950 border-slate-700 text-white placeholder:text-slate-500 h-10"
+                  />
+                  <Button type="submit" size="icon" className="h-10 w-10 bg-slate-800 hover:bg-slate-700 border border-slate-700">
+                      <Send className="w-4 h-4" />
+                  </Button>
+              </form>
+          </div>
       </div>
     </div>
   );

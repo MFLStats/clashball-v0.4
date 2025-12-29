@@ -29,10 +29,15 @@ export interface Ball {
   lastTouch: BallTouch | null;
   previousTouch: BallTouch | null;
 }
+export interface GoalPost {
+  pos: Vector;
+  radius: number;
+}
 export interface Field {
   width: number;
   height: number;
   goalHeight: number;
+  goalPosts: GoalPost[];
 }
 export interface GameState {
   players: Player[];
@@ -48,6 +53,7 @@ export class PhysicsEngine {
   // Arcade Physics Constants - Tuned for Timestep Independence (Units per Second)
   static readonly PLAYER_RADIUS = 15;
   static readonly BALL_RADIUS = 10;
+  static readonly POST_RADIUS = 8;
   // Kick Mechanics
   static readonly KICK_TOLERANCE = 5; // Extra range for kicking
   static readonly KICK_STRENGTH = 550; // Increased for faster gameplay
@@ -66,16 +72,25 @@ export class PhysicsEngine {
   static readonly BALL_DAMPING_BASE = 0.990;
   static readonly WALL_BOUNCE = 0.75;
   static readonly PLAYER_BOUNCE = 0.5;
+  static readonly POST_BOUNCE = 0.7;
   // Velocity threshold for stopping
   static readonly STOP_THRESHOLD = 0.6;
   // Assist Window (seconds)
   static readonly ASSIST_WINDOW = 3.0;
   static createInitialState(timeLimit: number = 180, fieldSize: 'small' | 'medium' | 'large' = 'medium'): GameState {
     const dims = this.FIELD_SIZES[fieldSize];
+    const goalTopY = (dims.height - this.GOAL_HEIGHT) / 2;
+    const goalBottomY = (dims.height + this.GOAL_HEIGHT) / 2;
     const field: Field = {
         width: dims.width,
         height: dims.height,
-        goalHeight: this.GOAL_HEIGHT
+        goalHeight: this.GOAL_HEIGHT,
+        goalPosts: [
+            { pos: { x: 0, y: goalTopY }, radius: this.POST_RADIUS }, // Top-Left
+            { pos: { x: 0, y: goalBottomY }, radius: this.POST_RADIUS }, // Bottom-Left
+            { pos: { x: dims.width, y: goalTopY }, radius: this.POST_RADIUS }, // Top-Right
+            { pos: { x: dims.width, y: goalBottomY }, radius: this.POST_RADIUS } // Bottom-Right
+        ]
     };
     return {
       players: [
@@ -129,7 +144,6 @@ export class PhysicsEngine {
                 this.resetPositions(newState);
             }
         } else {
-            // Fallback if timer missing
             this.resetPositions(newState);
         }
         return { state: newState, events };
@@ -199,7 +213,32 @@ export class PhysicsEngine {
     b.vel.y *= ballDamping;
     if (Math.abs(b.vel.x) < this.STOP_THRESHOLD) b.vel.x = 0;
     if (Math.abs(b.vel.y) < this.STOP_THRESHOLD) b.vel.y = 0;
-    // Ball Wall Collisions (Top/Bottom)
+    // --- 2a. Goal Post Collisions (Circle-Circle) ---
+    newState.field.goalPosts.forEach(post => {
+        const dx = b.pos.x - post.pos.x;
+        const dy = b.pos.y - post.pos.y;
+        const distSq = dx*dx + dy*dy;
+        const minDist = b.radius + post.radius;
+        if (distSq < minDist * minDist) {
+            const dist = Math.sqrt(distSq);
+            const nx = dx / (dist || 1);
+            const ny = dy / (dist || 1);
+            // Resolve Overlap
+            const overlap = minDist - dist;
+            b.pos.x += nx * overlap;
+            b.pos.y += ny * overlap;
+            // Bounce
+            const vn = b.vel.x * nx + b.vel.y * ny;
+            if (vn < 0) {
+                const j = -(1 + this.POST_BOUNCE) * vn;
+                b.vel.x += j * nx;
+                b.vel.y += j * ny;
+                events.push({ type: 'wall' });
+            }
+        }
+    });
+    // --- 2b. Wall Collisions ---
+    // Top/Bottom Walls
     if (b.pos.y < b.radius) {
         b.pos.y = b.radius;
         b.vel.y *= -this.WALL_BOUNCE;
@@ -210,58 +249,73 @@ export class PhysicsEngine {
         b.vel.y *= -this.WALL_BOUNCE;
         events.push({ type: 'wall' });
     }
-    // Goal Detection & X-Axis Walls
-    const checkGoal = (isLeft: boolean) => {
-        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 &&
-                       b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
-        if (isGoal) {
-            const scoringTeam = isLeft ? 'blue' : 'red';
-            newState.score[scoringTeam]++;
-            // Determine Scorer & Assister
-            let scorerId: string | undefined;
-            let assisterId: string | undefined;
-            if (b.lastTouch) {
-                if (b.lastTouch.team === scoringTeam) {
-                    scorerId = b.lastTouch.id;
-                    // Check Assist
-                    if (b.previousTouch &&
-                        b.previousTouch.team === scoringTeam &&
-                        b.previousTouch.id !== scorerId &&
-                        Math.abs(b.lastTouch.time - b.previousTouch.time) < this.ASSIST_WINDOW) {
-                        assisterId = b.previousTouch.id;
-                    }
-                } else {
-                    // Own Goal
-                    scorerId = b.lastTouch.id;
-                }
-            }
-            events.push({ type: 'goal', team: scoringTeam, scorerId, assisterId });
-            // GOLDEN GOAL LOGIC
-            if (newState.isOvertime) {
-                newState.status = 'ended';
-                events.push({ type: 'whistle' });
-            } else {
-                // Regular Goal - Pause for celebration
-                newState.status = 'goal';
-                newState.goalTimer = 3.0; // 3 seconds celebration
-            }
-            return true;
+    // Side Walls (Segments)
+    // Only collide if NOT in the goal mouth vertical range
+    const goalTopY = (newState.field.height - newState.field.goalHeight) / 2;
+    const goalBottomY = (newState.field.height + newState.field.goalHeight) / 2;
+    // Left Wall
+    if (b.pos.x < b.radius) {
+        // If ball is above top post OR below bottom post
+        if (b.pos.y < goalTopY || b.pos.y > goalBottomY) {
+            b.pos.x = b.radius;
+            b.vel.x *= -this.WALL_BOUNCE;
+            events.push({ type: 'wall' });
         }
-        return false;
-    };
-    // Left Side
-    if (b.pos.x < 0) {
-        if (checkGoal(true)) return { state: newState, events };
-        b.pos.x = b.radius;
-        b.vel.x *= -this.WALL_BOUNCE;
-        events.push({ type: 'wall' });
     }
-    // Right Side
-    if (b.pos.x > newState.field.width) {
+    // Right Wall
+    if (b.pos.x > newState.field.width - b.radius) {
+        // If ball is above top post OR below bottom post
+        if (b.pos.y < goalTopY || b.pos.y > goalBottomY) {
+            b.pos.x = newState.field.width - b.radius;
+            b.vel.x *= -this.WALL_BOUNCE;
+            events.push({ type: 'wall' });
+        }
+    }
+    // --- 2c. Goal Detection (Strict) ---
+    const checkGoal = (isLeft: boolean) => {
+        // Ball must be fully across the line
+        // Left Goal: x < -radius
+        // Right Goal: x > width + radius
+        // And within Y bounds (handled by wall collision logic preventing exit elsewhere)
+        const scoringTeam = isLeft ? 'blue' : 'red';
+        newState.score[scoringTeam]++;
+        // Determine Scorer & Assister
+        let scorerId: string | undefined;
+        let assisterId: string | undefined;
+        if (b.lastTouch) {
+            if (b.lastTouch.team === scoringTeam) {
+                scorerId = b.lastTouch.id;
+                // Check Assist
+                if (b.previousTouch && 
+                    b.previousTouch.team === scoringTeam && 
+                    b.previousTouch.id !== scorerId &&
+                    Math.abs(b.lastTouch.time - b.previousTouch.time) < this.ASSIST_WINDOW) {
+                    assisterId = b.previousTouch.id;
+                }
+            } else {
+                // Own Goal
+                scorerId = b.lastTouch.id;
+            }
+        }
+        events.push({ type: 'goal', team: scoringTeam, scorerId, assisterId });
+        // GOLDEN GOAL LOGIC
+        if (newState.isOvertime) {
+            newState.status = 'ended';
+            events.push({ type: 'whistle' });
+        } else {
+            // Regular Goal - Pause for celebration
+            newState.status = 'goal';
+            newState.goalTimer = 3.0; // 3 seconds celebration
+        }
+        return true;
+    };
+    // Check Left Goal
+    if (b.pos.x < -b.radius) {
+        if (checkGoal(true)) return { state: newState, events };
+    }
+    // Check Right Goal
+    if (b.pos.x > newState.field.width + b.radius) {
         if (checkGoal(false)) return { state: newState, events };
-        b.pos.x = newState.field.width - b.radius;
-        b.vel.x *= -this.WALL_BOUNCE;
-        events.push({ type: 'wall' });
     }
     // --- 3. Player-Ball Interaction (Kick & Collision) ---
     newState.players.forEach(p => {

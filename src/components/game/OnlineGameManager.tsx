@@ -22,6 +22,8 @@ interface ChatMessage {
 }
 export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerProps) {
   const profile = useUserStore(s => s.profile);
+  const userId = profile?.id;
+  const username = profile?.username;
   const [status, setStatus] = useState<'connecting' | 'searching' | 'playing' | 'error'>('connecting');
   // Refs for stable access in effects/callbacks
   const statusRef = useRef(status);
@@ -136,7 +138,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         }
       }
     };
-  }, [matchInfo]); // Re-create handler when matchInfo changes (though mostly handled by refs now)
+  }, []);
   // Ping Loop
   useEffect(() => {
     const interval = setInterval(() => {
@@ -149,7 +151,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   }, []);
   // Main WebSocket Connection Effect
   useEffect(() => {
-    if (!profile) {
+    if (!userId || !username) {
         toast.error("User profile missing. Cannot join queue.");
         onExitRef.current();
         return;
@@ -165,8 +167,8 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       ws.send(JSON.stringify({
         type: 'join_queue',
         mode,
-        userId: profile.id,
-        username: profile.username
+        userId,
+        username
       } satisfies WSMessage));
     };
     ws.onmessage = (event) => {
@@ -198,7 +200,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       }
     };
     // CRITICAL: Only depend on stable IDs/Modes. Do NOT depend on onExit or handleMessage directly.
-  }, [profile, mode]); // Added profile to dependency array as requested
+  }, [mode, userId, username]);
   const handleInput = (input: { move: { x: number; y: number }; kick: boolean }) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
@@ -289,7 +291,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             externalState={gameState}
             onInput={handleInput}
             winningScore={3}
-            currentUserId={profile?.id}
+            currentUserId={userId}
             finalStats={finalStats}
             onLeave={onExit}
         />

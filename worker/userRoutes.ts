@@ -10,7 +10,7 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     // --- WebSocket Route ---
     app.get('/api/ws', async (c) => {
         const upgradeHeader = c.req.header('Upgrade');
-        if (!upgradeHeader || upgradeHeader !== 'websocket') {
+        if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
             return c.text('Expected Upgrade: websocket', 426);
         }
         const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));

@@ -39,8 +39,12 @@ export class GlobalDurableObject extends DurableObject {
     // --- WebSocket Handling ---
     async fetch(request: Request): Promise<Response> {
         const url = new URL(request.url);
-        if (url.pathname === '/api/ws') {
-            if (request.headers.get('Upgrade') !== 'websocket') {
+        const upgradeHeader = request.headers.get('Upgrade');
+        // Robust check for WebSocket upgrade:
+        // 1. Check path (standard)
+        // 2. OR check if Upgrade header is 'websocket' (case-insensitive) - handles potential routing path rewrites
+        if (url.pathname === '/api/ws' || (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket')) {
+            if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
                 return new Response('Expected Upgrade: websocket', { status: 426 });
             }
             const pair = new WebSocketPair();
@@ -356,7 +360,7 @@ export class GlobalDurableObject extends DurableObject {
             if (profiles.length < 2) return null; // Need at least 2 players to form a "team" context for ranking usually
             const first = profiles[0].teams || [];
             // Find intersection of all players' team lists
-            const common = first.filter(teamId =>
+            const common = first.filter(teamId => 
                 profiles.every(p => (p.teams || []).includes(teamId))
             );
             return common.length > 0 ? common[0] : null; // Return first common team found

@@ -94,8 +94,8 @@ export function Dashboard() {
                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
                         {profile.country && (
                             <Badge variant="secondary" className="bg-slate-800/80 text-slate-300 border-slate-700 px-3 py-1.5 text-sm">
-                                <img 
-                                    src={`https://flagcdn.com/w20/${profile.country.toLowerCase()}.png`} 
+                                <img
+                                    src={`https://flagcdn.com/w20/${profile.country.toLowerCase()}.png`}
                                     alt={profile.country}
                                     className="w-4 h-auto mr-2 rounded-sm"
                                 />
@@ -200,9 +200,9 @@ export function Dashboard() {
                     </Card>
                 </div>
                 {/* Rating Chart Section */}
-                <RatingChart 
-                    currentRating={profile.stats['1v1'].rating} 
-                    recentMatches={profile.recentMatches.filter(m => m.mode === '1v1')} 
+                <RatingChart
+                    currentRating={profile.stats['1v1'].rating}
+                    recentMatches={profile.recentMatches.filter(m => m.mode === '1v1')}
                     className="bg-slate-900 border-slate-800"
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -270,13 +270,22 @@ export function Dashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {(['1v1', '2v2', '3v3', '4v4'] as GameMode[]).map((mode) => {
                         const stats = profile.stats[mode];
+                        const totalMatches = stats.wins + stats.losses;
+                        const isProvisional = totalMatches < 10;
                         return (
                             <Card key={mode} className="bg-slate-900 border-slate-800 hover:border-primary/30 transition-all duration-300 group overflow-hidden relative">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 group-hover:bg-primary/10 transition-colors" />
                                 <CardContent className="p-8 relative z-10">
                                     <div className="flex items-start justify-between mb-8">
                                         <div>
-                                            <h3 className="text-3xl font-display font-bold text-white mb-1">{mode}</h3>
+                                            <div className="flex items-center gap-3 mb-1">
+                                                <h3 className="text-3xl font-display font-bold text-white">{mode}</h3>
+                                                {isProvisional && (
+                                                    <Badge variant="outline" className="border-yellow-500 text-yellow-500 animate-pulse bg-yellow-500/10 text-[10px] h-5 px-1.5">
+                                                        PROVISIONAL
+                                                    </Badge>
+                                                )}
+                                            </div>
                                             <p className="text-slate-400 text-sm font-medium">Competitive League</p>
                                         </div>
                                         <RankBadge tier={stats.tier} division={stats.division} size="md" />
@@ -325,8 +334,8 @@ export function Dashboard() {
                         <CardContent>
                             <form onSubmit={handleCreateTeam} className="flex gap-4 items-center">
                                 <div className="flex-1">
-                                    <Input 
-                                        placeholder="Enter team name..." 
+                                    <Input
+                                        placeholder="Enter team name..."
                                         value={newTeamName}
                                         onChange={(e) => setNewTeamName(e.target.value)}
                                         className="bg-slate-950 border-slate-700 text-white placeholder:text-slate-600"
@@ -347,8 +356,8 @@ export function Dashboard() {
                         <CardContent>
                             <form onSubmit={handleJoinTeam} className="flex gap-4 items-center">
                                 <div className="flex-1">
-                                    <Input 
-                                        placeholder="ENTER CODE" 
+                                    <Input
+                                        placeholder="ENTER CODE"
                                         value={joinCode}
                                         onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                                         maxLength={6}
@@ -373,8 +382,8 @@ export function Dashboard() {
                         </Card>
                     ) : (
                         teams.map((team) => (
-                            <Card 
-                                key={team.id} 
+                            <Card
+                                key={team.id}
                                 className="bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors cursor-pointer group"
                                 onClick={() => {
                                     setSelectedTeam(team);
@@ -407,10 +416,10 @@ export function Dashboard() {
                 </div>
             </TabsContent>
         </Tabs>
-        <TeamDetailsDialog 
-            team={selectedTeam} 
-            open={isJoinDialogOpen} 
-            onOpenChange={setIsJoinDialogOpen} 
+        <TeamDetailsDialog
+            team={selectedTeam}
+            open={isJoinDialogOpen}
+            onOpenChange={setIsJoinDialogOpen}
         />
     </div>
   );

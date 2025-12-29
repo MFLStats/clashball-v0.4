@@ -672,10 +672,16 @@ export class GlobalDurableObject extends DurableObject {
       const rdOpponent = 350; // Assume opponent has high uncertainty for now (or pass it in)
       const g_rd = 1 / Math.sqrt(1 + 3 * Math.pow(qa * rdOpponent / Math.PI, 2));
       const E = 1 / (1 + Math.pow(10, -g_rd * (stats.rating - match.opponentRating) / 400));
-      const K = stats.rd / 10; // Simplified K-factor based on RD
+      // --- PROVISIONAL PHASE LOGIC ---
+      const totalMatches = (stats.wins || 0) + (stats.losses || 0);
+      const isProvisional = totalMatches < 10;
+      // K-Factor: High volatility for provisional, standard for established
+      const K = isProvisional ? 150 : stats.rd / 10;
+      // RD Decay: Keep uncertainty high during provisional
+      const decayFactor = isProvisional ? 0.98 : 0.95;
       const ratingChange = K * (s - E);
       const newRating = stats.rating + ratingChange;
-      const newRD = Math.max(30, stats.rd * 0.95); // Reduce uncertainty
+      const newRD = Math.max(30, stats.rd * decayFactor); // Apply decay
       // Update Stats
       stats.rating = Math.round(newRating);
       stats.rd = newRD;

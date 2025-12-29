@@ -196,7 +196,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       }
     };
     // CRITICAL: Only depend on stable IDs/Modes. Do NOT depend on onExit or handleMessage directly.
-  }, [profile?.id, mode]); 
+  }, [profile, mode]); // Added profile to dependency array as requested
   const handleInput = (input: { move: { x: number; y: number }; kick: boolean }) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({

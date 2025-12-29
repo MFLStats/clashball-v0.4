@@ -142,7 +142,7 @@ export function TournamentPage() {
                       onClick={() => setView('bracket')}
                       className="bg-yellow-400 text-yellow-900 hover:bg-yellow-300 font-bold w-full md:w-auto shadow-lg"
                     >
-                      <Play className="w-4 h-4 mr-2" /> Enter Bracket
+                      <Play className="w-4 h-4 mr-2" /> View Bracket
                     </Button>
                   </div>
                 ) : (

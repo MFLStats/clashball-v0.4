@@ -521,7 +521,7 @@ export class GlobalDurableObject extends DurableObject {
             if (profiles.length < 2) return null; // Need at least 2 players to form a "team" context for ranking usually
             const first = profiles[0].teams || [];
             // Find intersection of all players' team lists
-            const common = first.filter(teamId => 
+            const common = first.filter(teamId =>
                 profiles.every(p => (p.teams || []).includes(teamId))
             );
             return common.length > 0 ? common[0] : null; // Return first common team found
@@ -691,6 +691,7 @@ export class GlobalDurableObject extends DurableObject {
         losses: 0,
         tier: 'Silver',
         division: 3,
+        streak: 0,
         goals: 0,
         assists: 0,
         mvps: 0,
@@ -728,6 +729,7 @@ export class GlobalDurableObject extends DurableObject {
             losses: profile.losses || 0,
             tier: profile.tier || 'Silver',
             division: profile.division || 3,
+            streak: 0,
             goals: 0,
             assists: 0,
             mvps: 0,
@@ -767,6 +769,7 @@ export class GlobalDurableObject extends DurableObject {
               if (profile.stats[mode].mvps === undefined) profile.stats[mode].mvps = 0;
               if (profile.stats[mode].cleanSheets === undefined) profile.stats[mode].cleanSheets = 0;
               if (profile.stats[mode].ownGoals === undefined) profile.stats[mode].ownGoals = 0;
+              if (profile.stats[mode].streak === undefined) profile.stats[mode].streak = 0;
           }
       });
       // Migration: Ensure jersey and tournamentsWon exist
@@ -805,6 +808,7 @@ export class GlobalDurableObject extends DurableObject {
             losses: 0,
             tier: 'Silver',
             division: 3,
+            streak: 0,
             goals: 0,
             assists: 0,
             mvps: 0,
@@ -937,12 +941,26 @@ export class GlobalDurableObject extends DurableObject {
       const K = isProvisional ? 150 : stats.rd / 10;
       // RD Decay: Keep uncertainty high during provisional
       const decayFactor = isProvisional ? 0.98 : 0.95;
-      const ratingChange = K * (s - E);
+      let ratingChange = K * (s - E);
+      // --- STREAK LOGIC ---
+      let streak = stats.streak || 0;
+      if (match.result === 'win') {
+          streak++;
+      } else {
+          streak = 0;
+      }
+      // Apply Streak Multiplier (Anti-Smurf)
+      if (ratingChange > 0 && streak >= 3) {
+          // Multiplier starts at 1.1x for 3 wins, caps at 2.0x for 12+ wins
+          const multiplier = Math.min(1 + (streak - 2) * 0.1, 2.0);
+          ratingChange *= multiplier;
+      }
       const newRating = stats.rating + ratingChange;
       const newRD = Math.max(30, stats.rd * decayFactor); // Apply decay
       // Update Stats
       stats.rating = Math.round(newRating);
       stats.rd = newRD;
+      stats.streak = streak;
       if (match.result === 'win') stats.wins++;
       if (match.result === 'loss') stats.losses++;
       // Update Advanced Stats

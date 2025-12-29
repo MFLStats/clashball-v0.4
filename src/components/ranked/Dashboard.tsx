@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Trophy, Users, Plus, Goal, HandHelping, Crown, Shield, AlertTriangle, Activity, Calendar, Star, Medal, LogIn, Loader2, Info } from 'lucide-react';
+import { Trophy, Users, Plus, Goal, HandHelping, Crown, Shield, AlertTriangle, Activity, Calendar, Star, Medal, LogIn, Loader2, Info, Flame } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
 import { GameMode, TeamProfile } from '@shared/types';
 import { formatDistanceToNow } from 'date-fns';
@@ -293,6 +293,7 @@ export function Dashboard() {
                         const stats = profile.stats[mode];
                         const totalMatches = stats.wins + stats.losses;
                         const isProvisional = totalMatches < 10;
+                        const streak = stats.streak || 0;
                         return (
                             <Card key={mode} className="bg-slate-900 border-slate-800 hover:border-primary/30 transition-all duration-300 group overflow-hidden relative">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 group-hover:bg-primary/10 transition-colors" />
@@ -314,7 +315,15 @@ export function Dashboard() {
                                     <div className="space-y-6">
                                         <div className="flex justify-between items-end bg-slate-800/30 p-4 rounded-xl border border-slate-800">
                                             <div className="text-sm text-slate-500 font-bold uppercase tracking-wider">Current Rating</div>
-                                            <div className="text-4xl font-mono font-bold text-white text-glow">{stats.rating}</div>
+                                            <div className="flex items-center gap-3">
+                                                {streak >= 3 && (
+                                                    <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/50 animate-pulse gap-1">
+                                                        <Flame className="w-3 h-3 fill-current" />
+                                                        {streak} Win Streak
+                                                    </Badge>
+                                                )}
+                                                <div className="text-4xl font-mono font-bold text-white text-glow">{stats.rating}</div>
+                                            </div>
                                         </div>
                                         <div className="grid grid-cols-3 gap-4 text-center">
                                             <div className="p-2 rounded-lg hover:bg-slate-800/50 transition-colors">

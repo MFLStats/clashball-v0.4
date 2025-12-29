@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { PhysicsEngine, GameState } from '@shared/physics';
+import { PhysicsEngine, GameState, Field } from '@shared/physics';
 import { PlayerMatchStats } from '@shared/types';
 import confetti from 'canvas-confetti';
 import { Button } from '@/components/ui/button';
@@ -165,6 +165,48 @@ export function GameCanvas({
   const handleTouchUpdate = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
     touchInputRef.current = input;
   }, []);
+  // Helper: Draw Goal Net
+  const drawGoalNet = (ctx: CanvasRenderingContext2D, field: Field, scaleX: number, scaleY: number) => {
+      const goalH = field.goalHeight * scaleY;
+      const goalTop = (ctx.canvas.height - goalH) / 2;
+      const goalBottom = goalTop + goalH;
+      const depth = 40 * scaleX; // Net depth
+      const drawNet = (isLeft: boolean) => {
+          const xFront = isLeft ? 0 : ctx.canvas.width;
+          const xBack = isLeft ? -depth : ctx.canvas.width + depth;
+          // Draw Net Shape (Trapezoid)
+          ctx.beginPath();
+          ctx.moveTo(xFront, goalTop);
+          ctx.lineTo(xBack, goalTop + 10); // Slight taper
+          ctx.lineTo(xBack, goalBottom - 10);
+          ctx.lineTo(xFront, goalBottom);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          // Draw Grid Pattern
+          ctx.beginPath();
+          // Horizontal lines
+          for (let i = 1; i < 5; i++) {
+              const y = goalTop + (goalH * i) / 5;
+              ctx.moveTo(xFront, y);
+              ctx.lineTo(xBack, y);
+          }
+          // Vertical lines
+          for (let i = 1; i < 4; i++) {
+              const x = isLeft ? -depth * i / 4 : ctx.canvas.width + depth * i / 4;
+              ctx.moveTo(x, goalTop);
+              ctx.lineTo(x, goalBottom);
+          }
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+      };
+      drawNet(true); // Left Goal
+      drawNet(false); // Right Goal
+  };
   // Render Function
   const render = useCallback((ctx: CanvasRenderingContext2D, state: GameState) => {
     const { width, height } = ctx.canvas;
@@ -200,7 +242,8 @@ export function GameCanvas({
     ctx.beginPath();
     ctx.arc(width / 2, height / 2, 70 * scaleX, 0, Math.PI * 2);
     ctx.stroke();
-    // --- 3. Draw Goals ---
+    // --- 3. Draw Goals & Nets ---
+    drawGoalNet(ctx, state.field, scaleX, scaleY);
     const goalH = state.field.goalHeight * scaleY;
     const goalTop = (height - goalH) / 2;
     // Goal Posts (Simple Black Lines)

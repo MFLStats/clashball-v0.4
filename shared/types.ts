@@ -14,6 +14,7 @@ export interface ModeStats {
   losses: number;
   tier: Tier;
   division: 1 | 2 | 3;
+  streak: number;     // Consecutive wins
   // Advanced Stats
   goals: number;
   assists: number;

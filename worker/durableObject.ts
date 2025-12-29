@@ -122,7 +122,8 @@ export class GlobalDurableObject extends DurableObject {
         }));
         const match = new Match(matchId, matchPlayers, (id, winner) => {
             this.matches.delete(id);
-            // Process ratings here if needed
+            // Fire and forget rating updates
+            this.ctx.waitUntil(this.handleMatchEnd(id, winner, matchPlayers, mode));
         });
         this.matches.set(matchId, match);
         // Notify players
@@ -137,6 +138,36 @@ export class GlobalDurableObject extends DurableObject {
             }));
         });
         match.start();
+    }
+    async handleMatchEnd(matchId: string, winner: 'red' | 'blue', players: { id: string, team: 'red' | 'blue' }[], mode: GameMode) {
+        // 1. Get all user profiles to calculate team averages
+        const playerProfiles = await Promise.all(players.map(p => this.getUserProfile(p.id)));
+        const redPlayers = players.filter(p => p.team === 'red');
+        const bluePlayers = players.filter(p => p.team === 'blue');
+        const getAvgRating = (teamPlayers: typeof players) => {
+            if (teamPlayers.length === 0) return 1200;
+            const total = teamPlayers.reduce((sum, p) => {
+                const profile = playerProfiles.find(prof => prof.id === p.id);
+                return sum + (profile?.stats[mode]?.rating || 1200);
+            }, 0);
+            return total / teamPlayers.length;
+        };
+        const redAvg = getAvgRating(redPlayers);
+        const blueAvg = getAvgRating(bluePlayers);
+        // 2. Process updates for each player
+        const updates = players.map(async (p) => {
+            const isRed = p.team === 'red';
+            const opponentRating = isRed ? blueAvg : redAvg;
+            const result = (winner === 'red' && isRed) || (winner === 'blue' && !isRed) ? 'win' : 'loss';
+            await this.processMatch({
+                userId: p.id,
+                opponentRating,
+                result,
+                timestamp: Date.now(),
+                mode
+            });
+        });
+        await Promise.all(updates);
     }
     // --- Existing RPC Methods ---
     async getCounterValue(): Promise<number> {

@@ -77,6 +77,7 @@
   }
   /* Game Canvas Container */
   .game-container {
-    @apply relative w-full aspect-video bg-slate-950 rounded-xl overflow-hidden border-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.5)];
+    /* Updated to 2:1 aspect ratio to match 1200x600 physics field */
+    @apply relative w-full aspect-[2/1] bg-slate-950 rounded-xl overflow-hidden border-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.5)];
   }
 }

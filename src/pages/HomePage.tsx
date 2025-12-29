@@ -113,7 +113,13 @@ export function HomePage() {
         );
       case 'online_game':
         return (
-            <OnlineGameManager mode={selectedMode} onExit={() => setView('lobby')} />
+            <OnlineGameManager 
+                mode={selectedMode} 
+                onExit={async () => {
+                    await refreshProfile();
+                    setView('lobby');
+                }} 
+            />
         );
       case 'tournament':
         return (

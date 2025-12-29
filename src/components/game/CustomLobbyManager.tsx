@@ -25,7 +25,7 @@ interface ChatMessage {
   team: 'red' | 'blue' | 'spectator';
   scope?: 'all' | 'team';
 }
-const EMOTES = ['😀', '��', '😡', '😭', '😎', '👍', '👎', '⚽'];
+const EMOTES = ['😀', '😂', '😡', '😭', '😎', '👍', '👎', '⚽'];
 export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerProps) {
   const profile = useUserStore(s => s.profile);
   const [view, setView] = useState<'menu' | 'lobby' | 'game'>('menu');
@@ -34,6 +34,8 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
   const [isConnecting, setIsConnecting] = useState(false);
   const [lobbies, setLobbies] = useState<LobbyInfo[]>([]);
   const [isLoadingLobbies, setIsLoadingLobbies] = useState(false);
+  // Use state for socket
+  const [socket, setSocket] = useState<GameSocket | null>(null);
   // Game State
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' | 'spectator' } | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -41,7 +43,6 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
   const [chatScope, setChatScope] = useState<'all' | 'team'>('all');
   const [winner, setWinner] = useState<'red' | 'blue' | null>(null);
   const [emoteEvent, setEmoteEvent] = useState<{ userId: string; emoji: string; id: string } | null>(null);
-  const socketRef = useRef<GameSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
   // Auto-scroll chat
@@ -73,8 +74,7 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
   // Initialize Socket
   useEffect(() => {
     if (!profile) return;
-    const socket = new GameSocket();
-    socketRef.current = socket;
+    const newSocket = new GameSocket();
     const onLobbyUpdate = (msg: WSMessage) => {
         if (msg.type === 'lobby_update') {
             setLobbyState(msg.state);
@@ -147,42 +147,42 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
             setIsConnecting(false);
         }
     };
-    socket.on('lobby_update', onLobbyUpdate);
-    socket.on('match_started', onMatchStarted);
-    socket.on('match_found', onMatchStarted);
-    socket.on('game_events', onGameEvents);
-    socket.on('game_over', onGameOver);
-    socket.on('chat', onChat);
-    socket.on('emote', onEmote);
-    socket.on('kicked', onKicked);
-    socket.on('error', onError);
+    newSocket.on('lobby_update', onLobbyUpdate);
+    newSocket.on('match_started', onMatchStarted);
+    newSocket.on('match_found', onMatchStarted);
+    newSocket.on('game_events', onGameEvents);
+    newSocket.on('game_over', onGameOver);
+    newSocket.on('chat', onChat);
+    newSocket.on('emote', onEmote);
+    newSocket.on('kicked', onKicked);
+    newSocket.on('error', onError);
+    // Connect immediately to be ready
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/api/ws`;
+    newSocket.connect(wsUrl, profile.id, profile.username);
+    setSocket(newSocket);
     return () => {
-        socket.disconnect();
+        newSocket.disconnect();
+        setSocket(null);
     };
-  }, [profile]);
-  const ensureConnection = useCallback(async () => {
-      if (!socketRef.current || !profile) return false;
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host;
-      const wsUrl = `${protocol}//${host}/api/ws`;
-      socketRef.current.connect(wsUrl, profile.id, profile.username);
-      return true;
-  }, [profile]);
+  }, [profile?.id, profile?.username]); // Fixed dependency array
   const createLobby = useCallback(async () => {
     if (!profile) {
         toast.error("You must be logged in to create a lobby");
         return;
     }
+    if (!socket) {
+        toast.error("Connection not ready");
+        return;
+    }
     setIsConnecting(true);
-    await ensureConnection();
-    setTimeout(() => {
-        socketRef.current?.send({
-            type: 'create_lobby',
-            userId: profile.id,
-            username: profile.username
-        });
-    }, 500);
-  }, [profile, ensureConnection]);
+    socket.send({
+        type: 'create_lobby',
+        userId: profile.id,
+        username: profile.username
+    });
+  }, [profile, socket]);
   const joinLobby = useCallback(async (code?: string) => {
     const targetCode = code || joinCode;
     if (!profile) {
@@ -193,68 +193,69 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
         toast.error("Please enter a lobby code");
         return;
     }
+    if (!socket) {
+        toast.error("Connection not ready");
+        return;
+    }
     setIsConnecting(true);
-    await ensureConnection();
-    setTimeout(() => {
-        socketRef.current?.send({
-            type: 'join_lobby',
-            code: targetCode,
-            userId: profile.id,
-            username: profile.username
-        });
-    }, 500);
-  }, [profile, joinCode, ensureConnection]);
+    socket.send({
+        type: 'join_lobby',
+        code: targetCode,
+        userId: profile.id,
+        username: profile.username
+    });
+  }, [profile, joinCode, socket]);
   const startMatch = useCallback(() => {
-    socketRef.current?.send({ type: 'start_lobby_match' });
-  }, []);
+    socket?.send({ type: 'start_lobby_match' });
+  }, [socket]);
   const updateSettings = useCallback((settings: Partial<LobbySettings>) => {
-      socketRef.current?.send({
+      socket?.send({
           type: 'update_lobby_settings',
           settings
       });
-  }, []);
+  }, [socket]);
   const switchTeam = useCallback((team: LobbyTeam) => {
-      socketRef.current?.send({
+      socket?.send({
           type: 'switch_team',
           team
       });
-  }, []);
+  }, [socket]);
   const kickPlayer = useCallback((targetId: string) => {
-      socketRef.current?.send({
+      socket?.send({
           type: 'kick_player',
           targetId
       });
-  }, []);
+  }, [socket]);
   const handleInput = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
-    socketRef.current?.send({
+    socket?.send({
         type: 'input',
         move: input.move,
         kick: input.kick
     });
-  }, []);
+  }, [socket]);
   const sendChat = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
-    socketRef.current?.send({
+    socket?.send({
       type: 'chat',
       message: chatInput,
       scope: chatScope
     });
     setChatInput('');
-  }, [chatInput, chatScope]);
+  }, [chatInput, chatScope, socket]);
   const handleQuickChat = useCallback((message: string) => {
-    socketRef.current?.send({
+    socket?.send({
       type: 'chat',
       message,
       scope: chatScope
     });
-  }, [chatScope]);
+  }, [chatScope, socket]);
   const handleEmoteClick = useCallback((emoji: string) => {
-      socketRef.current?.send({
+      socket?.send({
           type: 'emote',
           emoji
       });
-  }, []);
+  }, [socket]);
   const copyCode = useCallback(() => {
       if (lobbyState?.code) {
           navigator.clipboard.writeText(lobbyState.code);
@@ -287,7 +288,7 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                 {/* Create */}
                 <button
                     onClick={createLobby}
-                    disabled={isConnecting}
+                    disabled={isConnecting || !socket}
                     className="group relative overflow-hidden rounded-3xl bg-slate-900 border border-slate-800 p-8 text-left transition-all hover:border-primary/50 hover:shadow-lg hover:scale-[1.02]"
                 >
                     <div className="absolute right-0 top-0 p-6 opacity-10 transition-transform group-hover:scale-110 group-hover:opacity-20">
@@ -325,7 +326,7 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                 onChange={e => setJoinCode(e.target.value.toUpperCase())}
                                 maxLength={6}
                             />
-                            <Button onClick={() => joinLobby()} disabled={isConnecting || joinCode.length !== 6} className="btn-kid-primary h-12 px-6">
+                            <Button onClick={() => joinLobby()} disabled={isConnecting || joinCode.length !== 6 || !socket} className="btn-kid-primary h-12 px-6">
                                 {isConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Join'}
                             </Button>
                         </div>
@@ -377,7 +378,7 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                     </div>
                                     <Button
                                         onClick={() => joinLobby(lobby.code)}
-                                        disabled={isConnecting || lobby.playerCount >= lobby.maxPlayers}
+                                        disabled={isConnecting || lobby.playerCount >= lobby.maxPlayers || !socket}
                                         className="bg-purple-600 hover:bg-purple-500 text-white"
                                     >
                                         <LogIn className="w-4 h-4 mr-2" /> Join
@@ -723,7 +724,7 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
             currentUserId={profile?.id}
             onLeave={handleLeaveGame}
             emoteEvent={emoteEvent}
-            socket={socketRef.current!}
+            socket={socket ?? undefined}
         />
       </div>
       {/* Chat Section - Moved Below Canvas */}

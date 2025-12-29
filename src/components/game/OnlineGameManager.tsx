@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { GameCanvas } from './GameCanvas';
 import { WSMessage, GameMode, PlayerMatchStats } from '@shared/types';
 import { useUserStore } from '@/store/useUserStore';
@@ -29,6 +29,8 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   const profile = useUserStore(s => s.profile);
   const userId = profile?.id;
   const username = profile?.username;
+  // Use state for socket to trigger re-renders when it's ready
+  const [socket, setSocket] = useState<GameSocket | null>(null);
   const [status, setStatus] = useState<'connecting' | 'searching' | 'playing' | 'error'>('connecting');
   const [queueCount, setQueueCount] = useState(0);
   const [hasState, setHasState] = useState(false);
@@ -41,7 +43,6 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' | 'spectator' } | null>(null);
   const [isWaitingForOpponent, setIsWaitingForOpponent] = useState(false);
   const [emoteEvent, setEmoteEvent] = useState<{ userId: string; emoji: string; id: string } | null>(null);
-  const socketRef = useRef<GameSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   // Auto-scroll chat
   useEffect(() => {
@@ -54,8 +55,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         onExit();
         return;
     }
-    const socket = new GameSocket();
-    socketRef.current = socket;
+    const newSocket = new GameSocket();
     const onMatchFound = (msg: WSMessage) => {
         if (msg.type !== 'match_found' && msg.type !== 'match_started') return;
         setMatchInfo({ matchId: msg.matchId, team: msg.team });
@@ -75,7 +75,8 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     };
     const onGameState = (msg: WSMessage) => {
         if (msg.type === 'game_state') {
-             if (!hasState) setHasState(true);
+             // Directly set true, React handles the no-op if already true
+             setHasState(true);
         }
     };
     const onGameEvents = (msg: WSMessage) => {
@@ -134,24 +135,24 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             setStatus('playing'); // Set to playing to avoid "Connecting" screen, but render waiting UI
         }
     };
-    socket.on('match_found', onMatchFound);
-    socket.on('match_started', onMatchFound);
-    socket.on('queue_update', onQueueUpdate);
-    socket.on('game_state', onGameState);
-    socket.on('game_events', onGameEvents);
-    socket.on('game_over', onGameOver);
-    socket.on('chat', onChat);
-    socket.on('emote', onEmote);
-    socket.on('error', onError);
-    socket.on('tournament_waiting', onTournamentWaiting);
+    newSocket.on('match_found', onMatchFound);
+    newSocket.on('match_started', onMatchFound);
+    newSocket.on('queue_update', onQueueUpdate);
+    newSocket.on('game_state', onGameState);
+    newSocket.on('game_events', onGameEvents);
+    newSocket.on('game_over', onGameOver);
+    newSocket.on('chat', onChat);
+    newSocket.on('emote', onEmote);
+    newSocket.on('error', onError);
+    newSocket.on('tournament_waiting', onTournamentWaiting);
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/api/ws`;
-    socket.connect(wsUrl, userId, username, () => {
+    newSocket.connect(wsUrl, userId, username, () => {
         setStatus('searching');
         if (matchId) {
             // Direct join for tournament
-            socket.send({
+            newSocket.send({
                 type: 'join_match',
                 matchId,
                 userId,
@@ -159,7 +160,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             });
         } else {
             // Standard queue
-            socket.send({
+            newSocket.send({
                 type: 'join_queue',
                 mode,
                 userId,
@@ -167,40 +168,42 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             });
         }
     });
+    setSocket(newSocket);
     return () => {
-        socket.disconnect();
+        newSocket.disconnect();
+        setSocket(null);
     };
-  }, [userId, username, mode, onExit, matchId, hasState]);
+  }, [userId, username, mode, onExit, matchId]); // Removed hasState from dependencies
   const handleInput = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
-    socketRef.current?.send({
+    socket?.send({
         type: 'input',
         move: input.move,
         kick: input.kick
     });
-  }, []);
+  }, [socket]);
   const sendChat = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
-    socketRef.current?.send({
+    socket?.send({
       type: 'chat',
       message: chatInput,
       scope: chatScope
     });
     setChatInput('');
-  }, [chatInput, chatScope]);
+  }, [chatInput, chatScope, socket]);
   const handleQuickChat = useCallback((message: string) => {
-    socketRef.current?.send({
+    socket?.send({
       type: 'chat',
       message,
       scope: chatScope
     });
-  }, [chatScope]);
+  }, [chatScope, socket]);
   const handleEmoteClick = useCallback((emoji: string) => {
-      socketRef.current?.send({
+      socket?.send({
           type: 'emote',
           emoji
       });
-  }, []);
+  }, [socket]);
   const handleRetry = () => {
       window.location.reload();
   };
@@ -215,15 +218,15 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     setHasState(false);
     setMatchInfo(null);
     setStatus('searching');
-    if (userId && username) {
-        socketRef.current?.send({
+    if (userId && username && socket) {
+        socket.send({
             type: 'join_queue',
             mode,
             userId,
             username
         });
     }
-  }, [mode, userId, username, matchId, onExit]);
+  }, [mode, userId, username, matchId, onExit, socket]);
   if (status === 'connecting' || status === 'searching') {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-6 animate-fade-in">
@@ -337,7 +340,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             onLeave={onExit}
             onPlayAgain={handlePlayAgain}
             emoteEvent={emoteEvent}
-            socket={socketRef.current!}
+            socket={socket ?? undefined}
         />
       </div>
       {/* Chat Section - Moved Below Canvas */}

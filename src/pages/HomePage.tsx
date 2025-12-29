@@ -4,21 +4,26 @@ import { GameCanvas } from '@/components/game/GameCanvas';
 import { Dashboard } from '@/components/ranked/Dashboard';
 import { OnlineGameManager } from '@/components/game/OnlineGameManager';
 import { TournamentManager } from '@/components/tournament/TournamentManager';
+import { TournamentBanner } from '@/components/tournament/TournamentBanner';
+import { AuthDialog } from '@/components/auth/AuthDialog';
 import { Button } from '@/components/ui/button';
-import { Play, Trophy, Users, ArrowLeft, Globe, Monitor, Crown } from 'lucide-react';
+import { Play, Trophy, Users, ArrowLeft, Globe, Monitor, Crown, LogOut } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { GameMode } from '@shared/types';
 import { OrientationLock } from '@/components/ui/orientation-lock';
-type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'ranked' | 'tournament';
+import { TournamentPage } from '@/pages/TournamentPage';
+type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'ranked' | 'tournament_mode' | 'tournament_lobby';
 export function HomePage() {
   const [view, setView] = useState<ViewState>('lobby');
   const [selectedMode, setSelectedMode] = useState<GameMode>('1v1');
   // STRICT ZUSTAND RULE: Select primitives individually
   const profile = useUserStore(s => s.profile);
+  const isAuthenticated = useUserStore(s => s.isAuthenticated);
   const initUser = useUserStore(s => s.initUser);
   const refreshProfile = useUserStore(s => s.refreshProfile);
+  const logout = useUserStore(s => s.logout);
   const [isProcessing, setIsProcessing] = useState(false);
   useEffect(() => {
     initUser();
@@ -61,8 +66,8 @@ export function HomePage() {
         return (
           <div className="animate-fade-in space-y-6">
             <div className="flex items-center justify-between">
-              <Button
-                variant="ghost"
+              <Button 
+                variant="ghost" 
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-100 text-slate-600 rounded-lg"
                 disabled={isProcessing}
@@ -74,7 +79,7 @@ export function HomePage() {
               </h2>
               <div className="w-24" />
             </div>
-            <GameCanvas
+            <GameCanvas 
                 onGameEnd={handleLocalGameEnd}
                 winningScore={3}
                 playerNames={{ red: 'You', blue: 'Bot (1200)' }}
@@ -85,8 +90,8 @@ export function HomePage() {
         return (
           <div className="animate-fade-in space-y-8">
              <div className="flex items-center justify-between">
-              <Button
-                variant="ghost"
+              <Button 
+                variant="ghost" 
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-100 text-slate-600 rounded-lg"
               >
@@ -114,24 +119,28 @@ export function HomePage() {
         );
       case 'online_game':
         return (
-            <OnlineGameManager
-                mode={selectedMode}
+            <OnlineGameManager 
+                mode={selectedMode} 
                 onExit={async () => {
                     await refreshProfile();
                     setView('lobby');
-                }}
+                }} 
             />
         );
-      case 'tournament':
+      case 'tournament_mode':
         return (
             <TournamentManager onExit={() => setView('lobby')} />
+        );
+      case 'tournament_lobby':
+        return (
+            <TournamentPage />
         );
       case 'ranked':
         return (
           <div className="animate-fade-in space-y-6">
             <div className="flex items-center justify-between">
-              <Button
-                variant="ghost"
+              <Button 
+                variant="ghost" 
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-100 text-slate-600 rounded-lg"
               >
@@ -160,40 +169,63 @@ export function HomePage() {
               <p className="text-xl text-slate-500 font-medium max-w-md mx-auto">
                 Classic physics-based soccer. Pure skill, no gimmicks.
               </p>
+              {/* Profile / Auth Pill */}
               {profile && stats && (
                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm border border-slate-200 animate-fade-in">
                     <div className={`w-3 h-3 rounded-full ${stats.tier === 'Bronze' ? 'bg-amber-600' : 'bg-haxball-blue'}`} />
+                    {profile.country && (
+                      <img 
+                        src={`https://flagcdn.com/w20/${profile.country.toLowerCase()}.png`}
+                        alt={profile.country}
+                        className="w-5 h-auto rounded-sm"
+                      />
+                    )}
                     <span className="font-bold text-slate-700">{profile.username}</span>
                     <span className="text-slate-300">|</span>
-                    <span className="text-slate-500 font-medium">{stats.rating} MMR (1v1)</span>
+                    <span className="text-slate-500 font-medium">{stats.rating} MMR</span>
+                    {isAuthenticated ? (
+                      <Button variant="ghost" size="icon" className="h-6 w-6 ml-2 text-slate-400 hover:text-red-500" onClick={logout}>
+                        <LogOut className="w-3 h-3" />
+                      </Button>
+                    ) : (
+                      <AuthDialog trigger={
+                        <Button variant="link" size="sm" className="h-6 px-2 ml-2 text-haxball-blue font-bold">
+                          Sign In
+                        </Button>
+                      } />
+                    )}
                  </div>
               )}
             </div>
+            {/* Tournament Banner */}
+            <div className="w-full max-w-md">
+              <TournamentBanner />
+            </div>
             {/* Action Buttons */}
             <div className="flex flex-col gap-4 w-full max-w-md">
-              <button
+              <button 
                 onClick={() => setView('online_select')}
                 className="btn-kid-primary flex items-center justify-center gap-3 text-lg group w-full"
               >
                 <Globe className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
                 Play Online
               </button>
-              <button
-                onClick={() => setView('tournament')}
+              <button 
+                onClick={() => setView('tournament_mode')}
                 className="btn-kid-action flex items-center justify-center gap-3 text-lg group w-full"
               >
                 <Crown className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
                 Tournament Mode
               </button>
               <div className="flex gap-4">
-                <button
+                <button 
                     onClick={() => setView('local_game')}
                     className="btn-kid-secondary flex-1 flex items-center justify-center gap-3 text-lg"
                 >
                     <Monitor className="w-6 h-6" />
                     Practice
                 </button>
-                <button
+                <button 
                     onClick={() => setView('ranked')}
                     className="btn-kid-secondary flex-1 flex items-center justify-center gap-3 text-lg"
                 >
@@ -208,13 +240,17 @@ export function HomePage() {
                 <div className="w-2 h-2 rounded-full bg-green-500" />
                 Online
               </span>
-              <span>v1.0.0 Classic</span>
+              <span>v1.1.0 Auth</span>
             </div>
           </div>
         );
       }
     }
   };
+  // If we are in tournament lobby view, render just that page component
+  if (view === 'tournament_lobby') {
+    return <TournamentPage />;
+  }
   return (
     <AppLayout container contentClassName="py-8">
       <OrientationLock />

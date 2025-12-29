@@ -31,6 +31,8 @@ export interface TeamProfile {
 export interface UserProfile {
   id: string;
   username: string;
+  email?: string;     // Optional for guest, required for auth
+  country?: string;   // ISO 2-letter code (e.g., 'US', 'BR')
   stats: Record<GameMode, ModeStats>;
   teams: string[]; // List of Team IDs
   lastMatchTime: number;
@@ -56,6 +58,32 @@ export interface MatchResponse {
   newDivision: 1 | 2 | 3;
   mode: GameMode;
   teamId?: string;
+}
+// --- Auth Types ---
+export interface AuthPayload {
+  email: string;
+  password?: string;
+  username?: string;
+  country?: string;
+  isGuest?: boolean;
+}
+export interface AuthResponse {
+  userId: string;
+  profile: UserProfile;
+  token?: string; // For future use, currently userId acts as session
+}
+// --- Tournament Types ---
+export interface TournamentParticipant {
+  userId: string;
+  username: string;
+  country: string;
+  rank: string; // e.g. "Gold I"
+  rating: number;
+}
+export interface TournamentState {
+  nextStartTime: number; // Timestamp
+  participants: TournamentParticipant[];
+  status: 'open' | 'in_progress' | 'completed';
 }
 // --- Multiplayer Types ---
 export type WSMessage =

@@ -1,5 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
-import type { DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage, GameMode, ModeStats, TeamProfile } from '@shared/types';
+import type { 
+    DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage, 
+    GameMode, ModeStats, TeamProfile, AuthPayload, AuthResponse, 
+    TournamentState, TournamentParticipant 
+} from '@shared/types';
 import { MOCK_ITEMS } from '@shared/mock-data';
 import { Match } from './match';
 // Glicko-2 Constants
@@ -12,6 +16,8 @@ export class GlobalDurableObject extends DurableObject {
     queues: Map<GameMode, { userId: string; ws: WebSocket; username: string }[]> = new Map();
     matches: Map<string, Match> = new Map();
     sessions: Map<WebSocket, { userId: string; matchId?: string }> = new Map();
+    // Tournament State (In-memory for active pool, could be persisted if needed)
+    tournamentParticipants: TournamentParticipant[] = [];
     constructor(ctx: DurableObjectState, env: any) {
         super(ctx, env);
         // Initialize queues
@@ -210,6 +216,39 @@ export class GlobalDurableObject extends DurableObject {
       await this.ctx.storage.put("demo_items", updatedItems);
       return updatedItems;
     }
+    // --- Auth Methods ---
+    async signup(payload: AuthPayload): Promise<AuthResponse> {
+        const { email, password, username, country } = payload;
+        if (!email || !password || !username) throw new Error("Missing required fields");
+        // Check if email exists
+        const emailIndex = (await this.ctx.storage.get<Record<string, string>>("email_index")) || {};
+        if (emailIndex[email]) {
+            throw new Error("Email already registered");
+        }
+        const userId = crypto.randomUUID();
+        // Store credentials (mock hash for demo)
+        const credentials = { userId, password }; // In prod, hash this!
+        await this.ctx.storage.put(`auth_${email}`, credentials);
+        // Update index
+        emailIndex[email] = userId;
+        await this.ctx.storage.put("email_index", emailIndex);
+        // Create Profile
+        const profile = await this.getUserProfile(userId, username);
+        profile.email = email;
+        profile.country = country || 'US';
+        await this.ctx.storage.put(`user_${userId}`, profile);
+        return { userId, profile };
+    }
+    async login(payload: AuthPayload): Promise<AuthResponse> {
+        const { email, password } = payload;
+        if (!email || !password) throw new Error("Missing credentials");
+        const credentials = await this.ctx.storage.get<{ userId: string, password: string }>(`auth_${email}`);
+        if (!credentials || credentials.password !== password) {
+            throw new Error("Invalid credentials");
+        }
+        const profile = await this.getUserProfile(credentials.userId);
+        return { userId: credentials.userId, profile };
+    }
     // --- Ranked Methods ---
     async getUserProfile(userId: string, username: string = 'Player'): Promise<UserProfile> {
       const key = `user_${userId}`;
@@ -376,5 +415,34 @@ export class GlobalDurableObject extends DurableObject {
       if (rating < 1800) return { tier: 'Platinum', division: rating < 1600 ? 3 : rating < 1700 ? 2 : 1 };
       if (rating < 2100) return { tier: 'Diamond', division: rating < 1900 ? 3 : rating < 2000 ? 2 : 1 };
       return { tier: 'Master', division: 1 };
+    }
+    // --- Tournament Methods ---
+    async getTournamentState(): Promise<TournamentState> {
+        // Calculate next 5-minute interval
+        const now = Date.now();
+        const interval = 5 * 60 * 1000; // 5 minutes
+        const nextStartTime = Math.ceil(now / interval) * interval;
+        // If we passed the previous start time significantly, clear old participants
+        // For simplicity in this phase, we just return the current pool for the "next" tournament
+        // In a real system, we'd move them to an "active" match state
+        return {
+            nextStartTime,
+            participants: this.tournamentParticipants,
+            status: 'open'
+        };
+    }
+    async joinTournament(userId: string): Promise<TournamentState> {
+        const profile = await this.getUserProfile(userId);
+        // Check if already joined
+        if (!this.tournamentParticipants.find(p => p.userId === userId)) {
+            this.tournamentParticipants.push({
+                userId: profile.id,
+                username: profile.username,
+                country: profile.country || 'US',
+                rank: `${profile.stats['1v1'].tier} ${profile.stats['1v1'].division === 1 ? 'I' : profile.stats['1v1'].division === 2 ? 'II' : 'III'}`,
+                rating: profile.stats['1v1'].rating
+            });
+        }
+        return this.getTournamentState();
     }
 }

@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import { Env } from './core-utils';
-import type { DemoItem, ApiResponse, UserProfile, MatchResult, MatchResponse, TeamProfile } from '@shared/types';
+import type { 
+    DemoItem, ApiResponse, UserProfile, MatchResult, MatchResponse, 
+    TeamProfile, AuthPayload, AuthResponse, TournamentState 
+} from '@shared/types';
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
     app.get('/api/test', (c) => c.json({ success: true, data: { name: 'CF Workers Demo' }}));
     // --- WebSocket Route ---
@@ -47,7 +50,28 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const data = await stub.deleteDemoItem(id);
         return c.json({ success: true, data } satisfies ApiResponse<DemoItem[]>);
     });
-    // --- New Ranked Routes ---
+    // --- Auth Routes ---
+    app.post('/api/auth/signup', async (c) => {
+        try {
+            const body = await c.req.json() as AuthPayload;
+            const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+            const data = await stub.signup(body);
+            return c.json({ success: true, data } satisfies ApiResponse<AuthResponse>);
+        } catch (e) {
+            return c.json({ success: false, error: (e as Error).message }, 400);
+        }
+    });
+    app.post('/api/auth/login', async (c) => {
+        try {
+            const body = await c.req.json() as AuthPayload;
+            const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+            const data = await stub.login(body);
+            return c.json({ success: true, data } satisfies ApiResponse<AuthResponse>);
+        } catch (e) {
+            return c.json({ success: false, error: (e as Error).message }, 401);
+        }
+    });
+    // --- Ranked Routes ---
     // Get or Create User Profile
     app.post('/api/profile', async (c) => {
         const { userId, username } = await c.req.json() as { userId: string, username: string };
@@ -84,5 +108,18 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
         const data = await stub.getUserTeams(id);
         return c.json({ success: true, data } satisfies ApiResponse<TeamProfile[]>);
+    });
+    // --- Tournament Routes ---
+    app.get('/api/tournament', async (c) => {
+        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+        const data = await stub.getTournamentState();
+        return c.json({ success: true, data } satisfies ApiResponse<TournamentState>);
+    });
+    app.post('/api/tournament/join', async (c) => {
+        const { userId } = await c.req.json() as { userId: string };
+        if (!userId) return c.json({ success: false, error: 'Missing userId' }, 400);
+        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+        const data = await stub.joinTournament(userId);
+        return c.json({ success: true, data } satisfies ApiResponse<TournamentState>);
     });
 }

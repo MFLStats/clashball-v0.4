@@ -298,33 +298,16 @@ export class GlobalDurableObject extends DurableObject {
             this.startMatch(matchPlayers, [], mode, RANKED_SETTINGS);
         }
     }
-    // Fair Team Balancing Algorithm
+    // Random Team Assignment (No Skill Balancing)
     balanceTeams(players: { userId: string; ws: WebSocket; username: string; rating: number; jersey?: string }[], mode: GameMode) {
-        if (mode === '1v1') {
-            // Random sides for 1v1
-            return [
-                { ...players[0], team: 'red' as const },
-                { ...players[1], team: 'blue' as const }
-            ];
-        }
-        // Sort by rating descending for the greedy algorithm
-        const sorted = [...players].sort((a, b) => b.rating - a.rating);
-        const red: typeof players = [];
-        const blue: typeof players = [];
-        let redRating = 0;
-        let blueRating = 0;
-        const teamSize = players.length / 2;
-        for (const p of sorted) {
-            // Assign to the team with lower total rating, unless that team is full
-            // This effectively creates balanced sums (Partition Problem greedy approximation)
-            if (red.length < teamSize && (blue.length >= teamSize || redRating <= blueRating)) {
-                red.push(p);
-                redRating += p.rating;
-            } else {
-                blue.push(p);
-                blueRating += p.rating;
-            }
-        }
+        // Random Shuffle (Fisher-Yates style via map-sort)
+        const shuffled = players
+            .map(value => ({ value, sort: Math.random() }))
+            .sort((a, b) => a.sort - b.sort)
+            .map(({ value }) => value);
+        const mid = Math.ceil(shuffled.length / 2);
+        const red = shuffled.slice(0, mid);
+        const blue = shuffled.slice(mid);
         return [
             ...red.map(p => ({ ...p, team: 'red' as const })),
             ...blue.map(p => ({ ...p, team: 'blue' as const }))

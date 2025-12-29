@@ -50,7 +50,7 @@ export function TournamentManager({ onExit, participants, startTime, tournamentN
       }
       setCurrentRound(activeRound);
       // Check if user is in an active match
-      const userMatch = serverBracket.find(m => 
+      const userMatch = serverBracket.find(m =>
           (m.player1?.userId === profile?.id || m.player2?.userId === profile?.id) &&
           m.status === 'in_progress'
       );
@@ -59,7 +59,7 @@ export function TournamentManager({ onExit, participants, startTime, tournamentN
           setTournamentState('playing');
       } else {
           // Check if user lost
-          const userLost = serverBracket.some(m => 
+          const userLost = serverBracket.some(m =>
               (m.player1?.userId === profile?.id || m.player2?.userId === profile?.id) &&
               m.status === 'completed' &&
               m.winnerId !== profile?.id
@@ -92,7 +92,7 @@ export function TournamentManager({ onExit, participants, startTime, tournamentN
      placeholders.push({ id: uuidv4(), round: 2, matchIndex: 0, player1: null, player2: null, p1Ready: false, p2Ready: false, status: 'pending' });
      return placeholders;
   }, []);
-  const generateSeededBracket = useCallback(() => {
+  const generateRandomBracket = useCallback(() => {
     let allPlayers: { name: string; rating: number; id: string }[] = [];
     if (participants && participants.length > 0) {
         allPlayers = participants.map(p => ({ name: p.username, rating: p.rating, id: p.userId }));
@@ -108,22 +108,28 @@ export function TournamentManager({ onExit, participants, startTime, tournamentN
             allPlayers.push({ name: botName, rating: Math.floor(Math.random() * 600) + 800, id: `bot-${i}` });
         });
     }
-    allPlayers.sort((a, b) => b.rating - a.rating);
+    // Random Shuffle instead of Skill Sort
+    allPlayers = allPlayers
+        .map(value => ({ value, sort: Math.random() }))
+        .sort((a, b) => a.sort - b.sort)
+        .map(({ value }) => value);
     const top8 = allPlayers.slice(0, 8);
+    // Ensure user is in top 8 if not already (rare edge case with >8 participants)
     if (!top8.some(p => p.name === userTeamName)) {
         const userIndex = allPlayers.findIndex(p => p.name === userTeamName);
         if (userIndex !== -1) {
             const userEntry = allPlayers[userIndex];
-            allPlayers.splice(userIndex, 1);
-            allPlayers.splice(7, 0, userEntry);
+            // Replace a random bot/player in top 8 with user
+            const replaceIdx = Math.floor(Math.random() * 8);
+            top8[replaceIdx] = userEntry;
         }
     }
-    const seeds = allPlayers.slice(0, 8).map(p => ({ username: p.name, userId: p.id, country: 'US', rank: 'Bronze', rating: p.rating }));
+    const seeds = top8.map(p => ({ username: p.name, userId: p.id, country: 'US', rank: 'Bronze', rating: p.rating }));
     const initialMatches: TournamentMatch[] = [
-        { id: uuidv4(), round: 0, matchIndex: 0, player1: seeds[0], player2: seeds[7], p1Ready: true, p2Ready: true, status: 'scheduled' },
-        { id: uuidv4(), round: 0, matchIndex: 1, player1: seeds[3], player2: seeds[4], p1Ready: true, p2Ready: true, status: 'scheduled' },
-        { id: uuidv4(), round: 0, matchIndex: 2, player1: seeds[1], player2: seeds[6], p1Ready: true, p2Ready: true, status: 'scheduled' },
-        { id: uuidv4(), round: 0, matchIndex: 3, player1: seeds[2], player2: seeds[5], p1Ready: true, p2Ready: true, status: 'scheduled' },
+        { id: uuidv4(), round: 0, matchIndex: 0, player1: seeds[0], player2: seeds[1], p1Ready: true, p2Ready: true, status: 'scheduled' },
+        { id: uuidv4(), round: 0, matchIndex: 1, player1: seeds[2], player2: seeds[3], p1Ready: true, p2Ready: true, status: 'scheduled' },
+        { id: uuidv4(), round: 0, matchIndex: 2, player1: seeds[4], player2: seeds[5], p1Ready: true, p2Ready: true, status: 'scheduled' },
+        { id: uuidv4(), round: 0, matchIndex: 3, player1: seeds[6], player2: seeds[7], p1Ready: true, p2Ready: true, status: 'scheduled' },
     ];
     for (let i = 0; i < 2; i++) initialMatches.push({ id: uuidv4(), round: 1, matchIndex: i, player1: null, player2: null, p1Ready: false, p2Ready: false, status: 'pending' });
     initialMatches.push({ id: uuidv4(), round: 2, matchIndex: 0, player1: null, player2: null, p1Ready: false, p2Ready: false, status: 'pending' });
@@ -138,9 +144,9 @@ export function TournamentManager({ onExit, participants, startTime, tournamentN
         setMatches(generatePlaceholders());
     } else {
         setIsWaiting(false);
-        generateSeededBracket();
+        generateRandomBracket();
     }
-  }, [startTime, matches.length, generateSeededBracket, generatePlaceholders, isOnline]);
+  }, [startTime, matches.length, generateRandomBracket, generatePlaceholders, isOnline]);
   // Timer Logic (Visual Only)
   useEffect(() => {
     if (tournamentState !== 'bracket') return;
@@ -151,12 +157,12 @@ export function TournamentManager({ onExit, participants, startTime, tournamentN
             setTimeRemaining(diff);
             if (diff <= 0 && !isOnline) {
                 setIsWaiting(false);
-                generateSeededBracket();
+                generateRandomBracket();
             }
         }
     }, 1000);
     return () => clearInterval(interval);
-  }, [tournamentState, isWaiting, startTime, generateSeededBracket, isOnline]);
+  }, [tournamentState, isWaiting, startTime, generateRandomBracket, isOnline]);
   const formatTime = (ms: number) => {
       const seconds = Math.ceil(ms / 1000);
       const m = Math.floor(seconds / 60);
@@ -167,12 +173,12 @@ export function TournamentManager({ onExit, participants, startTime, tournamentN
   if (tournamentState === 'playing') {
     if (isOnline && activeMatchId) {
         return (
-            <OnlineGameManager 
-                mode="1v1" 
+            <OnlineGameManager
+                mode="1v1"
                 onExit={() => {
                     setTournamentState('bracket');
                     setActiveMatchId(null);
-                }} 
+                }}
                 matchId={activeMatchId}
             />
         );

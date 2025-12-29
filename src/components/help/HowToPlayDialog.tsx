@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { HelpCircle, Keyboard, Gamepad2, Trophy, BookOpen, Move, Zap, Shield, Crown, Users, Scale } from 'lucide-react';
+import { HelpCircle, Keyboard, Gamepad2, Trophy, BookOpen, Move, Zap, Shield, Crown, Users } from 'lucide-react';
 interface HowToPlayDialogProps {
   trigger?: React.ReactNode;
   open?: boolean;
@@ -101,10 +101,6 @@ export function HowToPlayDialog({ trigger, open, onOpenChange }: HowToPlayDialog
                     <p className="text-sm text-slate-400 mt-1">
                       Compete in 1v1, 2v2, 3v3, or 4v4 leagues. Win matches to gain MMR and climb from Bronze to Master tier.
                     </p>
-                    <div className="mt-3 flex items-center gap-2 text-xs text-emerald-400 font-medium bg-emerald-950/30 px-2 py-1 rounded border border-emerald-500/20 w-fit">
-                        <Scale className="w-3 h-3" />
-                        <span>Fair Team Balancing: Players are sorted by skill to ensure even matches.</span>
-                    </div>
                   </div>
                 </div>
                 <div className="bg-slate-800/30 p-4 rounded-xl border border-white/5 flex gap-4 items-start">

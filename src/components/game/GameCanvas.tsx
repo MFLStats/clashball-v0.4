@@ -14,10 +14,10 @@ interface GameCanvasProps {
   playerNames?: { red: string; blue: string };
   currentUserId?: string;
 }
-export function GameCanvas({ 
-  onGameEnd, 
-  winningScore = 3, 
-  externalState, 
+export function GameCanvas({
+  onGameEnd,
+  winningScore = 3,
+  externalState,
   onInput,
   botDifficulty = 'medium',
   playerNames,
@@ -154,18 +154,13 @@ export function GameCanvas({
       const r = p.radius * scaleX;
       // Classic Haxball Colors
       const color = p.team === 'red' ? '#e56e56' : '#5689e5';
-      // Kick Indicator (White Ring + Glow)
+      // Kick Indicator (White Ring)
       if (p.isKicking) {
         ctx.beginPath();
         ctx.arc(x, y, r + 6, 0, Math.PI * 2);
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 4;
         ctx.stroke();
-        // Glow effect
-        ctx.shadowColor = '#ffffff';
-        ctx.shadowBlur = 10;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
       }
       // Body
       ctx.beginPath();
@@ -374,30 +369,30 @@ export function GameCanvas({
     lastTimeRef.current = performance.now();
   };
   // Format time remaining
-  const timeRemaining = latestExternalStateRef.current 
-    ? latestExternalStateRef.current.timeRemaining 
+  const timeRemaining = latestExternalStateRef.current
+    ? latestExternalStateRef.current.timeRemaining
     : gameStateRef.current.timeRemaining;
   const minutes = Math.floor(Math.max(0, timeRemaining) / 60);
   const seconds = Math.floor(Math.max(0, timeRemaining) % 60);
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-4xl mx-auto">
-      {/* Scoreboard - Modern Glass Style */}
-      <div className="flex items-center justify-between w-full px-8 py-3 bg-slate-900/80 backdrop-blur-md rounded-xl shadow-glass border border-white/10">
+      {/* Scoreboard - Clean Style */}
+      <div className="flex items-center justify-between w-full px-8 py-3 bg-slate-900 rounded-xl border border-slate-800 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="w-6 h-6 rounded-full bg-haxball-red border-2 border-black shadow-[0_0_10px_#e56e56]" />
-          <span className="text-4xl font-display font-bold text-white drop-shadow-md">{score.red}</span>
+          <div className="w-6 h-6 rounded-full bg-haxball-red border-2 border-black" />
+          <span className="text-4xl font-display font-bold text-white">{score.red}</span>
         </div>
         <div className="flex flex-col items-center">
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">
                 {gameOver ? 'MATCH ENDED' : `First to ${winningScore}`}
             </div>
-            <div className="px-3 py-1 bg-black/50 rounded text-neon-blue font-mono text-sm border border-white/10 shadow-inner">
+            <div className="px-3 py-1 bg-slate-800 rounded text-white font-mono text-sm border border-slate-700">
                 {minutes}:{seconds.toString().padStart(2, '0')}
             </div>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-4xl font-display font-bold text-white drop-shadow-md">{score.blue}</span>
-          <div className="w-6 h-6 rounded-full bg-haxball-blue border-2 border-black shadow-[0_0_10px_#5689e5]" />
+          <span className="text-4xl font-display font-bold text-white">{score.blue}</span>
+          <div className="w-6 h-6 rounded-full bg-haxball-blue border-2 border-black" />
         </div>
       </div>
       {/* Game Area */}
@@ -412,13 +407,13 @@ export function GameCanvas({
         <TouchControls onUpdate={handleTouchUpdate} />
         {/* Game Over Overlay */}
         {gameOver && (
-            <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in z-30">
-                <Trophy className={`w-20 h-20 mb-4 ${gameOver === 'red' ? 'text-haxball-red' : 'text-haxball-blue'} drop-shadow-[0_0_20px_currentColor]`} />
-                <h2 className="text-5xl font-display font-bold text-white mb-2 tracking-wider text-glow">
+            <div className="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center animate-fade-in z-30">
+                <Trophy className={`w-20 h-20 mb-4 ${gameOver === 'red' ? 'text-haxball-red' : 'text-haxball-blue'}`} />
+                <h2 className="text-5xl font-display font-bold text-white mb-2 tracking-wider">
                     {gameOver === 'red' ? 'RED VICTORY' : 'BLUE VICTORY'}
                 </h2>
-                <p className="text-slate-300 mb-8 font-medium text-lg">Match results are being processed...</p>
-                <Button onClick={handleReset} size="lg" className="btn-kid-secondary border-white/20 shadow-lg">
+                <p className="text-slate-400 mb-8 font-medium text-lg">Match results are being processed...</p>
+                <Button onClick={handleReset} size="lg" className="btn-kid-secondary border-slate-700">
                     Play Again
                 </Button>
             </div>
@@ -426,16 +421,16 @@ export function GameCanvas({
         {/* Controls Overlay (Visible on Hover/Pause) */}
         {!gameOver && !externalState && (
             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-30">
-            <Button size="icon" variant="secondary" onClick={handleReset} className="bg-white/10 text-white hover:bg-white/20 border border-white/10 backdrop-blur-sm">
+            <Button size="icon" variant="secondary" onClick={handleReset} className="bg-slate-800 text-white hover:bg-slate-700 border border-slate-700">
                 <RotateCcw className="w-4 h-4" />
             </Button>
-            <Button size="icon" variant="secondary" onClick={() => setIsPaused(!isPaused)} className="bg-white/10 text-white hover:bg-white/20 border border-white/10 backdrop-blur-sm">
+            <Button size="icon" variant="secondary" onClick={() => setIsPaused(!isPaused)} className="bg-slate-800 text-white hover:bg-slate-700 border border-slate-700">
                 <Play className="w-4 h-4" />
             </Button>
             </div>
         )}
       </div>
-      <div className="text-sm text-slate-400 font-medium font-mono bg-slate-900/50 px-4 py-2 rounded-full border border-white/5 hidden md:block">
+      <div className="text-sm text-slate-500 font-medium font-mono bg-slate-900 px-4 py-2 rounded-full border border-slate-800 hidden md:block">
         Controls: WASD to Move • SPACE to Kick
       </div>
     </div>

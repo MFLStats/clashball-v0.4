@@ -3,7 +3,7 @@
 @tailwind utilities;
 @layer base {
   :root {
-    /* Modern Dark Glass Theme */
+    /* Professional Dark Theme */
     --background: 222.2 84% 4.9%; /* Slate 950 #020617 */
     --foreground: 210 40% 98%;    /* Slate 50 #f8fafc */
     --card: 222.2 84% 4.9%;
@@ -23,21 +23,16 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
-    --radius: 0.75rem;
-    /* Chart Colors - Neon Palette */
-    --chart-1: 190 100% 50%; /* Neon Blue */
-    --chart-2: 320 100% 50%; /* Neon Pink */
-    --chart-3: 280 100% 60%; /* Neon Purple */
-    --chart-4: 60 100% 50%;  /* Neon Yellow */
-    --chart-5: 150 100% 50%; /* Neon Green */
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --radius: 0.5rem;
+    /* Sidebar Colors */
+    --sidebar-background: 222.2 84% 4.9%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 217.2 91.2% 59.8%;
+    --sidebar-primary-foreground: 222.2 47.4% 11.2%;
+    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 212.7 26.8% 83.9%;
   }
   * {
     @apply border-border;
@@ -48,45 +43,38 @@
     -moz-osx-font-smoothing: grayscale;
   }
   body {
-    @apply bg-background text-foreground min-h-screen;
-    background-image: url('https://www.transparenttextures.com/patterns/carbon-fibre.png'), linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a);
+    @apply bg-slate-950 text-foreground min-h-screen;
+    /* Subtle gradient instead of carbon fiber/neon */
+    background-image: radial-gradient(circle at top center, #1e293b 0%, #020617 100%);
     background-attachment: fixed;
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-    text-rendering: optimizeLegibility;
   }
 }
 @layer components {
-  /* Modern Glass Button System */
+  /* Clean Button System */
   .btn-kid {
-    @apply inline-flex items-center justify-center px-6 py-3 text-base font-bold transition-all duration-200 rounded-xl border-0 shadow-lg active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 relative overflow-hidden;
+    @apply inline-flex items-center justify-center px-6 py-3 text-base font-bold transition-all duration-200 rounded-lg shadow-md active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 relative overflow-hidden;
   }
   .btn-kid-primary {
-    @apply btn-kid text-slate-900 bg-gradient-to-r from-neon-yellow to-orange-500 hover:from-yellow-300 hover:to-orange-400 shadow-glow-sm hover:shadow-glow;
+    @apply btn-kid text-slate-900 bg-primary hover:bg-blue-400 text-white shadow-blue-900/20;
   }
   .btn-kid-secondary {
-    @apply btn-kid text-white bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/10 hover:border-white/30;
+    @apply btn-kid text-white bg-slate-800 hover:bg-slate-700 border border-slate-700;
   }
   .btn-kid-action {
-    @apply btn-kid text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 shadow-glow-lg;
+    @apply btn-kid text-white bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/20;
   }
-  /* Modern Glass Card System */
+  /* Clean Card System */
   .card-kid {
-    @apply bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl shadow-glass text-white;
+    @apply bg-slate-900 border border-slate-800 rounded-xl shadow-sm text-white;
   }
-  /* Text System */
+  /* Typography */
   .text-display {
     @apply font-display font-bold tracking-tight;
-  }
-  .text-glow {
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-  }
-  .text-glow-blue {
-    text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
   }
   /* Game Canvas Container */
   .game-container {
     /* 2:1 aspect ratio to match 1200x600 physics field */
-    @apply relative w-full aspect-[2/1] bg-[#718c5a] rounded-xl overflow-hidden border-4 border-slate-800/80 shadow-2xl;
+    @apply relative w-full aspect-[2/1] bg-[#718c5a] rounded-xl overflow-hidden border-4 border-slate-800 shadow-xl;
   }
   /* Scrollbar Hiding */
   .scrollbar-hide::-webkit-scrollbar {

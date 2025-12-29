@@ -193,7 +193,7 @@ export type WSMessage =
   | { type: 'lobby_update'; state: LobbyState }
   | { type: 'start_lobby_match' }
   | { type: 'input'; move: { x: number; y: number }; kick: boolean }
-  | { type: 'match_found'; matchId: string; team: 'red' | 'blue' | 'spectator'; opponent?: string; opponents?: string[] }
+  | { type: 'match_found'; matchId: string; team: 'red' | 'blue' | 'spectator'; opponent?: string; opponents?: string[]; isRejoin?: boolean }
   | { type: 'match_started'; matchId: string; team: 'red' | 'blue' | 'spectator'; opponent?: string; opponents?: string[] }
   | { type: 'game_state'; state: any } // Typed as 'any' to avoid circular dependency, but effectively GameState
   | { type: 'game_events'; events: GameEvent[] }

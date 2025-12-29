@@ -639,15 +639,15 @@ export function GameCanvas({
         // Play Local Sounds & Track Stats
         events.forEach(event => {
             switch (event.type) {
-                case 'kick': 
-                    SoundEngine.playKick(); 
+                case 'kick':
+                    SoundEngine.playKick();
                     break;
-                case 'wall': 
-                    SoundEngine.playWall(); 
+                case 'wall':
+                    SoundEngine.playWall();
                     SoundEngine.playHeavyImpact();
                     break;
-                case 'player': 
-                    SoundEngine.playPlayer(); 
+                case 'player':
+                    SoundEngine.playPlayer();
                     break;
                 case 'goal': {
                     SoundEngine.playGoal();
@@ -817,8 +817,28 @@ export function GameCanvas({
             </div>
         )}
       </div>
-      <div className="text-sm text-slate-500 font-medium font-mono bg-slate-900 px-4 py-2 rounded-full border border-slate-800 hidden md:block">
-        Controls: WASD to Move • SPACE to Kick
+      {/* Controls Overlay (Desktop) */}
+      <div className="hidden md:flex items-center gap-6 bg-slate-900/80 backdrop-blur-md px-6 py-3 rounded-full border border-slate-800 shadow-xl mt-4">
+        {/* Movement Group */}
+        <div className="flex items-center gap-3">
+            <div className="flex flex-col items-center gap-1">
+                <div className="w-8 h-8 bg-slate-800 border-b-4 border-slate-950 rounded flex items-center justify-center font-bold text-slate-200 text-xs shadow-lg">W</div>
+                <div className="flex gap-1">
+                    <div className="w-8 h-8 bg-slate-800 border-b-4 border-slate-950 rounded flex items-center justify-center font-bold text-slate-200 text-xs shadow-lg">A</div>
+                    <div className="w-8 h-8 bg-slate-800 border-b-4 border-slate-950 rounded flex items-center justify-center font-bold text-slate-200 text-xs shadow-lg">S</div>
+                    <div className="w-8 h-8 bg-slate-800 border-b-4 border-slate-950 rounded flex items-center justify-center font-bold text-slate-200 text-xs shadow-lg">D</div>
+                </div>
+            </div>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Move</span>
+        </div>
+        <div className="w-px h-8 bg-slate-700" />
+        {/* Action Group */}
+        <div className="flex items-center gap-3">
+            <div className="h-8 px-4 bg-slate-800 border-b-4 border-slate-950 rounded flex items-center justify-center font-bold text-slate-200 text-xs shadow-lg">
+                SPACE
+            </div>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Kick</span>
+        </div>
       </div>
     </div>
   );

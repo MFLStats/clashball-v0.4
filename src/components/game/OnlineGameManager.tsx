@@ -61,7 +61,9 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         setMatchInfo({ matchId: msg.matchId, team: msg.team });
         setStatus('playing');
         setIsWaitingForOpponent(false);
-        if (msg.team === 'spectator') {
+        if (msg.type === 'match_found' && msg.isRejoin) {
+             toast.success('Reconnected to active match!');
+        } else if (msg.team === 'spectator') {
             toast.info('Spectating Match');
         } else {
             const opponents = msg.opponents?.length ? msg.opponents.join(', ') : msg.opponent;

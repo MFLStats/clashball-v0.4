@@ -67,11 +67,48 @@ export class GlobalDurableObject extends DurableObject {
         this.handleDisconnect(ws);
     }
     // --- Core Logic ---
+    findActiveMatch(userId: string): Match | undefined {
+        for (const match of this.matches.values()) {
+            if (match.players.has(userId)) {
+                return match;
+            }
+        }
+        return undefined;
+    }
+    reconnectToMatch(ws: WebSocket, userId: string, username: string, match: Match) {
+        const player = match.players.get(userId);
+        if (player) {
+            // Update connection
+            player.ws = ws;
+            // Update session mapping
+            this.sessions.set(ws, { userId, matchId: match.id });
+            // Notify client
+            const opponents = Array.from(match.players.values())
+                .filter(p => p.team !== player.team)
+                .map(p => p.username);
+            ws.send(JSON.stringify({
+                type: 'match_found',
+                matchId: match.id,
+                team: player.team,
+                opponent: opponents.join(', '),
+                opponents,
+                isRejoin: true
+            }));
+            // Send immediate state
+            ws.send(JSON.stringify({ type: 'game_state', state: match.gameState }));
+        }
+    }
     async handleMessage(ws: WebSocket, msg: WSMessage) {
         try {
             switch (msg.type) {
                 case 'join_queue': {
                     if (!msg.userId || !msg.mode) return;
+                    // Check for active match first (Reconnection Logic)
+                    const activeMatch = this.findActiveMatch(msg.userId);
+                    if (activeMatch) {
+                        this.reconnectToMatch(ws, msg.userId, msg.username, activeMatch);
+                        return;
+                    }
                     const profile = await this.getUserProfile(msg.userId);
                     this.addToQueue(ws, msg.userId, msg.username, msg.mode, profile.stats[msg.mode].rating, profile.jersey);
                     break;

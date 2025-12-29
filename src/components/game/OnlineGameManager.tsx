@@ -135,56 +135,67 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/api/ws`;
     console.log(`Connecting to WebSocket: ${wsUrl} (Attempt ${reconnectAttemptsRef.current + 1})`);
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-    ws.onopen = () => {
-      if (!isMountedRef.current) {
-          ws.close();
-          return;
-      }
-      if (ws !== wsRef.current) return;
-      console.log('WebSocket Connected');
-      reconnectAttemptsRef.current = 0;
-      setStatus('searching');
-      // Join Queue
-      ws.send(JSON.stringify({
-        type: 'join_queue',
-        mode,
-        userId,
-        username
-      } satisfies WSMessage));
-    };
-    ws.onmessage = (event) => {
-      if (!isMountedRef.current) return;
-      try {
-        const msg = JSON.parse(event.data) as WSMessage;
-        handleMessage(msg);
-      } catch (e) {
-        console.error('Failed to parse WS message', e);
-      }
-    };
-    ws.onclose = (event) => {
-      if (!isMountedRef.current) return;
-      if (ws !== wsRef.current) return;
-      console.log(`WebSocket closed: Code ${event.code}, Reason: ${event.reason || 'No reason provided'}`);
-      wsRef.current = null;
-      // Reconnection Logic
-      if (reconnectAttemptsRef.current < 5) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000);
-          reconnectAttemptsRef.current++;
-          console.log(`Reconnecting in ${delay}ms...`);
-          reconnectTimeoutRef.current = setTimeout(() => {
-              if (isMountedRef.current) connect();
-          }, delay);
-      } else {
-          setStatus('error');
-      }
-    };
-    ws.onerror = (error) => {
-      console.error('WebSocket connection error', error);
-    };
+    try {
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+        ws.onopen = () => {
+          if (!isMountedRef.current) {
+              ws.close(1000, "Component unmounted");
+              return;
+          }
+          if (ws !== wsRef.current) return;
+          console.log('WebSocket Connected');
+          reconnectAttemptsRef.current = 0;
+          setStatus('searching');
+          // Join Queue
+          ws.send(JSON.stringify({
+            type: 'join_queue',
+            mode,
+            userId,
+            username
+          } satisfies WSMessage));
+        };
+        ws.onmessage = (event) => {
+          if (!isMountedRef.current) return;
+          try {
+            const msg = JSON.parse(event.data) as WSMessage;
+            handleMessage(msg);
+          } catch (e) {
+            console.error('Failed to parse WS message', e);
+          }
+        };
+        ws.onclose = (event) => {
+          if (!isMountedRef.current) return;
+          if (ws !== wsRef.current) return;
+          console.log(`WebSocket closed: Code ${event.code}, Reason: ${event.reason || 'No reason provided'}`);
+          wsRef.current = null;
+          // Don't reconnect if it was a normal closure or if we've exceeded attempts
+          if (event.code === 1000 || event.code === 1001) {
+              return;
+          }
+          // Reconnection Logic
+          if (reconnectAttemptsRef.current < 5) {
+              const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000);
+              reconnectAttemptsRef.current++;
+              console.log(`Reconnecting in ${delay}ms...`);
+              if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+              reconnectTimeoutRef.current = setTimeout(() => {
+                  if (isMountedRef.current) connect();
+              }, delay);
+          } else {
+              setStatus('error');
+          }
+        };
+        ws.onerror = (error) => {
+          // Just log it, onclose will handle the state update
+          console.error('WebSocket connection error', error);
+        };
+    } catch (err) {
+        console.error("Failed to create WebSocket:", err);
+        setStatus('error');
+    }
   }, [userId, username, mode, onExit, handleMessage]);
-  // Initial Connection
+  // Initial Connection & Cleanup
   useEffect(() => {
     connect();
     return () => {
@@ -192,13 +203,15 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
           clearTimeout(reconnectTimeoutRef.current);
       }
       if (wsRef.current) {
-        // Try to leave queue gracefully
+        // Try to leave queue gracefully if open
         if (wsRef.current.readyState === WebSocket.OPEN) {
             try {
                 wsRef.current.send(JSON.stringify({ type: 'leave_queue' } satisfies WSMessage));
             } catch (e) { /* ignore */ }
+            wsRef.current.close(1000, "Component unmounted");
+        } else {
+            wsRef.current.close();
         }
-        wsRef.current.close();
         wsRef.current = null;
       }
     };

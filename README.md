@@ -1,6 +1,6 @@
 # KickStar League: Physics Soccer
 
-[aureliabutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/MFLStats/clashball-v0.4)
 
 KickStar League is a fast-paced, physics-based 2D multiplayer soccer game inspired by Haxball, designed with a vibrant 'Kid Playful' aesthetic. Players control a single circular avatar on a stylized pitch, using simple inputs to outmaneuver opponents and score goals.
 
@@ -79,7 +79,7 @@ The core experience revolves around a high-skill ceiling physics engine where mo
 
 This project is configured for seamless deployment to Cloudflare Workers.
 
-[aureliabutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/MFLStats/clashball-v0.4)
 
 ### Manual Deployment
 

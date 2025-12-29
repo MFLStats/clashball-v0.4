@@ -17,7 +17,6 @@ import { useSettingsStore } from '@/store/useSettingsStore';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { GameMode } from '@shared/types';
-import { OrientationLock } from '@/components/ui/orientation-lock';
 import { TournamentPage } from '@/pages/TournamentPage';
 import { Leaderboard } from '@/components/ranked/Leaderboard';
 import { SoundEngine } from '@/lib/audio';
@@ -111,8 +110,8 @@ export function HomePage() {
         return (
           <div className="animate-fade-in space-y-6">
             <div className="flex items-center justify-between">
-              <Button
-                variant="ghost"
+              <Button 
+                variant="ghost" 
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-800 text-slate-200"
                 disabled={isProcessing}
@@ -124,7 +123,7 @@ export function HomePage() {
               </h2>
               <div className="w-24" />
             </div>
-            <GameCanvas
+            <GameCanvas 
                 onGameEnd={handleLocalGameEnd}
                 winningScore={3}
                 playerNames={{ red: 'You', blue: 'Bot (1200)' }}
@@ -133,14 +132,14 @@ export function HomePage() {
         );
       case 'online_select':
         return (
-          <GameModeSelector
+          <GameModeSelector 
             onSelect={startOnlineGame}
             onBack={() => setView('lobby')}
           />
         );
       case 'online_game':
         return (
-            <OnlineGameManager
+            <OnlineGameManager 
                 mode={selectedMode}
                 onExit={async () => {
                     await refreshProfile();
@@ -150,7 +149,7 @@ export function HomePage() {
         );
       case 'custom_lobby':
         return (
-            <CustomLobbyManager
+            <CustomLobbyManager 
                 onExit={() => setView('lobby')}
             />
         );
@@ -166,8 +165,8 @@ export function HomePage() {
         return (
           <div className="animate-fade-in space-y-6">
             <div className="flex items-center justify-between">
-              <Button
-                variant="ghost"
+              <Button 
+                variant="ghost" 
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-800 text-slate-200"
               >
@@ -183,8 +182,8 @@ export function HomePage() {
         return (
           <div className="animate-fade-in space-y-6">
             <div className="flex items-center justify-between">
-              <Button
-                variant="ghost"
+              <Button 
+                variant="ghost" 
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-800 text-slate-200"
               >
@@ -247,7 +246,7 @@ export function HomePage() {
                 </div>
                 {/* Right Column: Secondary Actions */}
                 <div className="grid grid-cols-1 gap-6">
-                    <button
+                    <button 
                         onClick={() => setView('local_game')}
                         className="group relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-left shadow-lg border border-slate-800 transition-all hover:border-slate-700 hover:bg-slate-800/50"
                     >
@@ -261,7 +260,7 @@ export function HomePage() {
                             </div>
                         </div>
                     </button>
-                    <button
+                    <button 
                         onClick={() => setView('leaderboard')}
                         className="group relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-left shadow-lg border border-slate-800 transition-all hover:border-slate-700 hover:bg-slate-800/50"
                     >
@@ -275,7 +274,7 @@ export function HomePage() {
                             </div>
                         </div>
                     </button>
-                    <button
+                    <button 
                         onClick={handleRankedClick}
                         className="group relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-left shadow-lg border border-slate-800 transition-all hover:border-slate-700 hover:bg-slate-800/50 flex-1"
                     >
@@ -297,7 +296,6 @@ export function HomePage() {
                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     <span>Servers Online</span>
                 </div>
-                {/* Footer text removed as per request */}
             </footer>
           </div>
         );
@@ -310,7 +308,6 @@ export function HomePage() {
   }
   return (
     <AppLayout container contentClassName="py-8">
-      <OrientationLock />
       <div className="min-h-screen -m-8 p-8">
         <div className="max-w-7xl mx-auto">
           {renderContent()}

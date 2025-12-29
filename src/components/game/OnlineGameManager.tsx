@@ -12,7 +12,7 @@ import { NetworkIndicator } from '@/components/ui/network-indicator';
 interface OnlineGameManagerProps {
   mode: GameMode;
   onExit: () => void;
-  matchId?: string; // Optional: If provided, we are reconnecting or joining specific match
+  matchId?: string;
 }
 interface ChatMessage {
   id: string;
@@ -23,24 +23,28 @@ interface ChatMessage {
 export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerProps) {
   const profile = useUserStore(s => s.profile);
   const [status, setStatus] = useState<'connecting' | 'searching' | 'playing' | 'error'>('connecting');
-  // Ref to track status without triggering re-renders in effects
+  // Refs for stable access in effects/callbacks
   const statusRef = useRef(status);
+  const onExitRef = useRef(onExit);
+  const wsRef = useRef<WebSocket | null>(null);
+  // Update refs
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
+  useEffect(() => {
+    onExitRef.current = onExit;
+  }, [onExit]);
   const [queueCount, setQueueCount] = useState(0);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [ping, setPing] = useState<number | null>(null);
   const [finalStats, setFinalStats] = useState<Record<string, PlayerMatchStats> | undefined>(undefined);
-  const wsRef = useRef<WebSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const lastPingTimeRef = useRef<number>(0);
-  // Use refs to access latest state in callbacks without triggering re-renders or effect re-runs
-  const matchInfoRef = useRef<{ matchId: string; team: 'red' | 'blue' } | null>(null);
+  // Match info state and ref
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' } | null>(null);
-  // Sync ref with state
+  const matchInfoRef = useRef<{ matchId: string; team: 'red' | 'blue' } | null>(null);
   useEffect(() => {
     matchInfoRef.current = matchInfo;
   }, [matchInfo]);
@@ -51,9 +55,9 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   // Connection Timeout Logic
   useEffect(() => {
     const timer = setTimeout(() => {
-      // Check ref instead of state to avoid dependency loop
-      if (statusRef.current === 'connecting' || statusRef.current === 'searching') {
-        // Only timeout if we haven't found a match yet and connection seems stuck
+      // Only timeout if we are stuck in connecting state (socket not open)
+      // If we are 'searching', the socket IS open, so we shouldn't timeout the connection
+      if (statusRef.current === 'connecting') {
         if (wsRef.current?.readyState !== WebSocket.OPEN) {
             setStatus('error');
             toast.error('Connection timed out. Please try again.');
@@ -62,75 +66,75 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       }
     }, 15000); // 15 seconds timeout
     return () => clearTimeout(timer);
-  }, []); // Run once on mount
-  const handleMessage = useCallback((msg: WSMessage) => {
-    switch (msg.type) {
-      case 'match_found': {
-        const info = { matchId: msg.matchId, team: msg.team };
-        setMatchInfo(info);
-        matchInfoRef.current = info;
-        setStatus('playing');
-        toast.success(`Match Found! You are Team ${msg.team.toUpperCase()}`);
-        break;
-      }
-      case 'queue_update': {
-        setQueueCount(msg.count);
-        break;
-      }
-      case 'game_state': {
-        setGameState(msg.state);
-        break;
-      }
-      case 'game_events': {
-        msg.events.forEach(event => {
-            switch (event.type) {
-                case 'kick': SoundEngine.playKick(); break;
-                case 'wall': SoundEngine.playWall(); break;
-                case 'player': SoundEngine.playPlayer(); break;
-                case 'goal': SoundEngine.playGoal(); break;
-                case 'whistle': SoundEngine.playWhistle(); break;
-            }
-        });
-        break;
-      }
-      case 'game_over': {
-        SoundEngine.playWhistle();
-        // Store stats for summary
-        if (msg.stats) {
-            setFinalStats(msg.stats);
-        }
-        // Don't auto-exit, let user view summary
-        break;
-      }
-      case 'chat': {
-        setChatMessages(prev => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            sender: msg.sender || 'Unknown',
-            message: msg.message,
-            team: msg.team || 'red'
-          }
-        ]);
-        break;
-      }
-      case 'error': {
-        toast.error(msg.message);
-        break;
-      }
-      case 'ping': {
-        // Server pinging client
-        wsRef.current?.send(JSON.stringify({ type: 'pong' }));
-        break;
-      }
-      case 'pong': {
-        // Client received pong from server
-        const rtt = Date.now() - lastPingTimeRef.current;
-        setPing(rtt);
-        break;
-      }
-    }
   }, []);
+  // Message Handler - Stable Ref
+  const handleMessageRef = useRef<(msg: WSMessage) => void>(() => {});
+  // Update the handler ref whenever dependencies change (like matchInfo state updates)
+  useEffect(() => {
+    handleMessageRef.current = (msg: WSMessage) => {
+      switch (msg.type) {
+        case 'match_found': {
+          const info = { matchId: msg.matchId, team: msg.team };
+          setMatchInfo(info);
+          setStatus('playing');
+          toast.success(`Match Found! You are Team ${msg.team.toUpperCase()}`);
+          break;
+        }
+        case 'queue_update': {
+          setQueueCount(msg.count);
+          break;
+        }
+        case 'game_state': {
+          setGameState(msg.state);
+          break;
+        }
+        case 'game_events': {
+          msg.events.forEach(event => {
+              switch (event.type) {
+                  case 'kick': SoundEngine.playKick(); break;
+                  case 'wall': SoundEngine.playWall(); break;
+                  case 'player': SoundEngine.playPlayer(); break;
+                  case 'goal': SoundEngine.playGoal(); break;
+                  case 'whistle': SoundEngine.playWhistle(); break;
+              }
+          });
+          break;
+        }
+        case 'game_over': {
+          SoundEngine.playWhistle();
+          if (msg.stats) {
+              setFinalStats(msg.stats);
+          }
+          break;
+        }
+        case 'chat': {
+          setChatMessages(prev => [
+            ...prev,
+            {
+              id: crypto.randomUUID(),
+              sender: msg.sender || 'Unknown',
+              message: msg.message,
+              team: msg.team || 'red'
+            }
+          ]);
+          break;
+        }
+        case 'error': {
+          toast.error(msg.message);
+          break;
+        }
+        case 'ping': {
+          wsRef.current?.send(JSON.stringify({ type: 'pong' }));
+          break;
+        }
+        case 'pong': {
+          const rtt = Date.now() - lastPingTimeRef.current;
+          setPing(rtt);
+          break;
+        }
+      }
+    };
+  }, [matchInfo]); // Re-create handler when matchInfo changes (though mostly handled by refs now)
   // Ping Loop
   useEffect(() => {
     const interval = setInterval(() => {
@@ -141,10 +145,11 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     }, 2000);
     return () => clearInterval(interval);
   }, []);
+  // Main WebSocket Connection Effect
   useEffect(() => {
     if (!profile) {
         toast.error("User profile missing. Cannot join queue.");
-        onExit();
+        onExitRef.current();
         return;
     }
     // Connect to WebSocket
@@ -165,7 +170,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data) as WSMessage;
-        handleMessage(msg);
+        handleMessageRef.current(msg);
       } catch (e) {
         console.error('Failed to parse WS message', e);
       }
@@ -173,7 +178,6 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     ws.onclose = (event) => {
       if (!event.wasClean) {
           console.warn('WebSocket closed unexpectedly', event.code, event.reason);
-          // Check ref to avoid dependency on status state
           if (statusRef.current !== 'error') {
              setStatus('error');
              toast.error('Disconnected from server');
@@ -191,7 +195,8 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         ws.close();
       }
     };
-  }, [profile, mode, handleMessage, onExit]);
+    // CRITICAL: Only depend on stable IDs/Modes. Do NOT depend on onExit or handleMessage directly.
+  }, [profile?.id, mode]); 
   const handleInput = (input: { move: { x: number; y: number }; kick: boolean }) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({

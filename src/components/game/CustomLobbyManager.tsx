@@ -35,6 +35,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' | 'spectator' } | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [winner, setWinner] = useState<'red' | 'blue' | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
@@ -102,16 +103,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
         }
         case 'game_over': {
             SoundEngine.playWhistle();
-            toast('Game Over', {
-              description: `Winner: ${msg.winner.toUpperCase()}`
-            });
-            setTimeout(() => {
-                if (isMountedRef.current) {
-                    setView('lobby');
-                    setGameState(null);
-                    setMatchInfo(null);
-                }
-            }, 3000);
+            setWinner(msg.winner);
             break;
         }
         case 'chat': {
@@ -287,6 +279,12 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
           toast.success('Lobby code copied!');
       }
   };
+  const handleLeaveGame = () => {
+      setView('lobby');
+      setGameState(null);
+      setMatchInfo(null);
+      setWinner(null);
+  };
   // Cleanup
   useEffect(() => {
       return () => {
@@ -397,7 +395,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                         </div>
                                         <div className="text-xs text-slate-500 uppercase font-bold">Players</div>
                                     </div>
-                                    <Button 
+                                    <Button
                                         onClick={() => joinLobby(lobby.code)}
                                         disabled={isConnecting || lobby.playerCount >= lobby.maxPlayers}
                                         className="bg-purple-600 hover:bg-purple-500 text-white"
@@ -451,8 +449,8 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                   {redPlayers.length} / {maxPerTeam}
                               </span>
                           </div>
-                          <Button 
-                              size="sm" 
+                          <Button
+                              size="sm"
                               className="w-full mt-2 bg-red-600 hover:bg-red-500 text-white border border-red-400/20"
                               disabled={myTeam === 'red' || redPlayers.length >= maxPerTeam}
                               onClick={() => switchTeam('red')}
@@ -496,8 +494,8 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                       {spectators.length}
                                   </span>
                               </div>
-                              <Button 
-                                  size="sm" 
+                              <Button
+                                  size="sm"
                                   variant="secondary"
                                   className="w-full mt-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
                                   disabled={myTeam === 'spectator'}
@@ -546,7 +544,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                   <div ref={chatEndRef} />
                               </div>
                               <form onSubmit={sendChat} className="flex gap-2">
-                                  <Input 
+                                  <Input
                                       value={chatInput}
                                       onChange={e => setChatInput(e.target.value)}
                                       placeholder="Message..."
@@ -568,8 +566,8 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                   {bluePlayers.length} / {maxPerTeam}
                               </span>
                           </div>
-                          <Button 
-                              size="sm" 
+                          <Button
+                              size="sm"
                               className="w-full mt-2 bg-blue-600 hover:bg-blue-500 text-white border border-blue-400/20"
                               disabled={myTeam === 'blue' || bluePlayers.length >= maxPerTeam}
                               onClick={() => switchTeam('blue')}
@@ -623,19 +621,19 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                   </span>
                               </div>
                               {isHost ? (
-                                  <Slider 
-                                      value={[lobbyState.settings.scoreLimit]} 
-                                      min={0} 
-                                      max={10} 
+                                  <Slider
+                                      value={[lobbyState.settings.scoreLimit]}
+                                      min={0}
+                                      max={10}
                                       step={1}
                                       onValueChange={(vals) => updateSettings({ scoreLimit: vals[0] })}
                                       className="py-2"
                                   />
                               ) : (
                                   <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                      <div 
-                                          className="h-full bg-slate-600" 
-                                          style={{ width: `${(lobbyState.settings.scoreLimit / 10) * 100}%` }} 
+                                      <div
+                                          className="h-full bg-slate-600"
+                                          style={{ width: `${(lobbyState.settings.scoreLimit / 10) * 100}%` }}
                                       />
                                   </div>
                               )}
@@ -652,19 +650,19 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                   </span>
                               </div>
                               {isHost ? (
-                                  <Slider 
-                                      value={[lobbyState.settings.timeLimit]} 
-                                      min={0} 
-                                      max={600} 
+                                  <Slider
+                                      value={[lobbyState.settings.timeLimit]}
+                                      min={0}
+                                      max={600}
                                       step={60}
                                       onValueChange={(vals) => updateSettings({ timeLimit: vals[0] })}
                                       className="py-2"
                                   />
                               ) : (
                                   <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                      <div 
-                                          className="h-full bg-slate-600" 
-                                          style={{ width: `${(lobbyState.settings.timeLimit / 600) * 100}%` }} 
+                                      <div
+                                          className="h-full bg-slate-600"
+                                          style={{ width: `${(lobbyState.settings.timeLimit / 600) * 100}%` }}
                                       />
                                   </div>
                               )}
@@ -681,8 +679,8 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                   </span>
                               </div>
                               {isHost ? (
-                                  <Tabs 
-                                      value={lobbyState.settings.fieldSize || 'medium'} 
+                                  <Tabs
+                                      value={lobbyState.settings.fieldSize || 'medium'}
                                       onValueChange={(val) => updateSettings({ fieldSize: val as any })}
                                       className="w-full"
                                   >
@@ -726,9 +724,11 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
       <div className="relative rounded-xl overflow-hidden shadow-2xl border border-slate-800">
         <GameCanvas
             externalState={gameState}
+            externalWinner={winner}
             onInput={matchInfo?.team === 'spectator' ? undefined : handleInput}
             winningScore={lobbyState?.settings.scoreLimit ?? 3}
             currentUserId={profile?.id}
+            onLeave={handleLeaveGame}
         />
         {/* Chat Overlay */}
         <div className="absolute bottom-4 left-4 w-80 max-h-64 flex flex-col gap-2 z-20">
@@ -747,7 +747,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                 <div ref={chatEndRef} />
             </div>
             <form onSubmit={sendChat} className="flex gap-2">
-                <Input 
+                <Input
                     value={chatInput}
                     onChange={e => setChatInput(e.target.value)}
                     placeholder="Type a message..."

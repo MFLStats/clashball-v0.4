@@ -58,6 +58,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   const [chatInput, setChatInput] = useState('');
   const [ping, setPing] = useState<number | null>(null);
   const [finalStats, setFinalStats] = useState<Record<string, PlayerMatchStats> | undefined>(undefined);
+  const [winner, setWinner] = useState<'red' | 'blue' | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const lastPingTimeRef = useRef<number>(0);
   // Match info state and ref
@@ -114,6 +115,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
           if (msg.stats) {
               setFinalStats(msg.stats);
           }
+          setWinner(msg.winner);
           break;
         }
         case 'chat': {
@@ -357,6 +359,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       <div className="relative">
         <GameCanvas
             externalState={gameState}
+            externalWinner={winner}
             onInput={matchInfo?.team === 'spectator' ? undefined : handleInput}
             winningScore={3}
             currentUserId={userId}

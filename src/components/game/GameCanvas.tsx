@@ -12,6 +12,7 @@ interface GameCanvasProps {
   onGameEnd?: (winner: 'red' | 'blue') => void;
   winningScore?: number;
   externalState?: GameState | null;
+  externalWinner?: 'red' | 'blue' | null; // New prop
   onInput?: (input: { move: { x: number; y: number }; kick: boolean }) => void;
   botDifficulty?: 'easy' | 'medium' | 'hard';
   playerNames?: { red: string; blue: string };
@@ -23,6 +24,7 @@ export function GameCanvas({
   onGameEnd,
   winningScore = 3,
   externalState,
+  externalWinner,
   onInput,
   botDifficulty = 'medium',
   playerNames,
@@ -115,6 +117,12 @@ export function GameCanvas({
     }
     if (onGameEnd) onGameEnd(winner);
   }, [onGameEnd, particles, externalState]);
+  // Watch for external winner (Online/Lobby)
+  useEffect(() => {
+    if (externalWinner) {
+      handleGameOver(externalWinner);
+    }
+  }, [externalWinner, handleGameOver]);
   // Input Handling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

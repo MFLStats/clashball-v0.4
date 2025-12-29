@@ -69,7 +69,7 @@ export function HomePage() {
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Lobby
               </Button>
               <h2 className="text-xl font-display font-bold text-white">
-                Practice vs Bot (1200 MMR)
+                Practice (Tactical Mode)
               </h2>
               <div className="w-24" />
             </div>
@@ -151,7 +151,7 @@ export function HomePage() {
                 KickStar <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-500">League</span>
               </h1>
               <p className="text-xl text-slate-400 font-medium max-w-md mx-auto">
-                Physics-based competitive soccer. Climb the ranks and become a Master!
+                Tactical, physics-based soccer. Climb the ranks and become a Master!
               </p>
               {profile && stats && (
                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900/80 rounded-full shadow-sm border border-slate-700 animate-fade-in">

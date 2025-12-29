@@ -34,21 +34,22 @@ export interface GameState {
   timeRemaining: number;
 }
 export class PhysicsEngine {
-  // Arcade Physics Constants - Tuned for "Haxball" feel
+  // Arcade Physics Constants - Tuned for "Tactical" feel (Phase 2 Update)
   static readonly PLAYER_RADIUS = 15;
   static readonly BALL_RADIUS = 10;
-  static readonly FIELD_WIDTH = 800;
-  static readonly FIELD_HEIGHT = 400;
-  static readonly GOAL_HEIGHT = 120;
-  // Movement & Feel
-  static readonly PLAYER_ACCELERATION = 3.0; // Snappier acceleration
-  static readonly PLAYER_MAX_SPEED = 6.0;    // Higher top speed
-  static readonly PLAYER_DAMPING = 0.88;     // High friction for quick stops (responsive)
+  // Field Expansion
+  static readonly FIELD_WIDTH = 1200;
+  static readonly FIELD_HEIGHT = 600;
+  static readonly GOAL_HEIGHT = 180; // Proportional increase
+  // Movement & Feel - Slowed down significantly
+  static readonly PLAYER_ACCELERATION = 0.8; // Was 3.0 - Heavy feel
+  static readonly PLAYER_MAX_SPEED = 3.5;    // Was 6.0 - Slower pace
+  static readonly PLAYER_DAMPING = 0.90;     // Was 0.88 - Smoother drift
   // Ball Physics
-  static readonly BALL_DAMPING = 0.992;      // Low friction for long rolls
-  static readonly KICK_STRENGTH = 9.0;       // Stronger kick
-  static readonly WALL_BOUNCE = 0.75;        // Dampened wall bounces
-  static readonly PLAYER_BOUNCE = 0.5;       // Player-Ball restitution
+  static readonly BALL_DAMPING = 0.990;      // Was 0.992 - Slightly more friction over distance
+  static readonly KICK_STRENGTH = 6.0;       // Was 9.0 - Weaker kick for control
+  static readonly WALL_BOUNCE = 0.75;
+  static readonly PLAYER_BOUNCE = 0.5;
   static createInitialState(): GameState {
     return {
       players: [
@@ -56,7 +57,7 @@ export class PhysicsEngine {
           id: 'p1',
           team: 'red',
           username: 'Player 1',
-          pos: { x: 100, y: 200 },
+          pos: { x: 150, y: 300 }, // Updated for 1200x600
           vel: { x: 0, y: 0 },
           radius: this.PLAYER_RADIUS,
           isKicking: false,
@@ -66,7 +67,7 @@ export class PhysicsEngine {
           id: 'p2',
           team: 'blue',
           username: 'Player 2',
-          pos: { x: 700, y: 200 },
+          pos: { x: 1050, y: 300 }, // Updated for 1200x600
           vel: { x: 0, y: 0 },
           radius: this.PLAYER_RADIUS,
           isKicking: false,
@@ -74,7 +75,7 @@ export class PhysicsEngine {
         }
       ],
       ball: {
-        pos: { x: 400, y: 200 },
+        pos: { x: 600, y: 300 }, // Center of 1200x600
         vel: { x: 0, y: 0 },
         radius: this.BALL_RADIUS
       },
@@ -147,7 +148,7 @@ export class PhysicsEngine {
     // Goal Detection & X-Axis Walls
     // Left Side
     if (b.pos.x < 0) {
-        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 && 
+        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 &&
                        b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
         if (isGoal) {
             newState.score.blue++;
@@ -160,7 +161,7 @@ export class PhysicsEngine {
     }
     // Right Side
     if (b.pos.x > newState.field.width) {
-        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 && 
+        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 &&
                        b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
         if (isGoal) {
             newState.score.red++;
@@ -217,9 +218,9 @@ export class PhysicsEngine {
     state.ball.vel = { x: 0, y: 0 };
     state.players.forEach(p => {
       if (p.team === 'red') {
-        p.pos = { x: 100, y: state.field.height / 2 };
+        p.pos = { x: 150, y: state.field.height / 2 }; // Updated spawn
       } else {
-        p.pos = { x: state.field.width - 100, y: state.field.height / 2 };
+        p.pos = { x: state.field.width - 150, y: state.field.height / 2 }; // Updated spawn
       }
       p.vel = { x: 0, y: 0 };
     });

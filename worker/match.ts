@@ -13,11 +13,14 @@ export class Match {
     // Initialize Game State
     this.gameState = PhysicsEngine.createInitialState();
     // Override players in state with actual connected players
+    // Using dynamic field dimensions for spawn positions
     this.gameState.players = players.map(p => ({
       id: p.id,
       team: p.team,
       username: p.username,
-      pos: p.team === 'red' ? { x: 100, y: 200 } : { x: 700, y: 200 },
+      pos: p.team === 'red' 
+        ? { x: 150, y: PhysicsEngine.FIELD_HEIGHT / 2 } 
+        : { x: PhysicsEngine.FIELD_WIDTH - 150, y: PhysicsEngine.FIELD_HEIGHT / 2 },
       vel: { x: 0, y: 0 },
       radius: PhysicsEngine.PLAYER_RADIUS,
       isKicking: false,

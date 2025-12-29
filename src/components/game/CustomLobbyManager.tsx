@@ -37,21 +37,26 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
   const [chatInput, setChatInput] = useState('');
   const wsRef = useRef<WebSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(true);
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
   // Poll lobbies
   const fetchLobbies = useCallback(async () => {
-    if (view !== 'menu') return;
+    if (view !== 'menu' || !isMountedRef.current) return;
     setIsLoadingLobbies(true);
     try {
       const data = await api.getLobbies();
-      setLobbies(data);
+      if (isMountedRef.current) setLobbies(data);
     } catch (error) {
       console.error('Failed to fetch lobbies', error);
     } finally {
-      setIsLoadingLobbies(false);
+      if (isMountedRef.current) setIsLoadingLobbies(false);
     }
   }, [view]);
   useEffect(() => {
@@ -59,142 +64,174 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
     const interval = setInterval(fetchLobbies, 5000);
     return () => clearInterval(interval);
   }, [fetchLobbies]);
-  // Use a ref for handleMessage to ensure it always has access to the latest state/props if needed,
-  // although for this component most state is local.
-  // We wrap it in useRef to keep the function identity stable for the websocket event listener.
-  const handleMessageRef = useRef<(msg: WSMessage) => void>(() => {});
-  useEffect(() => {
-    handleMessageRef.current = (msg: WSMessage) => {
-        switch (msg.type) {
-            case 'lobby_update': {
-                setLobbyState(msg.state);
-                setView('lobby');
-                setIsConnecting(false);
-                break;
+  // Message Handler
+  const handleMessage = useCallback((msg: WSMessage) => {
+    switch (msg.type) {
+        case 'lobby_update': {
+            setLobbyState(msg.state);
+            setView('lobby');
+            setIsConnecting(false);
+            break;
+        }
+        case 'match_found':
+        case 'match_started': {
+            setMatchInfo({ matchId: msg.matchId, team: msg.team });
+            setView('game');
+            if (msg.team === 'spectator') {
+                toast.info('Spectating Match');
+            } else {
+                toast.success('Match Starting!');
             }
-            case 'match_found':
-            case 'match_started': {
-                setMatchInfo({ matchId: msg.matchId, team: msg.team });
-                setView('game');
-                if (msg.team === 'spectator') {
-                    toast.info('Spectating Match');
-                } else {
-                    toast.success('Match Starting!');
+            break;
+        }
+        case 'game_state': {
+            setGameState(msg.state);
+            break;
+        }
+        case 'game_events': {
+            msg.events.forEach(event => {
+                switch (event.type) {
+                    case 'kick': SoundEngine.playKick(); break;
+                    case 'wall': SoundEngine.playWall(); break;
+                    case 'player': SoundEngine.playPlayer(); break;
+                    case 'goal': SoundEngine.playGoal(); break;
+                    case 'whistle': SoundEngine.playWhistle(); break;
                 }
-                break;
-            }
-            case 'game_state': {
-                setGameState(msg.state);
-                break;
-            }
-            case 'game_events': {
-                msg.events.forEach(event => {
-                    switch (event.type) {
-                        case 'kick': SoundEngine.playKick(); break;
-                        case 'wall': SoundEngine.playWall(); break;
-                        case 'player': SoundEngine.playPlayer(); break;
-                        case 'goal': SoundEngine.playGoal(); break;
-                        case 'whistle': SoundEngine.playWhistle(); break;
-                    }
-                });
-                break;
-            }
-            case 'game_over': {
-                SoundEngine.playWhistle();
-                toast('Game Over', {
-                  description: `Winner: ${msg.winner.toUpperCase()}`
-                });
-                setTimeout(() => {
-                    // Return to lobby view instead of exiting completely
+            });
+            break;
+        }
+        case 'game_over': {
+            SoundEngine.playWhistle();
+            toast('Game Over', {
+              description: `Winner: ${msg.winner.toUpperCase()}`
+            });
+            setTimeout(() => {
+                if (isMountedRef.current) {
                     setView('lobby');
                     setGameState(null);
                     setMatchInfo(null);
-                }, 3000);
-                break;
-            }
-            case 'chat': {
-                setChatMessages(prev => [
-                  ...prev,
-                  {
-                    id: crypto.randomUUID(),
-                    sender: msg.sender || 'Unknown',
-                    message: msg.message,
-                    team: msg.team || 'spectator'
-                  }
-                ]);
-                break;
-            }
-            case 'kicked': {
-                toast.error('You have been kicked from the lobby.');
-                setView('menu');
-                setLobbyState(null);
-                setIsConnecting(false);
-                break;
-            }
-            case 'error': {
-                toast.error(msg.message);
-                setIsConnecting(false);
-                break;
-            }
-            case 'ping': {
-                wsRef.current?.send(JSON.stringify({ type: 'pong' }));
-                break;
-            }
+                }
+            }, 3000);
+            break;
         }
-    };
-  }, []); // Empty dependency array means this ref updater runs once, but the function inside closes over nothing critical that isn't state setter.
-  const connectWS = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return wsRef.current;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const ws = new WebSocket(`${protocol}//${host}/api/ws`);
-    wsRef.current = ws;
-    ws.onmessage = (event) => {
-        try {
-            const msg = JSON.parse(event.data) as WSMessage;
-            handleMessageRef.current(msg);
-        } catch (e) {
-            console.error('Failed to parse WS message', e);
+        case 'chat': {
+            setChatMessages(prev => [
+              ...prev,
+              {
+                id: crypto.randomUUID(),
+                sender: msg.sender || 'Unknown',
+                message: msg.message,
+                team: msg.team || 'spectator'
+              }
+            ]);
+            break;
         }
-    };
-    ws.onerror = () => {
-        toast.error('Connection error');
-        setIsConnecting(false);
-    };
-    return ws;
+        case 'kicked': {
+            toast.error('You have been kicked from the lobby.');
+            setView('menu');
+            setLobbyState(null);
+            setIsConnecting(false);
+            break;
+        }
+        case 'error': {
+            toast.error(msg.message);
+            setIsConnecting(false);
+            break;
+        }
+        case 'ping': {
+            wsRef.current?.send(JSON.stringify({ type: 'pong' }));
+            break;
+        }
+    }
   }, []);
-  const createLobby = () => {
-    if (!profile) return;
-    setIsConnecting(true);
-    const ws = connectWS();
-    if (ws) {
-        const sendCreate = () => {
-            ws.send(JSON.stringify({
-                type: 'create_lobby',
-                userId: profile.id,
-                username: profile.username
-            }));
+  // Robust Connection Logic
+  const connectWS = useCallback((): Promise<WebSocket> => {
+    return new Promise((resolve, reject) => {
+        // If already connected and open, reuse
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            resolve(wsRef.current);
+            return;
+        }
+        // Close existing if connecting or closing
+        if (wsRef.current) {
+            wsRef.current.close();
+        }
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        const ws = new WebSocket(`${protocol}//${host}/api/ws`);
+        wsRef.current = ws;
+        const timeout = setTimeout(() => {
+            if (ws.readyState !== WebSocket.OPEN) {
+                ws.close();
+                reject(new Error("Connection timed out"));
+            }
+        }, 5000);
+        ws.onopen = () => {
+            clearTimeout(timeout);
+            resolve(ws);
         };
-        if (ws.readyState === WebSocket.OPEN) sendCreate();
-        else ws.onopen = sendCreate;
+        ws.onerror = (err) => {
+            clearTimeout(timeout);
+            reject(err);
+        };
+        ws.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data) as WSMessage;
+                handleMessage(msg);
+            } catch (e) {
+                console.error('Failed to parse WS message', e);
+            }
+        };
+        ws.onclose = () => {
+            if (isMountedRef.current && view !== 'menu') {
+                // Handle unexpected disconnects if needed
+                // For now, we might just let the user know or auto-reconnect logic could go here
+            }
+        };
+    });
+  }, [handleMessage, view]);
+  const createLobby = async () => {
+    if (!profile) {
+        toast.error("You must be logged in to create a lobby");
+        return;
+    }
+    setIsConnecting(true);
+    try {
+        const ws = await connectWS();
+        ws.send(JSON.stringify({
+            type: 'create_lobby',
+            userId: profile.id,
+            username: profile.username
+        }));
+    } catch (e) {
+        console.error(e);
+        toast.error("Failed to connect to server");
+        setIsConnecting(false);
     }
   };
-  const joinLobby = (code?: string) => {
+  const joinLobby = async (code?: string) => {
     const targetCode = code || joinCode;
-    if (!profile || !targetCode) return;
+    if (!profile) {
+        toast.error("You must be logged in to join a lobby");
+        return;
+    }
+    if (!targetCode) {
+        toast.error("Please enter a lobby code");
+        return;
+    }
     setIsConnecting(true);
-    const ws = connectWS();
-    if (ws) {
-        const sendJoin = () => {
-            ws.send(JSON.stringify({
-                type: 'join_lobby',
-                code: targetCode,
-                userId: profile.id,
-                username: profile.username
-            }));
-        };
-        if (ws.readyState === WebSocket.OPEN) sendJoin();
-        else ws.onopen = sendJoin;
+    try {
+        const ws = await connectWS();
+        ws.send(JSON.stringify({
+            type: 'join_lobby',
+            code: targetCode,
+            userId: profile.id,
+            username: profile.username
+        }));
+    } catch (e) {
+        console.error(e);
+        toast.error("Failed to connect to server");
+        setIsConnecting(false);
     }
   };
   const startMatch = () => {
@@ -360,7 +397,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                         </div>
                                         <div className="text-xs text-slate-500 uppercase font-bold">Players</div>
                                     </div>
-                                    <Button
+                                    <Button 
                                         onClick={() => joinLobby(lobby.code)}
                                         disabled={isConnecting || lobby.playerCount >= lobby.maxPlayers}
                                         className="bg-purple-600 hover:bg-purple-500 text-white"
@@ -414,8 +451,8 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                   {redPlayers.length} / {maxPerTeam}
                               </span>
                           </div>
-                          <Button
-                              size="sm"
+                          <Button 
+                              size="sm" 
                               className="w-full mt-2 bg-red-600 hover:bg-red-500 text-white border border-red-400/20"
                               disabled={myTeam === 'red' || redPlayers.length >= maxPerTeam}
                               onClick={() => switchTeam('red')}
@@ -459,8 +496,8 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                       {spectators.length}
                                   </span>
                               </div>
-                              <Button
-                                  size="sm"
+                              <Button 
+                                  size="sm" 
                                   variant="secondary"
                                   className="w-full mt-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
                                   disabled={myTeam === 'spectator'}
@@ -509,7 +546,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                   <div ref={chatEndRef} />
                               </div>
                               <form onSubmit={sendChat} className="flex gap-2">
-                                  <Input
+                                  <Input 
                                       value={chatInput}
                                       onChange={e => setChatInput(e.target.value)}
                                       placeholder="Message..."
@@ -531,8 +568,8 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                   {bluePlayers.length} / {maxPerTeam}
                               </span>
                           </div>
-                          <Button
-                              size="sm"
+                          <Button 
+                              size="sm" 
                               className="w-full mt-2 bg-blue-600 hover:bg-blue-500 text-white border border-blue-400/20"
                               disabled={myTeam === 'blue' || bluePlayers.length >= maxPerTeam}
                               onClick={() => switchTeam('blue')}
@@ -586,19 +623,19 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                   </span>
                               </div>
                               {isHost ? (
-                                  <Slider
-                                      value={[lobbyState.settings.scoreLimit]}
-                                      min={0}
-                                      max={10}
+                                  <Slider 
+                                      value={[lobbyState.settings.scoreLimit]} 
+                                      min={0} 
+                                      max={10} 
                                       step={1}
                                       onValueChange={(vals) => updateSettings({ scoreLimit: vals[0] })}
                                       className="py-2"
                                   />
                               ) : (
                                   <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                      <div
-                                          className="h-full bg-slate-600"
-                                          style={{ width: `${(lobbyState.settings.scoreLimit / 10) * 100}%` }}
+                                      <div 
+                                          className="h-full bg-slate-600" 
+                                          style={{ width: `${(lobbyState.settings.scoreLimit / 10) * 100}%` }} 
                                       />
                                   </div>
                               )}
@@ -615,19 +652,19 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                   </span>
                               </div>
                               {isHost ? (
-                                  <Slider
-                                      value={[lobbyState.settings.timeLimit]}
-                                      min={0}
-                                      max={600}
+                                  <Slider 
+                                      value={[lobbyState.settings.timeLimit]} 
+                                      min={0} 
+                                      max={600} 
                                       step={60}
                                       onValueChange={(vals) => updateSettings({ timeLimit: vals[0] })}
                                       className="py-2"
                                   />
                               ) : (
                                   <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                      <div
-                                          className="h-full bg-slate-600"
-                                          style={{ width: `${(lobbyState.settings.timeLimit / 600) * 100}%` }}
+                                      <div 
+                                          className="h-full bg-slate-600" 
+                                          style={{ width: `${(lobbyState.settings.timeLimit / 600) * 100}%` }} 
                                       />
                                   </div>
                               )}
@@ -644,8 +681,8 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                   </span>
                               </div>
                               {isHost ? (
-                                  <Tabs
-                                      value={lobbyState.settings.fieldSize || 'medium'}
+                                  <Tabs 
+                                      value={lobbyState.settings.fieldSize || 'medium'} 
                                       onValueChange={(val) => updateSettings({ fieldSize: val as any })}
                                       className="w-full"
                                   >
@@ -710,7 +747,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                 <div ref={chatEndRef} />
             </div>
             <form onSubmit={sendChat} className="flex gap-2">
-                <Input
+                <Input 
                     value={chatInput}
                     onChange={e => setChatInput(e.target.value)}
                     placeholder="Type a message..."

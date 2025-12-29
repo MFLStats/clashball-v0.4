@@ -1,8 +1,9 @@
 import React from 'react';
 import { GameMode } from '@shared/types';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Swords, Users, Shield, Crown, Zap } from 'lucide-react';
+import { ArrowLeft, Swords, Users, Shield, Crown, Zap, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
 interface GameModeSelectorProps {
   onSelect: (mode: GameMode) => void;
   onBack: () => void;
@@ -12,48 +13,81 @@ export function GameModeSelector({ onSelect, onBack }: GameModeSelectorProps) {
     {
       id: '1v1',
       title: 'Duel',
-      desc: 'Pure Skill. No Excuses.',
+      subtitle: 'Solo Competitive',
+      desc: 'Pure skill. No excuses. Prove your worth in the ultimate test of individual mechanics.',
       icon: Swords,
       color: 'text-yellow-400',
-      bg: 'from-yellow-500/20 to-orange-500/20',
-      border: 'group-hover:border-yellow-500/50',
-      glow: 'group-hover:shadow-yellow-500/20'
+      bgGradient: 'from-yellow-500/20 via-orange-500/10 to-transparent',
+      borderColor: 'group-hover:border-yellow-500/50',
+      shadowColor: 'group-hover:shadow-yellow-500/20',
+      iconBg: 'bg-yellow-500/10',
+      delay: 0.1
     },
     {
       id: '2v2',
       title: 'Doubles',
-      desc: 'Teamwork & Strategy.',
+      subtitle: 'Dynamic Duo',
+      desc: 'Coordinate with a partner. Combine passing plays and positioning to outsmart the defense.',
       icon: Users,
       color: 'text-blue-400',
-      bg: 'from-blue-500/20 to-cyan-500/20',
-      border: 'group-hover:border-blue-500/50',
-      glow: 'group-hover:shadow-blue-500/20'
+      bgGradient: 'from-blue-500/20 via-cyan-500/10 to-transparent',
+      borderColor: 'group-hover:border-blue-500/50',
+      shadowColor: 'group-hover:shadow-blue-500/20',
+      iconBg: 'bg-blue-500/10',
+      delay: 0.2
     },
     {
       id: '3v3',
       title: 'Squad',
-      desc: 'Tactical Chaos.',
+      subtitle: 'Tactical Teamwork',
+      desc: 'Balance offense and defense. Assign roles and execute complex strategies to dominate.',
       icon: Shield,
       color: 'text-emerald-400',
-      bg: 'from-emerald-500/20 to-green-500/20',
-      border: 'group-hover:border-emerald-500/50',
-      glow: 'group-hover:shadow-emerald-500/20'
+      bgGradient: 'from-emerald-500/20 via-green-500/10 to-transparent',
+      borderColor: 'group-hover:border-emerald-500/50',
+      shadowColor: 'group-hover:shadow-emerald-500/20',
+      iconBg: 'bg-emerald-500/10',
+      delay: 0.3
     },
     {
       id: '4v4',
       title: 'War',
-      desc: 'Full Scale Battle.',
+      subtitle: 'Total Chaos',
+      desc: 'Full scale battle. Manage the chaos, control the midfield, and overwhelm the opposition.',
       icon: Crown,
       color: 'text-purple-400',
-      bg: 'from-purple-500/20 to-pink-500/20',
-      border: 'group-hover:border-purple-500/50',
-      glow: 'group-hover:shadow-purple-500/20'
+      bgGradient: 'from-purple-500/20 via-pink-500/10 to-transparent',
+      borderColor: 'group-hover:border-purple-500/50',
+      shadowColor: 'group-hover:shadow-purple-500/20',
+      iconBg: 'bg-purple-500/10',
+      delay: 0.4
     }
   ];
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  };
+  const cardVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: {
+        type: "spring",
+        stiffness: 100,
+        damping: 15
+      }
+    }
+  };
   return (
-    <div className="animate-fade-in space-y-8 max-w-7xl mx-auto px-4">
+    <div className="min-h-[80vh] flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-12">
+      <div className="flex items-center justify-between mb-12 px-4">
         <Button
           variant="ghost"
           onClick={onBack}
@@ -67,64 +101,80 @@ export function GameModeSelector({ onSelect, onBack }: GameModeSelectorProps) {
           </h2>
           <p className="text-slate-400 mt-2 font-medium">Choose your battlefield</p>
         </div>
-        <div className="w-32" /> {/* Spacer for centering */}
+        <div className="w-32 hidden md:block" /> {/* Spacer */}
       </div>
       {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <motion.div 
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto px-4 w-full"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
         {modes.map((mode) => (
-          <button
+          <motion.button
             key={mode.id}
+            variants={cardVariants}
             onClick={() => onSelect(mode.id as GameMode)}
             className={cn(
-              "group relative h-96 rounded-3xl border border-white/10 bg-slate-900/50 backdrop-blur-xl overflow-hidden transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl text-left flex flex-col",
-              mode.border,
-              mode.glow
+              "group relative h-[420px] rounded-[2rem] border border-white/5 bg-slate-900/40 backdrop-blur-xl overflow-hidden text-left flex flex-col transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl",
+              mode.borderColor,
+              mode.shadowColor
             )}
           >
             {/* Background Gradient */}
             <div className={cn(
-              "absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-100 transition-opacity duration-500",
-              mode.bg
+              "absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-100 transition-opacity duration-700 ease-out",
+              mode.bgGradient
             )} />
+            {/* Texture Overlay */}
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-5 mix-blend-overlay" />
             {/* Content Container */}
             <div className="relative z-10 p-8 flex flex-col h-full">
-              {/* Icon */}
+              {/* Top Section */}
               <div className="mb-auto">
-                <div className={cn(
-                  "w-16 h-16 rounded-2xl bg-slate-950/50 border border-white/10 flex items-center justify-center mb-6 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3",
-                  mode.color
-                )}>
-                  <mode.icon className="w-8 h-8" />
+                <div className="flex justify-between items-start mb-6">
+                    <div className={cn(
+                        "w-16 h-16 rounded-2xl border border-white/10 flex items-center justify-center transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 shadow-lg",
+                        mode.iconBg,
+                        mode.color
+                    )}>
+                        <mode.icon className="w-8 h-8" />
+                    </div>
+                    <div className="px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm flex items-center gap-1.5">
+                        <Zap className="w-3 h-3 text-yellow-400 fill-yellow-400 animate-pulse" />
+                        <span className="text-[10px] font-bold text-slate-300 tracking-wider">RANKED</span>
+                    </div>
                 </div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-slate-300 mb-4">
-                  <Zap className="w-3 h-3 text-yellow-400 fill-current" />
-                  RANKED
+                <div className="space-y-1">
+                    <h3 className="text-5xl font-display font-bold text-white tracking-tighter opacity-90 group-hover:opacity-100 transition-opacity">
+                        {mode.id}
+                    </h3>
+                    <h4 className={cn("text-lg font-bold uppercase tracking-wide", mode.color)}>
+                        {mode.title}
+                    </h4>
                 </div>
               </div>
-              {/* Text */}
-              <div className="space-y-2">
-                <h3 className="text-5xl font-display font-bold text-white tracking-tighter">
-                  {mode.id}
-                </h3>
-                <div className="h-1 w-12 bg-white/20 rounded-full group-hover:w-24 transition-all duration-500" />
-                <h4 className={cn("text-xl font-bold pt-2", mode.color)}>
-                  {mode.title}
-                </h4>
-                <p className="text-slate-400 text-sm font-medium leading-relaxed">
+              {/* Bottom Section */}
+              <div className="space-y-6">
+                <div className="h-px w-12 bg-white/10 group-hover:w-full transition-all duration-700" />
+                <p className="text-slate-400 text-sm font-medium leading-relaxed min-h-[60px]">
                   {mode.desc}
                 </p>
-              </div>
-              {/* Action Hint */}
-              <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0">
-                <span className="text-sm font-bold text-white">PLAY NOW</span>
-                <div className={cn("p-2 rounded-full bg-white/10", mode.color)}>
-                  <ArrowLeft className="w-4 h-4 rotate-180" />
+                {/* Action Button Visual */}
+                <div className={cn(
+                    "flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 group-hover:bg-white/10 transition-colors",
+                    "transform translate-y-2 opacity-80 group-hover:translate-y-0 group-hover:opacity-100 duration-300"
+                )}>
+                    <span className="text-xs font-bold text-white pl-2">START MATCH</span>
+                    <div className={cn("p-2 rounded-lg text-white", mode.color.replace('text-', 'bg-').replace('400', '500'))}>
+                        <Play className="w-3 h-3 fill-current" />
+                    </div>
                 </div>
               </div>
             </div>
-          </button>
+          </motion.button>
         ))}
-      </div>
+      </motion.div>
     </div>
   );
 }

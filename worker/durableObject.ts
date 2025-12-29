@@ -227,6 +227,7 @@ export class GlobalDurableObject extends DurableObject {
         const queue = this.queues.get(mode) || [];
         if (!queue.find(p => p.userId === userId)) {
             queue.push({ userId, ws, username, rating, jersey });
+            // Sort by rating ascending (lowest first) to match similar skills
             queue.sort((a, b) => a.rating - b.rating);
             this.queues.set(mode, queue);
             this.sessions.set(ws, { userId });
@@ -254,11 +255,53 @@ export class GlobalDurableObject extends DurableObject {
         const queue = this.queues.get(mode) || [];
         const requiredPlayers = mode === '1v1' ? 2 : mode === '2v2' ? 4 : mode === '3v3' ? 6 : 8;
         if (queue.length >= requiredPlayers) {
+            // Take the first N players (who are close in rating due to sort)
             const players = queue.splice(0, requiredPlayers);
             this.broadcastQueueStatus(mode);
-            const matchPlayers = players.map(p => ({ userId: p.userId, ws: p.ws, username: p.username, jersey: p.jersey }));
+            // Balance teams based on rating
+            const balancedPlayers = this.balanceTeams(players, mode);
+            // Map to match format
+            const matchPlayers = balancedPlayers.map(p => ({
+                userId: p.userId,
+                ws: p.ws,
+                username: p.username,
+                team: p.team,
+                jersey: p.jersey
+            }));
             this.startMatch(matchPlayers, [], mode, RANKED_SETTINGS);
         }
+    }
+    // Fair Team Balancing Algorithm
+    balanceTeams(players: { userId: string; ws: WebSocket; username: string; rating: number; jersey?: string }[], mode: GameMode) {
+        if (mode === '1v1') {
+            // Random sides for 1v1
+            return [
+                { ...players[0], team: 'red' as const },
+                { ...players[1], team: 'blue' as const }
+            ];
+        }
+        // Sort by rating descending for the greedy algorithm
+        const sorted = [...players].sort((a, b) => b.rating - a.rating);
+        const red: typeof players = [];
+        const blue: typeof players = [];
+        let redRating = 0;
+        let blueRating = 0;
+        const teamSize = players.length / 2;
+        for (const p of sorted) {
+            // Assign to the team with lower total rating, unless that team is full
+            // This effectively creates balanced sums (Partition Problem greedy approximation)
+            if (red.length < teamSize && (blue.length >= teamSize || redRating <= blueRating)) {
+                red.push(p);
+                redRating += p.rating;
+            } else {
+                blue.push(p);
+                blueRating += p.rating;
+            }
+        }
+        return [
+            ...red.map(p => ({ ...p, team: 'red' as const })),
+            ...blue.map(p => ({ ...p, team: 'blue' as const }))
+        ];
     }
     // --- Lobby Methods (Preserved) ---
     async handleCreateLobby(ws: WebSocket, userId: string, username: string) {
@@ -378,6 +421,7 @@ export class GlobalDurableObject extends DurableObject {
             id: p.userId,
             ws: p.ws,
             username: p.username,
+            // Use assigned team if available, otherwise fallback to simple split
             team: p.team || (i < players.length / 2 ? 'red' : 'blue') as 'red' | 'blue',
             jersey: p.jersey
         }));
@@ -403,7 +447,7 @@ export class GlobalDurableObject extends DurableObject {
                 const opponents = matchPlayers.filter(op => op.team !== p.team).map(op => op.username);
                 const type = session?.lobbyCode ? 'match_started' : 'match_found';
                 p.ws.send(JSON.stringify({ type, matchId, team: p.team, opponent: opponents.join(', '), opponents }));
-            } catch (err) {}
+            } catch (err) { /* empty */ }
         });
         match.start();
     }
@@ -454,30 +498,10 @@ export class GlobalDurableObject extends DurableObject {
         // We need to pair them up.
         // If we have Byes, they should be distributed.
         // E.g. 5 players, size 8. 3 Byes.
-        // M1: P1 vs Bye -> P1 wins
-        // M2: P2 vs Bye -> P2 wins
-        // M3: P3 vs Bye -> P3 wins
-        // M4: P4 vs P5 -> Play
-        // Let's assign players to slots 0 to size-1.
-        // Slots >= count are Byes.
-        // Match i: Slot i vs Slot size-1-i ? No, standard is 0 vs 1, 2 vs 3 in array representation.
-        // Let's use a simple filling strategy.
-        // Fill slots 0 to size-1.
-        // Players take 0 to count-1.
-        // Byes take count to size-1.
-        // But we want to distribute byes so top seeds advance.
-        // Since it's shuffled, "top seeds" are random.
-        // Pairings:
-        // We need size/2 matches for Round 0.
-        const round0Matches = size / 2;
-        // We place Byes in the second slot of matches if possible to advance the first player.
-        // Actually, simpler:
-        // Create 'size' slots. Fill 'count' of them with players. Rest null.
-        // But we want P1 vs P2, P3 vs P4.
-        // If we have 5 players:
         // M1: P1 vs P2
         // M2: P3 vs P4
-        // M3: P5 vs Bye (P5 advances)\n        // M4: Bye vs Bye (Should not happen if logic correct)
+        // M3: P5 vs Bye (P5 advances)
+        // M4: Bye vs Bye (Should not happen if logic correct)
         // Correct logic for N players:
         // We need N-1 matches total in single elimination.
         // But for the bracket structure, we model rounds.
@@ -488,6 +512,7 @@ export class GlobalDurableObject extends DurableObject {
             slots[i] = shuffled[i];
         }
         // Now create Round 0 matches
+        const round0Matches = size / 2;
         for (let i = 0; i < round0Matches; i++) {
             const p1 = slots[i * 2];
             const p2 = slots[i * 2 + 1];

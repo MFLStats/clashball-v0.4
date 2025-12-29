@@ -1,7 +1,7 @@
 import React from 'react';
 import { GameMode } from '@shared/types';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Swords, Users, Shield, Crown, Zap, Play } from 'lucide-react';
+import { ArrowLeft, Swords, Users, Shield, Crown, Zap, Play, Scale } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 interface GameModeSelectorProps {
@@ -21,46 +21,50 @@ export function GameModeSelector({ onSelect, onBack }: GameModeSelectorProps) {
       borderColor: 'group-hover:border-yellow-500/50',
       shadowColor: 'group-hover:shadow-yellow-500/20',
       iconBg: 'bg-yellow-500/10',
-      delay: 0.1
+      delay: 0.1,
+      balanced: false
     },
     {
       id: '2v2',
       title: 'Doubles',
       subtitle: 'Dynamic Duo',
-      desc: 'Coordinate with a partner. Combine passing plays and positioning to outsmart the defense.',
+      desc: 'Coordinate with a partner. Auto-balanced teams ensure fair competition.',
       icon: Users,
       color: 'text-blue-400',
       bgGradient: 'from-blue-500/20 via-cyan-500/10 to-transparent',
       borderColor: 'group-hover:border-blue-500/50',
       shadowColor: 'group-hover:shadow-blue-500/20',
       iconBg: 'bg-blue-500/10',
-      delay: 0.2
+      delay: 0.2,
+      balanced: true
     },
     {
       id: '3v3',
       title: 'Squad',
       subtitle: 'Tactical Teamwork',
-      desc: 'Balance offense and defense. Assign roles and execute complex strategies to dominate.',
+      desc: 'Balance offense and defense. Teams are sorted by skill rating.',
       icon: Shield,
       color: 'text-emerald-400',
       bgGradient: 'from-emerald-500/20 via-green-500/10 to-transparent',
       borderColor: 'group-hover:border-emerald-500/50',
       shadowColor: 'group-hover:shadow-emerald-500/20',
       iconBg: 'bg-emerald-500/10',
-      delay: 0.3
+      delay: 0.3,
+      balanced: true
     },
     {
       id: '4v4',
       title: 'War',
       subtitle: 'Total Chaos',
-      desc: 'Full scale battle. Manage the chaos, control the midfield, and overwhelm the opposition.',
+      desc: 'Full scale battle. Smart matchmaking distributes high-rank players evenly.',
       icon: Crown,
       color: 'text-purple-400',
       bgGradient: 'from-purple-500/20 via-pink-500/10 to-transparent',
       borderColor: 'group-hover:border-purple-500/50',
       shadowColor: 'group-hover:shadow-purple-500/20',
       iconBg: 'bg-purple-500/10',
-      delay: 0.4
+      delay: 0.4,
+      balanced: true
     }
   ];
   const containerVariants = {
@@ -140,9 +144,17 @@ export function GameModeSelector({ onSelect, onBack }: GameModeSelectorProps) {
                     )}>
                         <mode.icon className="w-8 h-8" />
                     </div>
-                    <div className="px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm flex items-center gap-1.5">
-                        <Zap className="w-3 h-3 text-yellow-400 fill-yellow-400 animate-pulse" />
-                        <span className="text-[10px] font-bold text-slate-300 tracking-wider">RANKED</span>
+                    <div className="flex flex-col items-end gap-1">
+                        <div className="px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm flex items-center gap-1.5">
+                            <Zap className="w-3 h-3 text-yellow-400 fill-yellow-400 animate-pulse" />
+                            <span className="text-[10px] font-bold text-slate-300 tracking-wider">RANKED</span>
+                        </div>
+                        {mode.balanced && (
+                            <div className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-sm flex items-center gap-1">
+                                <Scale className="w-3 h-3 text-emerald-400" />
+                                <span className="text-[9px] font-bold text-emerald-300 tracking-wider">BALANCED</span>
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div className="space-y-1">

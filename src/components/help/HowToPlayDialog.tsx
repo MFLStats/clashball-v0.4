@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { HelpCircle, Keyboard, Gamepad2, Trophy, BookOpen, Move, Zap, Shield, Crown, Users } from 'lucide-react';
+import { HelpCircle, Keyboard, Gamepad2, Trophy, BookOpen, Move, MousePointerClick, Zap, Shield, Crown, Users } from 'lucide-react';
 interface HowToPlayDialogProps {
   trigger?: React.ReactNode;
   open?: boolean;

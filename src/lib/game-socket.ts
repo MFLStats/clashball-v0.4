@@ -18,7 +18,9 @@ export class GameSocket {
     this.on = this.on.bind(this);
     this.off = this.off.bind(this);
     this.handleMessage = this.handleMessage.bind(this);
-    this.heartbeat = this.heartbeat.bind(this);
+    // Fixed: Removed incorrect heartbeat binding and added correct ones
+    this.startHeartbeat = this.startHeartbeat.bind(this);
+    this.stopHeartbeat = this.stopHeartbeat.bind(this);
     this.reconnect = this.reconnect.bind(this);
   }
   connect(url: string, userId: string, username: string, onOpen?: () => void) {
@@ -100,7 +102,6 @@ export class GameSocket {
     if (handlers) {
       handlers.forEach(handler => handler(msg));
     }
-    // Also dispatch to wildcard listeners if we had them, but for now specific types only
   }
   private startHeartbeat() {
     this.stopHeartbeat();

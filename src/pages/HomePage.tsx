@@ -10,6 +10,7 @@ import { PlayOnlineBanner } from '@/components/home/PlayOnlineBanner';
 import { CustomLobbyBanner } from '@/components/home/CustomLobbyBanner';
 import { AuthDialog } from '@/components/auth/AuthDialog';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
+import { HowToPlayDialog } from '@/components/help/HowToPlayDialog';
 import { Button } from '@/components/ui/button';
 import { Trophy, ArrowLeft, Crown, LogOut, BarChart2, Target } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
@@ -50,7 +51,7 @@ export function HomePage() {
     if (lobbyCode) {
       setInitialLobbyCode(lobbyCode);
       setView('custom_lobby');
-      // Clean URL without reload to prevent re-joining on refresh if desired, 
+      // Clean URL without reload to prevent re-joining on refresh if desired,
       // or keep it to allow bookmarking. Cleaning it is usually cleaner UX.
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -244,7 +245,10 @@ export function HomePage() {
                     ) : (
                         <AuthDialog open={showAuth} onOpenChange={setShowAuth} />
                     )}
-                    <SettingsDialog />
+                    <div className="flex items-center gap-1">
+                        <HowToPlayDialog />
+                        <SettingsDialog />
+                    </div>
                 </div>
             </header>
             {/* Main Grid Layout */}
@@ -260,7 +264,7 @@ export function HomePage() {
                 </div>
                 {/* Right Column: Secondary Actions */}
                 <div className="grid grid-cols-1 gap-6">
-                    <button 
+                    <button
                         onClick={() => setView('local_game')}
                         className="group relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-left shadow-lg border border-slate-800 transition-all hover:border-slate-700 hover:bg-slate-800/50"
                     >
@@ -274,7 +278,7 @@ export function HomePage() {
                             </div>
                         </div>
                     </button>
-                    <button 
+                    <button
                         onClick={() => setView('leaderboard')}
                         className="group relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-left shadow-lg border border-slate-800 transition-all hover:border-slate-700 hover:bg-slate-800/50"
                     >
@@ -288,7 +292,7 @@ export function HomePage() {
                             </div>
                         </div>
                     </button>
-                    <button 
+                    <button
                         onClick={handleRankedClick}
                         className="group relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-left shadow-lg border border-slate-800 transition-all hover:border-slate-700 hover:bg-slate-800/50 flex-1"
                     >

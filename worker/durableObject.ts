@@ -3,7 +3,7 @@ import type {
     DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage,
     GameMode, ModeStats, TeamProfile, AuthPayload, AuthResponse,
     TournamentState, TournamentParticipant, LobbyState, LeaderboardEntry, MatchHistoryEntry,
-    TeamMember, LobbyInfo
+    TeamMember, LobbyInfo, PlayerMatchStats
 } from '@shared/types';
 import { MOCK_ITEMS } from '@shared/mock-data';
 import { Match } from './match';
@@ -330,7 +330,7 @@ export class GlobalDurableObject extends DurableObject {
         });
         match.start();
     }
-    async handleMatchEnd(matchId: string, winner: 'red' | 'blue', players: { id: string, team: 'red' | 'blue', username: string }[], mode: GameMode, playerStats?: any) {
+    async handleMatchEnd(matchId: string, winner: 'red' | 'blue', players: { id: string, team: 'red' | 'blue', username: string }[], mode: GameMode, playerStats?: Record<string, PlayerMatchStats>) {
         // 1. Get all user profiles to calculate team averages and detect teams
         const playerProfiles = await Promise.all(players.map(p => this.getUserProfile(p.id)));
         const redPlayers = players.filter(p => p.team === 'red');
@@ -397,34 +397,63 @@ export class GlobalDurableObject extends DurableObject {
                 playerStats // Pass the stats map
             });
         });
+        // Helper to aggregate stats for a team
+        const getAggregatedStats = (teamPlayers: typeof players): PlayerMatchStats | undefined => {
+            if (!playerStats) return undefined;
+            const agg: PlayerMatchStats = {
+                goals: 0,
+                assists: 0,
+                ownGoals: 0,
+                isMvp: false,
+                cleanSheet: false
+            };
+            // Check clean sheet from first player (same for all in team)
+            if (teamPlayers.length > 0 && playerStats[teamPlayers[0].id]?.cleanSheet) {
+                agg.cleanSheet = true;
+            }
+            teamPlayers.forEach(p => {
+                const s = playerStats[p.id];
+                if (s) {
+                    agg.goals += s.goals;
+                    agg.assists += s.assists;
+                    agg.ownGoals += s.ownGoals;
+                    if (s.isMvp) agg.isMvp = true;
+                }
+            });
+            return agg;
+        };
         // 3. Process updates for Teams (if detected)
         const teamUpdates: Promise<any>[] = [];
         if (redTeamId) {
             const result = winner === 'red' ? 'win' : 'loss';
+            const aggStats = getAggregatedStats(redPlayers);
+            const representativeId = redPlayers[0].id;
             teamUpdates.push(this.processMatch({
                 matchId,
-                userId: redPlayers[0].id, // Placeholder, teamId is what matters
+                userId: representativeId, // Placeholder, teamId is what matters
                 teamId: redTeamId,
                 opponentRating: blueAvg, // Use player average of opponents
                 opponentName: blueTeamId ? blueTeamName : 'Opponents',
                 result,
                 timestamp: Date.now(),
                 mode,
-                playerStats: undefined // Do not attribute individual stats to team aggregate directly
+                playerStats: aggStats ? { [representativeId]: aggStats } : undefined
             }));
         }
         if (blueTeamId) {
             const result = winner === 'blue' ? 'win' : 'loss';
+            const aggStats = getAggregatedStats(bluePlayers);
+            const representativeId = bluePlayers[0].id;
             teamUpdates.push(this.processMatch({
                 matchId,
-                userId: bluePlayers[0].id,
+                userId: representativeId,
                 teamId: blueTeamId,
                 opponentRating: redAvg,
                 opponentName: redTeamId ? redTeamName : 'Opponents',
                 result,
                 timestamp: Date.now(),
                 mode,
-                playerStats: undefined
+                playerStats: aggStats ? { [representativeId]: aggStats } : undefined
             }));
         }
         await Promise.all([...updates, ...teamUpdates]);

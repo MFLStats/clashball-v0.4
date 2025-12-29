@@ -234,14 +234,29 @@ export class PhysicsEngine {
   static resetPositions(state: GameState) {
     state.ball.pos = { x: state.field.width / 2, y: state.field.height / 2 };
     state.ball.vel = { x: 0, y: 0 };
-    state.players.forEach(p => {
-      if (p.team === 'red') {
-        p.pos = { x: 150, y: state.field.height / 2 };
-      } else {
-        p.pos = { x: state.field.width - 150, y: state.field.height / 2 };
-      }
-      p.vel = { x: 0, y: 0 };
-    });
+    const redPlayers = state.players.filter(p => p.team === 'red');
+    const bluePlayers = state.players.filter(p => p.team === 'blue');
+    const setFormation = (players: Player[], isRed: boolean) => {
+        const count = players.length;
+        // Base X: Red on left (150), Blue on right (Width - 150)
+        const baseX = isRed ? 150 : state.field.width - 150;
+        players.forEach((p, index) => {
+            p.vel = { x: 0, y: 0 };
+            p.input = { move: { x: 0, y: 0 }, kick: false }; // Reset inputs
+            if (count === 1) {
+                // Center
+                p.pos = { x: baseX, y: state.field.height / 2 };
+            } else {
+                // Distribute vertically
+                // e.g. 2 players: 1/3 and 2/3 of height
+                // e.g. 3 players: 1/4, 2/4, 3/4
+                const segment = state.field.height / (count + 1);
+                p.pos = { x: baseX, y: segment * (index + 1) };
+            }
+        });
+    };
+    setFormation(redPlayers, true);
+    setFormation(bluePlayers, false);
     state.status = 'playing';
   }
 }

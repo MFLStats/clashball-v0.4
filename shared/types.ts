@@ -95,4 +95,5 @@ export type WSMessage =
   | { type: 'game_over'; winner: 'red' | 'blue' }
   | { type: 'error'; message: string }
   | { type: 'ping' }
-  | { type: 'pong' };
+  | { type: 'pong' }
+  | { type: 'chat'; message: string; sender?: string; team?: 'red' | 'blue' };

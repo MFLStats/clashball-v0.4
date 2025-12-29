@@ -4,17 +4,27 @@ import { GameState } from '@shared/physics';
 import { WSMessage, GameMode } from '@shared/types';
 import { useUserStore } from '@/store/useUserStore';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Loader2, ArrowLeft, Send } from 'lucide-react';
 import { toast } from 'sonner';
 interface OnlineGameManagerProps {
   mode: GameMode;
   onExit: () => void;
 }
+interface ChatMessage {
+  id: string;
+  sender: string;
+  message: string;
+  team: 'red' | 'blue';
+}
 export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
   const profile = useUserStore(s => s.profile);
   const [status, setStatus] = useState<'connecting' | 'searching' | 'playing' | 'error'>('connecting');
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
   const wsRef = useRef<WebSocket | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
   // Use refs to access latest state in callbacks without triggering re-renders or effect re-runs
   const matchInfoRef = useRef<{ matchId: string; team: 'red' | 'blue' } | null>(null);
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' } | null>(null);
@@ -22,12 +32,16 @@ export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
   useEffect(() => {
     matchInfoRef.current = matchInfo;
   }, [matchInfo]);
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
   const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
       case 'match_found': {
         const info = { matchId: msg.matchId, team: msg.team };
         setMatchInfo(info);
-        matchInfoRef.current = info; // Update ref immediately for subsequent messages in same tick
+        matchInfoRef.current = info;
         setStatus('playing');
         toast.success(`Match Found! You are Team ${msg.team.toUpperCase()}`);
         break;
@@ -44,6 +58,18 @@ export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
         setTimeout(() => {
             onExit();
         }, 3000);
+        break;
+      }
+      case 'chat': {
+        setChatMessages(prev => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            sender: msg.sender || 'Unknown',
+            message: msg.message,
+            team: msg.team || 'red'
+          }
+        ]);
         break;
       }
       case 'error': {
@@ -106,6 +132,15 @@ export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
       } satisfies WSMessage));
     }
   };
+  const sendChat = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !wsRef.current) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'chat',
+      message: chatInput
+    } satisfies WSMessage));
+    setChatInput('');
+  };
   if (status === 'connecting' || status === 'searching') {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-6 animate-fade-in">
@@ -134,7 +169,7 @@ export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
     );
   }
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-4 animate-fade-in relative">
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={onExit}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Leave Match
@@ -146,11 +181,39 @@ export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
             </span>
         </div>
       </div>
-      <GameCanvas 
-        externalState={gameState} 
-        onInput={handleInput}
-        winningScore={3}
-      />
+      <div className="relative">
+        <GameCanvas
+            externalState={gameState}
+            onInput={handleInput}
+            winningScore={3}
+            currentUserId={profile?.id}
+        />
+        {/* Chat Overlay */}
+        <div className="absolute bottom-4 left-4 w-80 max-h-64 flex flex-col gap-2 z-20">
+            <div className="flex-1 overflow-y-auto bg-black/40 backdrop-blur-sm rounded-lg p-2 space-y-1 scrollbar-hide">
+                {chatMessages.map(msg => (
+                    <div key={msg.id} className="text-sm text-white drop-shadow-md">
+                        <span className={`font-bold ${msg.team === 'red' ? 'text-red-300' : 'text-blue-300'}`}>
+                            {msg.sender}:
+                        </span>
+                        <span className="ml-1">{msg.message}</span>
+                    </div>
+                ))}
+                <div ref={chatEndRef} />
+            </div>
+            <form onSubmit={sendChat} className="flex gap-2">
+                <Input
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    placeholder="Type a message..."
+                    className="bg-black/40 border-white/20 text-white placeholder:text-white/50 h-8 text-sm"
+                />
+                <Button type="submit" size="sm" className="h-8 w-8 p-0 bg-white/20 hover:bg-white/30">
+                    <Send className="w-3 h-3" />
+                </Button>
+            </form>
+        </div>
+      </div>
     </div>
   );
 }

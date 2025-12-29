@@ -18,14 +18,14 @@ export class Match {
       id: p.id,
       team: p.team,
       username: p.username,
-      pos: p.team === 'red' 
-        ? { x: 150, y: PhysicsEngine.FIELD_HEIGHT / 2 } 
-        : { x: PhysicsEngine.FIELD_WIDTH - 150, y: PhysicsEngine.FIELD_HEIGHT / 2 },
+      pos: { x: 0, y: 0 }, // Will be set by resetPositions
       vel: { x: 0, y: 0 },
       radius: PhysicsEngine.PLAYER_RADIUS,
       isKicking: false,
       input: { move: { x: 0, y: 0 }, kick: false }
     }));
+    // Apply correct formation based on team size
+    PhysicsEngine.resetPositions(this.gameState);
     // Store WS connections
     players.forEach(p => {
       this.players.set(p.id, { ws: p.ws, team: p.team, username: p.username });
@@ -53,6 +53,18 @@ export class Match {
       player.input = input;
     }
   }
+  handleChat(userId: string, message: string) {
+    const player = this.gameState.players.find(p => p.id === userId);
+    if (!player) return;
+    // Basic sanitization (truncate)
+    const cleanMessage = message.slice(0, 100);
+    this.broadcast({
+        type: 'chat',
+        message: cleanMessage,
+        sender: player.username,
+        team: player.team
+    });
+  }
   private update(dt: number) {
     // Run physics with delta time
     this.gameState = PhysicsEngine.update(this.gameState, dt);
@@ -66,10 +78,8 @@ export class Match {
         } else if (this.gameState.score.blue > this.gameState.score.red) {
             this.endGame('blue');
         } else {
-            // Draw - for now, maybe sudden death? Or just end as draw (random winner for tournament logic simplicity in MVP)
-            // For MVP, let's just say Red wins draws or handle it in the client
-            // Actually, let's just pick Red for now to avoid stuck states
-            this.endGame('red'); 
+            // Draw - Default to Red for MVP simplicity
+            this.endGame('red');
         }
     } else if (this.gameState.score.red >= 3) {
       this.endGame('red');

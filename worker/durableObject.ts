@@ -82,6 +82,16 @@ export class GlobalDurableObject extends DurableObject {
                 ws.send(JSON.stringify({ type: 'pong' }));
                 break;
             }
+            case 'chat': {
+                const session = this.sessions.get(ws);
+                if (session && session.matchId) {
+                    const match = this.matches.get(session.matchId);
+                    if (match) {
+                        match.handleChat(session.userId, msg.message);
+                    }
+                }
+                break;
+            }
         }
     }
     handleDisconnect(ws: WebSocket) {

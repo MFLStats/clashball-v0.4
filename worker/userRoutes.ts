@@ -8,12 +8,8 @@ import type {
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
     app.get('/api/test', (c) => c.json({ success: true, data: { name: 'CF Workers Demo' }}));
     // --- WebSocket Route ---
-    // Simplified: Delegate handshake entirely to Durable Object to prevent header casing issues
-    // We forward the request directly without pre-validation to ensure the DO receives the original Upgrade headers intact.
     app.get('/api/ws', async (c) => {
         const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
-        // Pass the raw request to the DO. The DO's fetch method will handle the Upgrade check
-        // and acceptWebSocket call.
         return stub.fetch(c.req.raw);
     });
     // --- Auth Routes ---
@@ -38,7 +34,6 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         }
     });
     // --- Ranked Routes ---
-    // Get or Create User Profile
     app.post('/api/profile', async (c) => {
         const { userId, username } = await c.req.json() as { userId: string, username: string };
         if (!userId) return c.json({ success: false, error: 'Missing userId' }, 400);
@@ -46,7 +41,6 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const data = await stub.getUserProfile(userId, username);
         return c.json({ success: true, data } satisfies ApiResponse<UserProfile>);
     });
-    // Update User Profile
     app.post('/api/profile/update', async (c) => {
         const { userId, jersey } = await c.req.json() as { userId: string, jersey?: string };
         if (!userId) return c.json({ success: false, error: 'Missing userId' }, 400);
@@ -54,7 +48,6 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const data = await stub.updateProfile(userId, { jersey });
         return c.json({ success: true, data } satisfies ApiResponse<UserProfile>);
     });
-    // Report Match Result
     app.post('/api/match/end', async (c) => {
         const body = await c.req.json() as MatchResult;
         if (!body.userId || !body.result) return c.json({ success: false, error: 'Invalid match data' }, 400);
@@ -62,7 +55,6 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const data = await stub.processMatch(body);
         return c.json({ success: true, data } satisfies ApiResponse<MatchResponse>);
     });
-    // Get Leaderboard
     app.get('/api/leaderboard/:mode', async (c) => {
         const mode = c.req.param('mode') as GameMode;
         const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
@@ -127,6 +119,17 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
         const data = await stub.recordTournamentWin(userId);
         return c.json({ success: true, data } satisfies ApiResponse<UserProfile>);
+    });
+    app.post('/api/tournament/match/join', async (c) => {
+        try {
+            const { matchId, userId } = await c.req.json() as { matchId: string, userId: string };
+            if (!matchId || !userId) return c.json({ success: false, error: 'Missing required fields' }, 400);
+            const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+            const data = await stub.joinTournamentMatch(matchId, userId);
+            return c.json({ success: true, data } satisfies ApiResponse<TournamentState>);
+        } catch (e) {
+            return c.json({ success: false, error: (e as Error).message }, 400);
+        }
     });
     // --- Lobby Routes ---
     app.get('/api/lobbies', async (c) => {

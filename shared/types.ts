@@ -124,10 +124,24 @@ export interface TournamentParticipant {
   rank: string; // e.g. "Gold I"
   rating: number;
 }
+export interface TournamentMatch {
+  id: string;
+  round: number; // 0 = Round 1, 1 = Round 2, etc.
+  matchIndex: number; // Position in the round
+  player1: TournamentParticipant | null; // null if TBD or Bye
+  player2: TournamentParticipant | null;
+  winnerId?: string;
+  startTime?: number; // Timestamp when match became active (both players set)
+  p1Ready: boolean;
+  p2Ready: boolean;
+  status: 'pending' | 'scheduled' | 'in_progress' | 'completed';
+  score?: { p1: number; p2: number };
+}
 export interface TournamentState {
   nextStartTime: number; // Timestamp
   participants: TournamentParticipant[];
   status: 'open' | 'in_progress' | 'completed';
+  bracket: TournamentMatch[];
 }
 // --- Game Event Types ---
 export type GameEventType = 'kick' | 'wall' | 'player' | 'goal' | 'whistle';
@@ -166,6 +180,7 @@ export interface LobbyInfo {
 // --- Multiplayer Types ---
 export type WSMessage =
   | { type: 'join_queue'; mode: GameMode; userId: string; username: string }
+  | { type: 'join_match'; matchId: string; userId: string; username: string } // New for Tournament
   | { type: 'leave_queue' }
   | { type: 'queue_update'; count: number }
   | { type: 'create_lobby'; userId: string; username: string }
@@ -179,7 +194,7 @@ export type WSMessage =
   | { type: 'input'; move: { x: number; y: number }; kick: boolean }
   | { type: 'match_found'; matchId: string; team: 'red' | 'blue' | 'spectator'; opponent?: string; opponents?: string[] }
   | { type: 'match_started'; matchId: string; team: 'red' | 'blue' | 'spectator'; opponent?: string; opponents?: string[] }
-  | { type: 'game_state'; state: any } // Typed as 'any' here to avoid circular dependency, but effectively GameState
+  | { type: 'game_state'; state: any } // Typed as 'any' to avoid circular dependency, but effectively GameState
   | { type: 'game_events'; events: GameEvent[] }
   | { type: 'game_over'; winner: 'red' | 'blue'; stats?: Record<string, PlayerMatchStats> }
   | { type: 'error'; message: string }

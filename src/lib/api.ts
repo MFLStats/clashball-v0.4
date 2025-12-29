@@ -81,6 +81,11 @@ export const api = {
       fetchApi<UserProfile>('/tournament/win', {
         method: 'POST',
         body: JSON.stringify({ userId })
+      }),
+    joinMatch: (matchId: string, userId: string) =>
+      fetchApi<TournamentState>('/tournament/match/join', {
+        method: 'POST',
+        body: JSON.stringify({ matchId, userId })
       })
   },
   // Lobbies

@@ -121,17 +121,28 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     const wsUrl = `${protocol}//${host}/api/ws`;
     socket.connect(wsUrl, userId, username, () => {
         setStatus('searching');
-        socket.send({
-            type: 'join_queue',
-            mode,
-            userId,
-            username
-        });
+        if (matchId) {
+            // Direct join for tournament
+            socket.send({
+                type: 'join_match',
+                matchId,
+                userId,
+                username
+            });
+        } else {
+            // Standard queue
+            socket.send({
+                type: 'join_queue',
+                mode,
+                userId,
+                username
+            });
+        }
     });
     return () => {
         socket.disconnect();
     };
-  }, [userId, username, mode, onExit]);
+  }, [userId, username, mode, onExit, matchId]);
   const handleInput = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
     socketRef.current?.send({
         type: 'input',
@@ -158,6 +169,11 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       window.location.reload();
   };
   const handlePlayAgain = useCallback(() => {
+    if (matchId) {
+        // For tournament, play again just exits to bracket
+        onExit();
+        return;
+    }
     setWinner(null);
     setFinalStats(undefined);
     setGameState(null);
@@ -171,7 +187,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             username
         });
     }
-  }, [mode, userId, username]);
+  }, [mode, userId, username, matchId, onExit]);
   if (status === 'connecting' || status === 'searching') {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-6 animate-fade-in">
@@ -183,10 +199,10 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         </div>
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-display font-bold text-slate-800">
-            {status === 'connecting' ? 'Connecting to Server...' : 'Searching for Opponent...'}
+            {status === 'connecting' ? 'Connecting to Server...' : matchId ? 'Joining Match...' : 'Searching for Opponent...'}
           </h2>
           <p className="text-slate-500">Mode: {mode}</p>
-          {status === 'searching' && queueCount > 0 && (
+          {status === 'searching' && queueCount > 0 && !matchId && (
               <p className="text-sm font-bold text-haxball-blue animate-pulse">
                   {queueCount} Player{queueCount !== 1 ? 's' : ''} in Queue
               </p>

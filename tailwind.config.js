@@ -103,7 +103,7 @@ export default {
   				border: 'hsl(var(--sidebar-border))',
   				ring: 'hsl(var(--sidebar-ring))'
   			},
-            // Classic Haxball Palette
+            // Classic Haxball Palette (Preserved for Game Canvas)
             haxball: {
                 field: '#718c5a',   // Base grass
                 stripe: '#6c8655',  // Darker stripe
@@ -112,12 +112,23 @@ export default {
                 blue: '#5689e5',    // Team Blue
                 border: '#000000',  // Entity strokes
                 text: '#ffffff'     // Text on field
+            },
+            // New Neon Palette
+            neon: {
+                blue: '#00f3ff',
+                purple: '#bc13fe',
+                yellow: '#f9f871',
+                green: '#0aff99',
+                pink: '#ff0055'
             }
   		},
   		boxShadow: {
   			soft: '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
   			primary: '0 0 20px -5px hsl(var(--primary) / 0.4)',
-  			glass: '0 8px 32px 0 rgba(0, 0, 0, 0.1)',
+  			glass: '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
+            glow: '0 0 15px rgba(0, 243, 255, 0.5)',
+            'glow-sm': '0 0 8px rgba(0, 243, 255, 0.3)',
+            'glow-lg': '0 0 30px rgba(188, 19, 254, 0.6)',
   		},
   		keyframes: {
   			'fade-in': {
@@ -140,6 +151,10 @@ export default {
                 '0%, 100%': { transform: 'translateY(-5%)', animationTimingFunction: 'cubic-bezier(0.8,0,1,1)' },
                 '50%': { transform: 'translateY(0)', animationTimingFunction: 'cubic-bezier(0,0,0.2,1)' }
             },
+            'spin-slow': {
+                '0%': { transform: 'translate(-50%, -50%) rotate(0deg)' },
+                '100%': { transform: 'translate(-50%, -50%) rotate(360deg)' }
+            },
   			'accordion-down': {
   				from: { height: '0' },
   				to: { height: 'var(--radix-accordion-content-height)' }
@@ -154,13 +169,16 @@ export default {
   			'slide-up': 'slide-up 0.4s ease-out',
   			'scale-in': 'scale-in 0.3s ease-out',
   			shimmer: 'shimmer 2s infinite',
-            bounce: 'bounce 1s infinite',
+            bounce: 'bounce 2s infinite',
+            'spin-slow': 'spin-slow 8s linear infinite',
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out'
   		},
   		backgroundImage: {
   			'gradient-rainbow': 'linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #f5576c 75%, #4facfe 100%)',
   			'gradient-primary': 'linear-gradient(135deg, #5689e5, #3b82f6)',
+            'carbon': "url('https://www.transparenttextures.com/patterns/carbon-fibre.png')",
+            'gradient-dark': 'linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a)',
   		}
   	}
   },

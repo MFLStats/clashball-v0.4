@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameCanvas } from './GameCanvas';
 import { GameState } from '@shared/physics';
-import { WSMessage, LobbyState } from '@shared/types';
+import { WSMessage, LobbyState, LobbyInfo } from '@shared/types';
 import { useUserStore } from '@/store/useUserStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ArrowLeft, Users, Copy, Play, Send, KeyRound, Crown } from 'lucide-react';
+import { Loader2, ArrowLeft, Users, Copy, Play, Send, KeyRound, Crown, RefreshCw, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
 import { SoundEngine } from '@/lib/audio';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
 interface CustomLobbyManagerProps {
   onExit: () => void;
 }
@@ -25,6 +26,8 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
   const [lobbyState, setLobbyState] = useState<LobbyState | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
+  const [lobbies, setLobbies] = useState<LobbyInfo[]>([]);
+  const [isLoadingLobbies, setIsLoadingLobbies] = useState(false);
   // Game State
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' } | null>(null);
@@ -36,6 +39,24 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+  // Poll lobbies
+  const fetchLobbies = useCallback(async () => {
+    if (view !== 'menu') return;
+    setIsLoadingLobbies(true);
+    try {
+      const data = await api.getLobbies();
+      setLobbies(data);
+    } catch (error) {
+      console.error('Failed to fetch lobbies', error);
+    } finally {
+      setIsLoadingLobbies(false);
+    }
+  }, [view]);
+  useEffect(() => {
+    fetchLobbies();
+    const interval = setInterval(fetchLobbies, 5000);
+    return () => clearInterval(interval);
+  }, [fetchLobbies]);
   const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
         case 'lobby_update': {
@@ -144,15 +165,16 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
         }
     }
   };
-  const joinLobby = () => {
-    if (!profile || !joinCode) return;
+  const joinLobby = (code?: string) => {
+    const targetCode = code || joinCode;
+    if (!profile || !targetCode) return;
     setIsConnecting(true);
     const ws = connectWS();
     if (ws) {
         const sendJoin = () => {
             ws.send(JSON.stringify({
                 type: 'join_lobby',
-                code: joinCode,
+                code: targetCode,
                 userId: profile.id,
                 username: profile.username
             }));
@@ -200,8 +222,8 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
   }, []);
   if (view === 'menu') {
       return (
-        <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8 animate-fade-in">
-            <div className="flex items-center justify-between w-full max-w-md">
+        <div className="flex flex-col items-center min-h-[60vh] space-y-8 animate-fade-in w-full">
+            <div className="flex items-center justify-between w-full max-w-4xl">
                 <Button variant="ghost" onClick={onExit} className="text-slate-300 hover:bg-white/10">
                     <ArrowLeft className="mr-2 h-4 w-4" /> Back
                 </Button>
@@ -250,11 +272,67 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                 onChange={e => setJoinCode(e.target.value.toUpperCase())}
                                 maxLength={6}
                             />
-                            <Button onClick={joinLobby} disabled={isConnecting || joinCode.length !== 6} className="btn-kid-primary h-12 px-6">
+                            <Button onClick={() => joinLobby()} disabled={isConnecting || joinCode.length !== 6} className="btn-kid-primary h-12 px-6">
                                 {isConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Join'}
                             </Button>
                         </div>
                     </div>
+                </div>
+            </div>
+            {/* Public Lobbies List */}
+            <div className="w-full max-w-4xl space-y-4">
+                <div className="flex items-center justify-between px-2">
+                    <h3 className="text-xl font-display font-bold text-white flex items-center gap-2">
+                        <Users className="w-5 h-5 text-purple-400" />
+                        Public Lobbies
+                    </h3>
+                    <Button variant="ghost" size="sm" onClick={fetchLobbies} disabled={isLoadingLobbies} className="text-slate-400 hover:text-white">
+                        <RefreshCw className={cn("w-4 h-4 mr-2", isLoadingLobbies && "animate-spin")} />
+                        Refresh
+                    </Button>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                    {lobbies.length === 0 ? (
+                        <div className="text-center py-12 bg-slate-900/50 rounded-2xl border border-dashed border-slate-800 text-slate-500">
+                            No public lobbies found. Create one to start playing!
+                        </div>
+                    ) : (
+                        lobbies.map((lobby) => (
+                            <div key={lobby.code} className="flex items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-xl hover:border-purple-500/30 transition-colors group">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400 font-bold border border-purple-500/20">
+                                        {lobby.hostName.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-white flex items-center gap-2">
+                                            {lobby.hostName}'s Lobby
+                                            <span className="text-xs font-mono bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">
+                                                {lobby.code}
+                                            </span>
+                                        </div>
+                                        <div className="text-sm text-slate-400">
+                                            Waiting for players...
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="text-right">
+                                        <div className="text-sm font-bold text-slate-300">
+                                            {lobby.playerCount} / {lobby.maxPlayers}
+                                        </div>
+                                        <div className="text-xs text-slate-500 uppercase font-bold">Players</div>
+                                    </div>
+                                    <Button 
+                                        onClick={() => joinLobby(lobby.code)}
+                                        disabled={isConnecting || lobby.playerCount >= lobby.maxPlayers}
+                                        className="bg-purple-600 hover:bg-purple-500 text-white"
+                                    >
+                                        <LogIn className="w-4 h-4 mr-2" /> Join
+                                    </Button>
+                                </div>
+                            </div>
+                        ))
+                    )}
                 </div>
             </div>
         </div>

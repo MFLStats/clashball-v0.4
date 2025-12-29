@@ -3,7 +3,7 @@ import type {
     DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage,
     GameMode, ModeStats, TeamProfile, AuthPayload, AuthResponse,
     TournamentState, TournamentParticipant, LobbyState, LeaderboardEntry, MatchHistoryEntry,
-    TeamMember
+    TeamMember, LobbyInfo
 } from '@shared/types';
 import { MOCK_ITEMS } from '@shared/mock-data';
 import { Match } from './match';
@@ -269,6 +269,22 @@ export class GlobalDurableObject extends DurableObject {
         lobby.players.forEach(p => {
             try { p.ws.send(msg); } catch(e) { /* empty */ }
         });
+    }
+    async getLobbies(): Promise<LobbyInfo[]> {
+        const lobbies: LobbyInfo[] = [];
+        for (const lobby of this.lobbies.values()) {
+            if (lobby.status === 'waiting') {
+                const host = lobby.players.find(p => p.id === lobby.hostId);
+                lobbies.push({
+                    code: lobby.code,
+                    hostName: host ? host.username : 'Unknown',
+                    playerCount: lobby.players.length,
+                    maxPlayers: 8,
+                    status: lobby.status
+                });
+            }
+        }
+        return lobbies;
     }
     // --- Match Logic ---
     startMatch(players: { userId: string; ws: WebSocket; username: string }[], mode: GameMode) {

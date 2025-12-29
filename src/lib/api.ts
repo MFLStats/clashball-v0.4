@@ -1,6 +1,7 @@
 import type {
   ApiResponse, UserProfile, MatchResult, MatchResponse,
-  TeamProfile, AuthPayload, AuthResponse, TournamentState, LeaderboardEntry, GameMode
+  TeamProfile, AuthPayload, AuthResponse, TournamentState, LeaderboardEntry, GameMode,
+  LobbyInfo
 } from '@shared/types';
 const API_BASE = '/api';
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -66,5 +67,7 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ userId })
       })
-  }
+  },
+  // Lobbies
+  getLobbies: () => fetchApi<LobbyInfo[]>('/lobbies')
 };

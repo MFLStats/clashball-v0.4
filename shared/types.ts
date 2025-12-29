@@ -144,6 +144,13 @@ export interface LobbyState {
     players: { id: string; username: string }[];
     status: 'waiting' | 'playing';
 }
+export interface LobbyInfo {
+  code: string;
+  hostName: string;
+  playerCount: number;
+  maxPlayers: number;
+  status: 'waiting' | 'playing';
+}
 // --- Multiplayer Types ---
 export type WSMessage =
   | { type: 'join_queue'; mode: GameMode; userId: string; username: string }

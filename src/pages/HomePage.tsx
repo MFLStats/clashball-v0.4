@@ -22,6 +22,7 @@ import { TournamentPage } from '@/pages/TournamentPage';
 import { Leaderboard } from '@/components/ranked/Leaderboard';
 import { SoundEngine } from '@/lib/audio';
 import { cn } from '@/lib/utils';
+import { GameModeSelector } from '@/components/game/GameModeSelector';
 type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'custom_lobby' | 'ranked' | 'tournament_mode' | 'tournament_lobby' | 'leaderboard';
 export function HomePage() {
   const [view, setView] = useState<ViewState>('lobby');
@@ -103,45 +104,10 @@ export function HomePage() {
         );
       case 'online_select':
         return (
-          <div className="animate-fade-in space-y-8 max-w-6xl mx-auto">
-             <div className="flex items-center justify-between mb-8">
-              <Button
-                variant="ghost"
-                onClick={() => setView('lobby')}
-                className="hover:bg-slate-800 text-slate-200"
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Lobby
-              </Button>
-              <h2 className="text-3xl font-display font-bold text-white">Select Game Mode</h2>
-              <div className="w-24" />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {[
-                    { mode: '1v1', icon: Swords, color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'hover:border-yellow-400/50', desc: 'Pure Skill Duel' },
-                    { mode: '2v2', icon: Users, color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'hover:border-blue-400/50', desc: 'Team Strategy' },
-                    { mode: '3v3', icon: Shield, color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'hover:border-emerald-400/50', desc: 'Tactical Chaos' },
-                    { mode: '4v4', icon: Crown, color: 'text-purple-400', bg: 'bg-purple-400/10', border: 'hover:border-purple-400/50', desc: 'Full Scale War' }
-                ].map((item) => (
-                    <button
-                        key={item.mode}
-                        onClick={() => startOnlineGame(item.mode as GameMode)}
-                        className={cn(
-                            "group relative overflow-hidden p-8 rounded-2xl bg-slate-900 border border-slate-800 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl flex flex-col items-center text-center gap-4",
-                            item.border
-                        )}
-                    >
-                        <div className={cn("p-4 rounded-full transition-transform group-hover:scale-110 duration-300", item.bg)}>
-                            <item.icon className={cn("w-10 h-10", item.color)} />
-                        </div>
-                        <div>
-                            <h3 className="text-4xl font-display font-bold text-white mb-1">{item.mode}</h3>
-                            <p className="text-slate-400 font-medium text-sm">{item.desc}</p>
-                        </div>
-                        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/20 pointer-events-none" />
-                    </button>
-                ))}
-            </div>
-          </div>
+          <GameModeSelector 
+            onSelect={startOnlineGame}
+            onBack={() => setView('lobby')}
+          />
         );
       case 'online_game':
         return (

@@ -3,7 +3,7 @@ import { Env } from './core-utils';
 import type {
     DemoItem, ApiResponse, UserProfile, MatchResult, MatchResponse,
     TeamProfile, AuthPayload, AuthResponse, TournamentState, LeaderboardEntry, GameMode,
-    JoinTeamPayload
+    JoinTeamPayload, LobbyInfo
 } from '@shared/types';
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
     app.get('/api/test', (c) => c.json({ success: true, data: { name: 'CF Workers Demo' }}));
@@ -140,5 +140,11 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
         const data = await stub.joinTournament(userId);
         return c.json({ success: true, data } satisfies ApiResponse<TournamentState>);
+    });
+    // --- Lobby Routes ---
+    app.get('/api/lobbies', async (c) => {
+        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+        const data = await stub.getLobbies();
+        return c.json({ success: true, data } satisfies ApiResponse<LobbyInfo[]>);
     });
 }

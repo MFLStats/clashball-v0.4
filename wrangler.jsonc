@@ -4,7 +4,7 @@
  */
  {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "kickstar-league-pf7e19bc",
+	"name": "clashball-v01",
 	"main": "worker/index.ts",
 	"compatibility_date": "2025-04-24",
 	"assets": {

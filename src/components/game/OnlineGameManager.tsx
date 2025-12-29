@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameCanvas } from './GameCanvas';
-import { GameState } from '@shared/physics';
 import { WSMessage, GameMode, PlayerMatchStats } from '@shared/types';
 import { useUserStore } from '@/store/useUserStore';
 import { Button } from '@/components/ui/button';
@@ -32,7 +31,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   const username = profile?.username;
   const [status, setStatus] = useState<'connecting' | 'searching' | 'playing' | 'error'>('connecting');
   const [queueCount, setQueueCount] = useState(0);
-  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [hasState, setHasState] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatScope, setChatScope] = useState<'all' | 'team'>('all');
@@ -73,7 +72,9 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         if (msg.type === 'queue_update') setQueueCount(msg.count);
     };
     const onGameState = (msg: WSMessage) => {
-        if (msg.type === 'game_state') setGameState(msg.state);
+        if (msg.type === 'game_state') {
+             if (!hasState) setHasState(true);
+        }
     };
     const onGameEvents = (msg: WSMessage) => {
         if (msg.type !== 'game_events') return;
@@ -167,7 +168,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     return () => {
         socket.disconnect();
     };
-  }, [userId, username, mode, onExit, matchId]);
+  }, [userId, username, mode, onExit, matchId, hasState]);
   const handleInput = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
     socketRef.current?.send({
         type: 'input',
@@ -209,7 +210,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     }
     setWinner(null);
     setFinalStats(undefined);
-    setGameState(null);
+    setHasState(false);
     setMatchInfo(null);
     setStatus('searching');
     if (userId && username) {
@@ -285,7 +286,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       </div>
     );
   }
-  if (status === 'playing' && !gameState) {
+  if (status === 'playing' && !hasState) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-6 animate-fade-in">
         <div className="relative">
@@ -326,7 +327,6 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       {/* Game Canvas Container */}
       <div className="relative w-full">
         <GameCanvas
-            externalState={gameState}
             externalWinner={winner}
             onInput={matchInfo?.team === 'spectator' ? undefined : handleInput}
             winningScore={3}
@@ -335,6 +335,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             onLeave={onExit}
             onPlayAgain={handlePlayAgain}
             emoteEvent={emoteEvent}
+            socket={socketRef.current!}
         />
       </div>
       {/* Chat Section - Moved Below Canvas */}

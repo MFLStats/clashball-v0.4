@@ -1,4 +1,2 @@
-// Component deprecated in favor of permanent dark mode
-export function ThemeToggle() {
-  return null;
-}
+// This file has been deleted.
+export {};

@@ -1,1 +1,2 @@
-// File deleted
+// This file has been deleted.
+export {};

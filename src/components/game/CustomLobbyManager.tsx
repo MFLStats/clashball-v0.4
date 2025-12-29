@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameCanvas } from './GameCanvas';
-import { GameState } from '@shared/physics';
 import { WSMessage, LobbyState, LobbyInfo, LobbySettings, LobbyTeam } from '@shared/types';
 import { useUserStore } from '@/store/useUserStore';
 import { Button } from '@/components/ui/button';
@@ -36,7 +35,6 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
   const [lobbies, setLobbies] = useState<LobbyInfo[]>([]);
   const [isLoadingLobbies, setIsLoadingLobbies] = useState(false);
   // Game State
-  const [gameState, setGameState] = useState<GameState | null>(null);
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' | 'spectator' } | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -95,9 +93,6 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
             }
         }
     };
-    const onGameState = (msg: WSMessage) => {
-        if (msg.type === 'game_state') setGameState(msg.state);
-    };
     const onGameEvents = (msg: WSMessage) => {
         if (msg.type !== 'game_events') return;
         msg.events.forEach(event => {
@@ -155,7 +150,6 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
     socket.on('lobby_update', onLobbyUpdate);
     socket.on('match_started', onMatchStarted);
     socket.on('match_found', onMatchStarted);
-    socket.on('game_state', onGameState);
     socket.on('game_events', onGameEvents);
     socket.on('game_over', onGameOver);
     socket.on('chat', onChat);
@@ -276,7 +270,6 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
   }, [lobbyState?.code]);
   const handleLeaveGame = useCallback(() => {
       setView('lobby');
-      setGameState(null);
       setMatchInfo(null);
       setWinner(null);
   }, []);
@@ -724,13 +717,13 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
       </div>
       <div className="relative rounded-xl overflow-hidden shadow-2xl border border-slate-800">
         <GameCanvas
-            externalState={gameState}
             externalWinner={winner}
             onInput={matchInfo?.team === 'spectator' ? undefined : handleInput}
             winningScore={lobbyState?.settings.scoreLimit ?? 3}
             currentUserId={profile?.id}
             onLeave={handleLeaveGame}
             emoteEvent={emoteEvent}
+            socket={socketRef.current!}
         />
       </div>
       {/* Chat Section - Moved Below Canvas */}

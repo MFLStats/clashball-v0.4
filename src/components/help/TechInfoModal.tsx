@@ -1,2 +1,2 @@
-// This component has been deprecated and removed as per user request.
+// This file has been deleted.
 export {};

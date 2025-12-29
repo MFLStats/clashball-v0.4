@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { PhysicsEngine, GameState, Field } from '@shared/physics';
-import { PlayerMatchStats, GameMode } from '@shared/types';
+import { PlayerMatchStats, GameMode, WSMessage } from '@shared/types';
 import confetti from 'canvas-confetti';
 import { Button } from '@/components/ui/button';
 import { Play, RotateCcw } from 'lucide-react';
@@ -8,6 +8,7 @@ import { TouchControls } from './TouchControls';
 import { SoundEngine } from '@/lib/audio';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { PostMatchSummary } from './PostMatchSummary';
+import { GameSocket } from '@/lib/game-socket';
 interface GameCanvasProps {
   onGameEnd?: (winner: 'red' | 'blue', score: { red: number; blue: number }) => void;
   winningScore?: number;
@@ -22,6 +23,7 @@ interface GameCanvasProps {
   onPlayAgain?: () => void;
   mode?: GameMode;
   emoteEvent?: { userId: string; emoji: string; id: string } | null;
+  socket?: GameSocket;
 }
 interface ActiveEmote {
     id: string;
@@ -42,7 +44,8 @@ export function GameCanvas({
   onLeave,
   onPlayAgain,
   mode = '1v1',
-  emoteEvent
+  emoteEvent,
+  socket
 }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,10 +83,22 @@ export function GameCanvas({
       window.removeEventListener('keydown', initAudio);
     };
   }, []);
-  // Sync external state ref
+  // Sync external state ref (Socket or Prop)
   useEffect(() => {
-    latestExternalStateRef.current = externalState || null;
-  }, [externalState]);
+    if (socket) {
+        const onGameState = (msg: WSMessage) => {
+            if (msg.type === 'game_state') {
+                latestExternalStateRef.current = msg.state;
+            }
+        };
+        socket.on('game_state', onGameState);
+        return () => {
+            socket.off('game_state', onGameState);
+        };
+    } else {
+        latestExternalStateRef.current = externalState || null;
+    }
+  }, [socket, externalState]);
   // Handle Emote Events
   useEffect(() => {
       if (emoteEvent) {
@@ -95,7 +110,7 @@ export function GameCanvas({
   }, [emoteEvent]);
   // Initialize Local Stats
   useEffect(() => {
-    if (!externalState) {
+    if (!socket && !externalState) {
         // Initialize stats for all local players
         const players = gameStateRef.current.players;
         players.forEach(p => {
@@ -108,7 +123,7 @@ export function GameCanvas({
             };
         });
     }
-  }, [externalState, mode]);
+  }, [socket, externalState, mode]);
   // Handle Game Over Logic
   const handleGameOver = useCallback((winner: 'red' | 'blue') => {
     setGameOver(winner);
@@ -122,7 +137,7 @@ export function GameCanvas({
       });
     }
     // Calculate MVP for local game
-    if (!externalState) {
+    if (!socket && !externalState) {
         let maxScore = -1;
         let mvpId = '';
         Object.entries(localStatsRef.current).forEach(([id, stats]) => {
@@ -144,10 +159,10 @@ export function GameCanvas({
     }
     if (onGameEnd) {
         // Pass the authoritative score (local ref or external state if available)
-        const finalScore = externalState ? externalState.score : gameStateRef.current.score;
+        const finalScore = latestExternalStateRef.current ? latestExternalStateRef.current.score : gameStateRef.current.score;
         onGameEnd(winner, finalScore);
     }
-  }, [onGameEnd, particles, externalState]);
+  }, [onGameEnd, particles, socket, externalState]);
   // Watch for external winner (Online/Lobby)
   useEffect(() => {
     if (externalWinner) {
@@ -176,14 +191,14 @@ export function GameCanvas({
   }, [gameOver]);
   // Update local names if provided (Only updates first players for now)
   useEffect(() => {
-    if (!externalState && playerNames) {
+    if (!socket && !externalState && playerNames) {
         const state = gameStateRef.current;
         const p1 = state.players.find(p => p.team === 'red');
         const p2 = state.players.find(p => p.team === 'blue');
         if (p1) p1.username = playerNames.red;
         if (p2) p2.username = playerNames.blue;
     }
-  }, [playerNames, externalState]);
+  }, [playerNames, socket, externalState]);
   // Handle Touch Input Update
   const handleTouchUpdate = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
     touchInputRef.current = input;
@@ -624,15 +639,15 @@ export function GameCanvas({
         // Play Local Sounds & Track Stats
         events.forEach(event => {
             switch (event.type) {
-                case 'kick':
-                    SoundEngine.playKick();
+                case 'kick': 
+                    SoundEngine.playKick(); 
                     break;
-                case 'wall':
-                    SoundEngine.playWall();
+                case 'wall': 
+                    SoundEngine.playWall(); 
                     SoundEngine.playHeavyImpact();
                     break;
-                case 'player':
-                    SoundEngine.playPlayer();
+                case 'player': 
+                    SoundEngine.playPlayer(); 
                     break;
                 case 'goal': {
                     SoundEngine.playGoal();
@@ -737,15 +752,15 @@ export function GameCanvas({
   const seconds = Math.floor(Math.max(0, timeRemaining) % 60);
   // Prepare data for summary
   const summaryStats = finalStats || localStatsRef.current;
-  const summaryPlayers = externalState
-    ? externalState.players.map(p => ({ id: p.id, username: p.username, team: p.team }))
+  const summaryPlayers = latestExternalStateRef.current
+    ? latestExternalStateRef.current.players.map(p => ({ id: p.id, username: p.username, team: p.team }))
     : gameStateRef.current.players.map(p => ({ id: p.id, username: p.username, team: p.team }));
   // Determine user team for victory/defeat message
-  const userTeam = externalState
+  const userTeam = latestExternalStateRef.current
     ? summaryPlayers.find(p => p.id === currentUserId)?.team
     : 'red';
   // Determine final score to display in summary (use external if available, else local state)
-  const finalScore = externalState ? externalState.score : score;
+  const finalScore = latestExternalStateRef.current ? latestExternalStateRef.current.score : score;
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-4xl mx-auto">
       {/* Scoreboard - Clean Style */}
@@ -785,13 +800,13 @@ export function GameCanvas({
                 score={finalScore}
                 stats={summaryStats}
                 players={summaryPlayers}
-                onPlayAgain={onPlayAgain || (!externalState ? handleReset : undefined)}
+                onPlayAgain={onPlayAgain || (!socket && !externalState ? handleReset : undefined)}
                 onLeave={onLeave || (() => {})}
-                isLocal={!externalState}
+                isLocal={!socket && !externalState}
             />
         )}
         {/* Controls Overlay (Visible on Hover/Pause) */}
-        {!gameOver && !externalState && (
+        {!gameOver && !socket && !externalState && (
             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-30">
             <Button size="icon" variant="secondary" onClick={handleReset} className="bg-slate-800 text-white hover:bg-slate-700 border border-slate-700">
                 <RotateCcw className="w-4 h-4" />

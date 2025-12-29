@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { RankBadge, Tier } from './RankBadge';
+import React, { useEffect, useState, useMemo } from 'react';
+import { RankBadge } from './RankBadge';
+import { Tier } from '@shared/types';
 import { Progress } from '@/components/ui/progress';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,23 @@ export function Dashboard() {
   useEffect(() => {
     if (!profile) initUser();
   }, [profile, initUser]);
-  if (isLoading || !profile) {
+  // Calculate aggregated career stats across all modes
+  const careerStats = useMemo(() => {
+    if (!profile) return null;
+    const modes: GameMode[] = ['1v1', '2v2', '3v3', '4v4'];
+    return modes.reduce((acc, mode) => {
+      const stats = profile.stats[mode];
+      if (stats) {
+        acc.goals += stats.goals || 0;
+        acc.assists += stats.assists || 0;
+        acc.mvps += stats.mvps || 0;
+        acc.cleanSheets += stats.cleanSheets || 0;
+        acc.ownGoals += stats.ownGoals || 0;
+      }
+      return acc;
+    }, { goals: 0, assists: 0, mvps: 0, cleanSheets: 0, ownGoals: 0 });
+  }, [profile]);
+  if (isLoading || !profile || !careerStats) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 animate-spin text-neon-blue" />
@@ -36,8 +53,8 @@ export function Dashboard() {
     const currentRating = stats.rating;
     const progress = (currentRating % 100);
     const nextMilestone = Math.ceil((currentRating + 1) / 100) * 100;
-    const winRate = stats.wins + stats.losses > 0 
-      ? Math.round((stats.wins / (stats.wins + stats.losses)) * 100) 
+    const winRate = stats.wins + stats.losses > 0
+      ? Math.round((stats.wins / (stats.wins + stats.losses)) * 100)
       : 0;
     return (
       <div className="space-y-8 animate-fade-in mt-6">
@@ -45,7 +62,7 @@ export function Dashboard() {
         <div className="space-y-4">
             <h3 className="text-xl font-display font-bold text-white px-2 flex items-center gap-2 text-glow">
                 <Trophy className="w-5 h-5 text-neon-yellow" />
-                Ranked Performance
+                Ranked Performance ({mode})
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Main Rank Card */}
@@ -91,50 +108,6 @@ export function Dashboard() {
                 </div>
                 </Card>
             </div>
-            </div>
-        </div>
-        {/* Career Statistics Section */}
-        <div className="space-y-4">
-            <h3 className="text-xl font-display font-bold text-white px-2 flex items-center gap-2 text-glow">
-                <Users className="w-5 h-5 text-neon-blue" />
-                Career Statistics
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 hover:border-neon-blue/50 transition-colors">
-                    <div className="p-3 bg-emerald-500/20 rounded-full text-emerald-400 mb-1 border border-emerald-500/30">
-                        <Goal className="w-6 h-6" />
-                    </div>
-                    <p className="text-2xl font-display font-bold text-white">{stats.goals || 0}</p>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Goals</p>
-                </Card>
-                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 hover:border-neon-blue/50 transition-colors">
-                    <div className="p-3 bg-indigo-500/20 rounded-full text-indigo-400 mb-1 border border-indigo-500/30">
-                        <HandHelping className="w-6 h-6" />
-                    </div>
-                    <p className="text-2xl font-display font-bold text-white">{stats.assists || 0}</p>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Assists</p>
-                </Card>
-                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 hover:border-neon-blue/50 transition-colors">
-                    <div className="p-3 bg-amber-500/20 rounded-full text-amber-400 mb-1 border border-amber-500/30">
-                        <Crown className="w-6 h-6" />
-                    </div>
-                    <p className="text-2xl font-display font-bold text-white">{stats.mvps || 0}</p>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">MVPs</p>
-                </Card>
-                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 hover:border-neon-blue/50 transition-colors">
-                    <div className="p-3 bg-sky-500/20 rounded-full text-sky-400 mb-1 border border-sky-500/30">
-                        <Shield className="w-6 h-6" />
-                    </div>
-                    <p className="text-2xl font-display font-bold text-white">{stats.cleanSheets || 0}</p>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Clean Sheets</p>
-                </Card>
-                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 hover:border-neon-blue/50 transition-colors">
-                    <div className="p-3 bg-red-500/20 rounded-full text-red-400 mb-1 border border-red-500/30">
-                        <AlertTriangle className="w-6 h-6" />
-                    </div>
-                    <p className="text-2xl font-display font-bold text-white">{stats.ownGoals || 0}</p>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Own Goals</p>
-                </Card>
             </div>
         </div>
         {/* Tier Ladder Preview */}
@@ -186,62 +159,108 @@ export function Dashboard() {
       );
   };
   return (
-    <Tabs defaultValue="1v1" className="w-full">
-      <TabsList className="grid w-full grid-cols-5 h-14 p-1 bg-slate-900/80 rounded-xl border border-white/10">
-        <TabsTrigger value="1v1" className="rounded-lg text-base font-bold data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue data-[state=active]:shadow-sm text-slate-400">
-            <User className="w-4 h-4 mr-2" /> 1v1
-        </TabsTrigger>
-        <TabsTrigger value="2v2" className="rounded-lg text-base font-bold data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue data-[state=active]:shadow-sm text-slate-400">
-            <Users className="w-4 h-4 mr-2" /> 2v2
-        </TabsTrigger>
-        <TabsTrigger value="3v3" className="rounded-lg text-base font-bold data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue data-[state=active]:shadow-sm text-slate-400">
-            <Shield className="w-4 h-4 mr-2" /> 3v3
-        </TabsTrigger>
-        <TabsTrigger value="4v4" className="rounded-lg text-base font-bold data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue data-[state=active]:shadow-sm text-slate-400">
-            <Trophy className="w-4 h-4 mr-2" /> 4v4
-        </TabsTrigger>
-        <TabsTrigger value="teams" className="rounded-lg text-base font-bold data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue data-[state=active]:shadow-sm text-slate-400">
-            <Users className="w-4 h-4 mr-2" /> Teams
-        </TabsTrigger>
-      </TabsList>
-      <TabsContent value="1v1">{renderStats('1v1', profile.stats['1v1'])}</TabsContent>
-      <TabsContent value="2v2">{renderStats('2v2', profile.stats['2v2'])}</TabsContent>
-      <TabsContent value="3v3">{renderStats('3v3', profile.stats['3v3'])}</TabsContent>
-      <TabsContent value="4v4">{renderStats('4v4', profile.stats['4v4'])}</TabsContent>
-      <TabsContent value="teams" className="space-y-6 mt-6 animate-fade-in">
-          <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-display font-bold text-white text-glow">My Teams</h2>
-          </div>
-          {/* Create Team Form */}
-          <Card className="card-kid">
-              <CardContent className="p-6">
-                  <form onSubmit={handleCreateTeam} className="flex gap-4 items-end">
-                      <div className="flex-1 space-y-2">
-                          <label className="text-sm font-medium text-slate-300">Create New Team</label>
-                          <Input 
-                            placeholder="Enter team name..." 
-                            value={newTeamName}
-                            onChange={(e) => setNewTeamName(e.target.value)}
-                            className="bg-slate-950/50 border-white/10 text-white placeholder:text-slate-500"
-                          />
-                      </div>
-                      <Button type="submit" disabled={!newTeamName.trim() || isLoading} className="btn-kid-primary">
-                          <Plus className="w-4 h-4 mr-2" /> Create
-                      </Button>
-                  </form>
-              </CardContent>
-          </Card>
-          {/* Team List */}
-          <div className="grid gap-4">
-              {teams.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500">
-                      You haven't joined any teams yet. Create one above!
-                  </div>
-              ) : (
-                  teams.map(renderTeamCard)
-              )}
-          </div>
-      </TabsContent>
-    </Tabs>
+    <div className="space-y-8">
+        {/* Career Statistics Section (Aggregated) */}
+        <div className="space-y-4 animate-fade-in">
+            <h3 className="text-xl font-display font-bold text-white px-2 flex items-center gap-2 text-glow">
+                <Users className="w-5 h-5 text-neon-blue" />
+                Career Overview (All Modes)
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 hover:border-neon-blue/50 transition-colors">
+                    <div className="p-3 bg-emerald-500/20 rounded-full text-emerald-400 mb-1 border border-emerald-500/30">
+                        <Goal className="w-6 h-6" />
+                    </div>
+                    <p className="text-2xl font-display font-bold text-white">{careerStats.goals}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Goals</p>
+                </Card>
+                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 hover:border-neon-blue/50 transition-colors">
+                    <div className="p-3 bg-indigo-500/20 rounded-full text-indigo-400 mb-1 border border-indigo-500/30">
+                        <HandHelping className="w-6 h-6" />
+                    </div>
+                    <p className="text-2xl font-display font-bold text-white">{careerStats.assists}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Assists</p>
+                </Card>
+                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 hover:border-neon-blue/50 transition-colors">
+                    <div className="p-3 bg-amber-500/20 rounded-full text-amber-400 mb-1 border border-amber-500/30">
+                        <Crown className="w-6 h-6" />
+                    </div>
+                    <p className="text-2xl font-display font-bold text-white">{careerStats.mvps}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">MVPs</p>
+                </Card>
+                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 hover:border-neon-blue/50 transition-colors">
+                    <div className="p-3 bg-sky-500/20 rounded-full text-sky-400 mb-1 border border-sky-500/30">
+                        <Shield className="w-6 h-6" />
+                    </div>
+                    <p className="text-2xl font-display font-bold text-white">{careerStats.cleanSheets}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Clean Sheets</p>
+                </Card>
+                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 hover:border-neon-blue/50 transition-colors">
+                    <div className="p-3 bg-red-500/20 rounded-full text-red-400 mb-1 border border-red-500/30">
+                        <AlertTriangle className="w-6 h-6" />
+                    </div>
+                    <p className="text-2xl font-display font-bold text-white">{careerStats.ownGoals}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Own Goals</p>
+                </Card>
+            </div>
+        </div>
+        <Tabs defaultValue="1v1" className="w-full">
+            <TabsList className="grid w-full grid-cols-5 h-14 p-1 bg-slate-900/80 rounded-xl border border-white/10">
+                <TabsTrigger value="1v1" className="rounded-lg text-base font-bold data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue data-[state=active]:shadow-sm text-slate-400">
+                    <User className="w-4 h-4 mr-2" /> 1v1
+                </TabsTrigger>
+                <TabsTrigger value="2v2" className="rounded-lg text-base font-bold data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue data-[state=active]:shadow-sm text-slate-400">
+                    <Users className="w-4 h-4 mr-2" /> 2v2
+                </TabsTrigger>
+                <TabsTrigger value="3v3" className="rounded-lg text-base font-bold data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue data-[state=active]:shadow-sm text-slate-400">
+                    <Shield className="w-4 h-4 mr-2" /> 3v3
+                </TabsTrigger>
+                <TabsTrigger value="4v4" className="rounded-lg text-base font-bold data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue data-[state=active]:shadow-sm text-slate-400">
+                    <Trophy className="w-4 h-4 mr-2" /> 4v4
+                </TabsTrigger>
+                <TabsTrigger value="teams" className="rounded-lg text-base font-bold data-[state=active]:bg-white/10 data-[state=active]:text-neon-blue data-[state=active]:shadow-sm text-slate-400">
+                    <Users className="w-4 h-4 mr-2" /> Teams
+                </TabsTrigger>
+            </TabsList>
+            <TabsContent value="1v1">{renderStats('1v1', profile.stats['1v1'])}</TabsContent>
+            <TabsContent value="2v2">{renderStats('2v2', profile.stats['2v2'])}</TabsContent>
+            <TabsContent value="3v3">{renderStats('3v3', profile.stats['3v3'])}</TabsContent>
+            <TabsContent value="4v4">{renderStats('4v4', profile.stats['4v4'])}</TabsContent>
+            <TabsContent value="teams" className="space-y-6 mt-6 animate-fade-in">
+                <div className="flex justify-between items-center">
+                    <h2 className="text-2xl font-display font-bold text-white text-glow">My Teams</h2>
+                </div>
+                {/* Create Team Form */}
+                <Card className="card-kid">
+                    <CardContent className="p-6">
+                        <form onSubmit={handleCreateTeam} className="flex gap-4 items-end">
+                            <div className="flex-1 space-y-2">
+                                <label className="text-sm font-medium text-slate-300">Create New Team</label>
+                                <Input
+                                    placeholder="Enter team name..."
+                                    value={newTeamName}
+                                    onChange={(e) => setNewTeamName(e.target.value)}
+                                    className="bg-slate-950/50 border-white/10 text-white placeholder:text-slate-500"
+                                />
+                            </div>
+                            <Button type="submit" disabled={!newTeamName.trim() || isLoading} className="btn-kid-primary">
+                                <Plus className="w-4 h-4 mr-2" /> Create
+                            </Button>
+                        </form>
+                    </CardContent>
+                </Card>
+                {/* Team List */}
+                <div className="grid gap-4">
+                    {teams.length === 0 ? (
+                        <div className="text-center py-12 text-slate-500">
+                            You haven't joined any teams yet. Create one above!
+                        </div>
+                    ) : (
+                        teams.map(renderTeamCard)
+                    )}
+                </div>
+            </TabsContent>
+        </Tabs>
+    </div>
   );
 }

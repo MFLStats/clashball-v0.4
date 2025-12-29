@@ -175,7 +175,11 @@ export function HomePage() {
         );
       case 'tournament_mode':
         return (
-            <TournamentManager onExit={() => setView('lobby')} />
+            <TournamentManager
+                onExit={() => setView('lobby')}
+                startTime={Date.now()}
+                tournamentName="Practice Cup"
+            />
         );
       case 'tournament_lobby':
         return (

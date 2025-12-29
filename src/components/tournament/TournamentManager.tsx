@@ -12,12 +12,13 @@ interface TournamentManagerProps {
   onExit: () => void;
   participants?: TournamentParticipant[];
   startTime: number;
+  tournamentName?: string;
 }
 const BOT_NAMES = [
   "RoboKicker", "CircuitBreaker", "BinaryBoot", "PixelStriker",
   "CyberGoalie", "NanoNet", "MechaMessi", "DroidBeckham"
 ];
-export function TournamentManager({ onExit, participants, startTime }: TournamentManagerProps) {
+export function TournamentManager({ onExit, participants, startTime, tournamentName = "Blitz Cup" }: TournamentManagerProps) {
   const profile = useUserStore(s => s.profile);
   const [matches, setMatches] = useState<TournamentMatch[]>([]);
   const [currentRound, setCurrentRound] = useState(0); // 0, 1, 2
@@ -95,7 +96,7 @@ export function TournamentManager({ onExit, participants, startTime }: Tournamen
     initialMatches.push({ id: uuidv4(), round: 2, player1: '', player2: '' });
     setMatches(initialMatches);
     // Set first round start time (10 seconds from now to give time to see bracket)
-    setRoundStartTime(Date.now() + 10000); 
+    setRoundStartTime(Date.now() + 10000);
   }, [participants, profile, userTeamName]);
   // Initialization Effect
   useEffect(() => {
@@ -244,7 +245,7 @@ export function TournamentManager({ onExit, participants, startTime }: Tournamen
           </div>
         </div>
         <div className="border-4 border-slate-800 rounded-xl overflow-hidden shadow-2xl">
-            <GameCanvas 
+            <GameCanvas
                 onGameEnd={handleUserMatchEnd}
                 winningScore={3}
                 botDifficulty={difficulty}
@@ -263,7 +264,7 @@ export function TournamentManager({ onExit, participants, startTime }: Tournamen
             </div>
             <div>
                 <h1 className="text-7xl font-display font-bold text-white mb-4 text-glow">CHAMPION!</h1>
-                <p className="text-2xl text-slate-300">You have conquered the Blitz Cup!</p>
+                <p className="text-2xl text-slate-300">You have conquered the {tournamentName}!</p>
             </div>
             <div className="flex gap-4">
                 <Button onClick={onExit} size="lg" className="h-16 px-12 text-xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 text-slate-900 hover:scale-105 transition-transform shadow-xl shadow-orange-500/20">
@@ -294,7 +295,7 @@ export function TournamentManager({ onExit, participants, startTime }: Tournamen
           <ArrowLeft className="mr-2 h-4 w-4" /> Leave Tournament
         </Button>
         <div className="flex flex-col items-end">
-            <h2 className="text-3xl font-display font-bold text-white tracking-wide">Blitz Cup</h2>
+            <h2 className="text-3xl font-display font-bold text-white tracking-wide">{tournamentName}</h2>
             {timeRemaining > 0 && (
                 <div className="flex items-center gap-2 text-blue-400 font-mono font-bold animate-pulse bg-blue-900/20 px-3 py-1 rounded-full border border-blue-800/50 mt-2">
                     <Clock className="w-4 h-4" />
@@ -309,12 +310,12 @@ export function TournamentManager({ onExit, participants, startTime }: Tournamen
         <Bracket matches={matches} currentRound={currentRound} />
       </div>
       <div className="flex justify-center">
-        <Button 
+        <Button
             size="lg"
             className={cn(
                 "h-20 px-16 text-2xl font-bold rounded-2xl shadow-2xl transition-all duration-300",
-                timeRemaining > 0 
-                    ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700" 
+                timeRemaining > 0
+                    ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700"
                     : "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white hover:scale-105 hover:shadow-emerald-500/25 border-b-4 border-teal-800 active:border-b-0 active:translate-y-1"
             )}
             onClick={startUserMatch}

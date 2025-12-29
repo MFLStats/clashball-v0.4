@@ -87,6 +87,7 @@ export function TournamentPage() {
           onExit={() => setView('lobby')}
           participants={state?.participants}
           startTime={state?.nextStartTime || Date.now()}
+          tournamentName="Blitz Cup"
         />
       </AppLayout>
     );
@@ -142,27 +143,27 @@ export function TournamentPage() {
             {/* Actions */}
             <div className="flex flex-col gap-4 min-w-[200px]">
               {!isAuthenticated ? (
-                <AuthDialog 
+                <AuthDialog
                   trigger={
                     <Button size="lg" className="w-full h-14 text-lg font-bold bg-white text-indigo-950 hover:bg-indigo-50 shadow-xl shadow-indigo-900/20">
                       Sign In to Join
                     </Button>
-                  } 
+                  }
                 />
               ) : isJoined ? (
                 <>
                   <div className="flex items-center justify-center gap-2 bg-emerald-500/20 text-emerald-400 px-4 py-2 rounded-lg border border-emerald-500/30 font-bold text-sm mb-2">
                     <Zap className="w-4 h-4 fill-current" /> You are Registered
                   </div>
-                  <Button 
-                    size="lg" 
+                  <Button
+                    size="lg"
                     onClick={() => setView('bracket')}
                     className="w-full h-14 text-lg font-bold bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-300 hover:to-orange-400 text-slate-900 shadow-lg shadow-orange-500/20"
                   >
                     <Play className="w-5 h-5 mr-2 fill-current" /> View Bracket
                   </Button>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     onClick={handleLeave}
                     disabled={isJoining}
                     className="w-full text-red-400 hover:text-red-300 hover:bg-red-950/30"
@@ -172,8 +173,8 @@ export function TournamentPage() {
                   </Button>
                 </>
               ) : (
-                <Button 
-                  size="lg" 
+                <Button
+                  size="lg"
                   onClick={handleJoin}
                   disabled={isJoining}
                   className="w-full h-14 text-lg font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-600/20 border-t border-white/10"
@@ -209,8 +210,8 @@ export function TournamentPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {state?.participants.map((p) => (
-                <div 
-                  key={p.userId} 
+                <div
+                  key={p.userId}
                   className={cn(
                     "group relative bg-slate-900 border border-slate-800 rounded-2xl p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-indigo-500/30",
                     p.userId === profile?.id && "border-indigo-500 bg-indigo-950/10"
@@ -220,7 +221,7 @@ export function TournamentPage() {
                     <div className="relative">
                       <div className="w-12 h-12 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center overflow-hidden group-hover:border-indigo-500 transition-colors">
                         {p.country ? (
-                           <img 
+                           <img
                              src={`https://flagcdn.com/w80/${p.country.toLowerCase()}.png`}
                              alt={p.country}
                              className="w-full h-full object-cover opacity-80 group-hover:opacity-100"

@@ -2,7 +2,8 @@ import { DurableObject } from "cloudflare:workers";
 import type {
     DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage,
     GameMode, ModeStats, TeamProfile, AuthPayload, AuthResponse,
-    TournamentState, TournamentParticipant, LobbyState, LeaderboardEntry, MatchHistoryEntry
+    TournamentState, TournamentParticipant, LobbyState, LeaderboardEntry, MatchHistoryEntry,
+    TeamMember
 } from '@shared/types';
 import { MOCK_ITEMS } from '@shared/mock-data';
 import { Match } from './match';
@@ -523,10 +524,23 @@ export class GlobalDurableObject extends DurableObject {
             cleanSheets: 0,
             ownGoals: 0
         };
+        // Generate Unique Code
+        let code = '';
+        let isUnique = false;
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        while (!isUnique) {
+            code = '';
+            for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+            const existing = await this.ctx.storage.get(`team_code_${code}`);
+            if (!existing) isUnique = true;
+        }
+        // Get Creator Profile for Username
+        const creatorProfile = await this.getUserProfile(creatorId);
         const newTeam: TeamProfile = {
             id: teamId,
             name,
-            members: [creatorId],
+            code,
+            members: [{ id: creatorId, username: creatorProfile.username }],
             stats: {
                 '1v1': { ...defaultStats },
                 '2v2': { ...defaultStats },
@@ -537,18 +551,64 @@ export class GlobalDurableObject extends DurableObject {
             creatorId,
             recentMatches: []
         };
-        // Save Team
+        // Save Team and Code Mapping
         await this.ctx.storage.put(`team_${teamId}`, newTeam);
+        await this.ctx.storage.put(`team_code_${code}`, teamId);
         // Update Creator's Profile
-        const userProfile = await this.getUserProfile(creatorId);
-        if (!userProfile.teams.includes(teamId)) {
-            userProfile.teams.push(teamId);
-            await this.ctx.storage.put(`user_${creatorId}`, userProfile);
+        if (!creatorProfile.teams.includes(teamId)) {
+            creatorProfile.teams.push(teamId);
+            await this.ctx.storage.put(`user_${creatorId}`, creatorProfile);
         }
         return newTeam;
     }
+    async joinTeam(code: string, userId: string, username: string): Promise<TeamProfile> {
+        const teamId = await this.ctx.storage.get<string>(`team_code_${code.toUpperCase()}`);
+        if (!teamId) throw new Error("Invalid invite code");
+        const team = await this.getTeam(teamId);
+        if (!team) throw new Error("Team not found");
+        // Check if already member
+        if (team.members.some(m => m.id === userId)) {
+            throw new Error("You are already a member of this team");
+        }
+        // Add Member
+        team.members.push({ id: userId, username });
+        await this.ctx.storage.put(`team_${teamId}`, team);
+        // Update User Profile
+        const userProfile = await this.getUserProfile(userId);
+        if (!userProfile.teams.includes(teamId)) {
+            userProfile.teams.push(teamId);
+            await this.ctx.storage.put(`user_${userId}`, userProfile);
+        }
+        return team;
+    }
     async getTeam(teamId: string): Promise<TeamProfile | null> {
-        return await this.ctx.storage.get<TeamProfile>(`team_${teamId}`) || null;
+        let team = await this.ctx.storage.get<any>(`team_${teamId}`);
+        if (!team) return null;
+        // Migration: members string[] -> object[]
+        if (team.members.length > 0 && typeof team.members[0] === 'string') {
+            const newMembers: TeamMember[] = [];
+            for (const memberId of team.members) {
+                 const profile = await this.getUserProfile(memberId);
+                 newMembers.push({ id: memberId, username: profile.username });
+            }
+            team.members = newMembers;
+            // Ensure code exists (legacy teams)
+            if (!team.code) {
+                 let code = '';
+                 let isUnique = false;
+                 const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                 while (!isUnique) {
+                    code = '';
+                    for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+                    const existing = await this.ctx.storage.get(`team_code_${code}`);
+                    if (!existing) isUnique = true;
+                 }
+                 team.code = code;
+                 await this.ctx.storage.put(`team_code_${code}`, teamId);
+            }
+            await this.ctx.storage.put(`team_${teamId}`, team);
+        }
+        return team as TeamProfile;
     }
     async getUserTeams(userId: string): Promise<TeamProfile[]> {
         const profile = await this.getUserProfile(userId);

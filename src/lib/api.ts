@@ -40,6 +40,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ name, creatorId })
     }),
+  joinTeam: (code: string, userId: string, username: string) =>
+    fetchApi<TeamProfile>('/teams/join', {
+      method: 'POST',
+      body: JSON.stringify({ code, userId, username })
+    }),
   getTeam: (teamId: string) =>
     fetchApi<TeamProfile>(`/teams/${teamId}`),
   getUserTeams: (userId: string) =>

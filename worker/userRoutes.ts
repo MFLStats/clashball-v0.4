@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import { Env } from './core-utils';
 import type {
     DemoItem, ApiResponse, UserProfile, MatchResult, MatchResponse,
-    TeamProfile, AuthPayload, AuthResponse, TournamentState, LeaderboardEntry, GameMode
+    TeamProfile, AuthPayload, AuthResponse, TournamentState, LeaderboardEntry, GameMode,
+    JoinTeamPayload
 } from '@shared/types';
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
     app.get('/api/test', (c) => c.json({ success: true, data: { name: 'CF Workers Demo' }}));
@@ -102,6 +103,17 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
         const data = await stub.createTeam(name, creatorId);
         return c.json({ success: true, data } satisfies ApiResponse<TeamProfile>);
+    });
+    app.post('/api/teams/join', async (c) => {
+        try {
+            const { code, userId, username } = await c.req.json() as JoinTeamPayload;
+            if (!code || !userId || !username) return c.json({ success: false, error: 'Missing required fields' }, 400);
+            const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+            const data = await stub.joinTeam(code, userId, username);
+            return c.json({ success: true, data } satisfies ApiResponse<TeamProfile>);
+        } catch (e) {
+            return c.json({ success: false, error: (e as Error).message }, 400);
+        }
     });
     app.get('/api/teams/:id', async (c) => {
         const id = c.req.param('id');

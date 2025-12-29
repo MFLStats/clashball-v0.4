@@ -26,14 +26,24 @@ export interface ModeStats {
   cleanSheets: number;
   ownGoals: number;
 }
+export interface TeamMember {
+  id: string;
+  username: string;
+}
 export interface TeamProfile {
   id: string;
   name: string;
-  members: string[]; // User IDs
+  code: string; // Unique invite code
+  members: TeamMember[]; // Changed from string[] to object array
   stats: Record<GameMode, ModeStats>;
   createdAt: number;
   creatorId: string;
   recentMatches?: MatchHistoryEntry[];
+}
+export interface JoinTeamPayload {
+  code: string;
+  userId: string;
+  username: string;
 }
 export interface MatchHistoryEntry {
   matchId: string;

@@ -1,17 +1,18 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { RankBadge } from './RankBadge';
 import { MatchHistory } from './MatchHistory';
+import { TeamDetailsDialog } from './TeamDetailsDialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Trophy, Users, Plus, Goal, HandHelping, Crown, Shield, AlertTriangle, Flag, Activity, Calendar, Star, Medal } from 'lucide-react';
+import { Trophy, Users, Plus, Goal, HandHelping, Crown, Shield, AlertTriangle, Flag, Activity, Calendar, Star, Medal, LogIn, Loader2 } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
-import { GameMode } from '@shared/types';
-import { Loader2 } from 'lucide-react';
+import { GameMode, TeamProfile } from '@shared/types';
 import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
 export function Dashboard() {
   // STRICT ZUSTAND RULE: Select primitives individually
   const profile = useUserStore(s => s.profile);
@@ -19,7 +20,11 @@ export function Dashboard() {
   const isLoading = useUserStore(s => s.isLoading);
   const initUser = useUserStore(s => s.initUser);
   const createTeam = useUserStore(s => s.createTeam);
+  const joinTeam = useUserStore(s => s.joinTeam);
   const [newTeamName, setNewTeamName] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [selectedTeam, setSelectedTeam] = useState<TeamProfile | null>(null);
+  const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
   useEffect(() => {
     if (!profile) initUser();
   }, [profile, initUser]);
@@ -53,6 +58,18 @@ export function Dashboard() {
       if (!newTeamName.trim()) return;
       await createTeam(newTeamName);
       setNewTeamName('');
+      toast.success('Team created successfully!');
+  };
+  const handleJoinTeam = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!joinCode.trim()) return;
+      try {
+        await joinTeam(joinCode);
+        setJoinCode('');
+        toast.success('Joined team successfully!');
+      } catch (err) {
+        toast.error((err as Error).message);
+      }
   };
   const totalMatches = careerStats.wins + careerStats.losses;
   const winRate = totalMatches > 0 ? Math.round((careerStats.wins / totalMatches) * 100) : 0;
@@ -85,7 +102,7 @@ export function Dashboard() {
                             </Badge>
                         )}
                         <Badge variant="secondary" className="bg-slate-800/80 text-slate-300 border-slate-700 px-3 py-1.5 text-sm">
-                            <Calendar className="w-3.5 h-3.5 mr-2 text-slate-400" /> 
+                            <Calendar className="w-3.5 h-3.5 mr-2 text-slate-400" />
                             Joined {new Date().getFullYear()}
                         </Badge>
                         <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 bg-emerald-500/5 px-3 py-1.5 text-sm">
@@ -291,27 +308,53 @@ export function Dashboard() {
             </TabsContent>
             {/* TEAMS TAB */}
             <TabsContent value="teams" className="animate-fade-in space-y-6">
-                <Card className="bg-slate-900 border-slate-800">
-                    <CardHeader>
-                        <CardTitle className="text-white">Create New Team</CardTitle>
-                        <CardDescription className="text-slate-400">Form a squad to compete in 2v2, 3v3, and 4v4 leagues.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <form onSubmit={handleCreateTeam} className="flex gap-4 items-center">
-                            <div className="flex-1">
-                                <Input
-                                    placeholder="Enter team name..."
-                                    value={newTeamName}
-                                    onChange={(e) => setNewTeamName(e.target.value)}
-                                    className="bg-slate-950 border-slate-700 text-white placeholder:text-slate-600"
-                                />
-                            </div>
-                            <Button type="submit" disabled={!newTeamName.trim() || isLoading} className="btn-kid-primary">
-                                <Plus className="w-4 h-4 mr-2" /> Create Team
-                            </Button>
-                        </form>
-                    </CardContent>
-                </Card>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Create Team */}
+                    <Card className="bg-slate-900 border-slate-800">
+                        <CardHeader>
+                            <CardTitle className="text-white">Create New Team</CardTitle>
+                            <CardDescription className="text-slate-400">Form a squad to compete in 2v2, 3v3, and 4v4 leagues.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleCreateTeam} className="flex gap-4 items-center">
+                                <div className="flex-1">
+                                    <Input
+                                        placeholder="Enter team name..."
+                                        value={newTeamName}
+                                        onChange={(e) => setNewTeamName(e.target.value)}
+                                        className="bg-slate-950 border-slate-700 text-white placeholder:text-slate-600"
+                                    />
+                                </div>
+                                <Button type="submit" disabled={!newTeamName.trim() || isLoading} className="btn-kid-primary">
+                                    <Plus className="w-4 h-4 mr-2" /> Create
+                                </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+                    {/* Join Team */}
+                    <Card className="bg-slate-900 border-slate-800">
+                        <CardHeader>
+                            <CardTitle className="text-white">Join Existing Team</CardTitle>
+                            <CardDescription className="text-slate-400">Enter an invite code to join a friend's squad.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleJoinTeam} className="flex gap-4 items-center">
+                                <div className="flex-1">
+                                    <Input
+                                        placeholder="ENTER CODE"
+                                        value={joinCode}
+                                        onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                                        maxLength={6}
+                                        className="bg-slate-950 border-slate-700 text-white placeholder:text-slate-600 font-mono uppercase"
+                                    />
+                                </div>
+                                <Button type="submit" disabled={!joinCode.trim() || isLoading} className="btn-kid-action">
+                                    <LogIn className="w-4 h-4 mr-2" /> Join
+                                </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
                 <div className="grid gap-4">
                     <h3 className="text-xl font-display font-bold text-white px-1">My Teams</h3>
                     {teams.length === 0 ? (
@@ -323,16 +366,23 @@ export function Dashboard() {
                         </Card>
                     ) : (
                         teams.map((team) => (
-                            <Card key={team.id} className="bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors">
+                            <Card
+                                key={team.id}
+                                className="bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors cursor-pointer group"
+                                onClick={() => {
+                                    setSelectedTeam(team);
+                                    setIsJoinDialogOpen(true);
+                                }}
+                            >
                                 <CardContent className="p-6 flex items-center justify-between">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 flex items-center justify-center">
+                                        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 flex items-center justify-center group-hover:border-primary/50 transition-colors">
                                             <span className="text-xl font-bold text-slate-300">
                                                 {team.name.substring(0, 2).toUpperCase()}
                                             </span>
                                         </div>
                                         <div>
-                                            <h4 className="text-lg font-bold text-white">{team.name}</h4>
+                                            <h4 className="text-lg font-bold text-white group-hover:text-primary transition-colors">{team.name}</h4>
                                             <p className="text-sm text-slate-400">{team.members.length} Members</p>
                                         </div>
                                     </div>
@@ -350,6 +400,11 @@ export function Dashboard() {
                 </div>
             </TabsContent>
         </Tabs>
+        <TeamDetailsDialog
+            team={selectedTeam}
+            open={isJoinDialogOpen}
+            onOpenChange={setIsJoinDialogOpen}
+        />
     </div>
   );
 }

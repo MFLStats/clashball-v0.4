@@ -13,6 +13,7 @@ interface UserState {
   signup: (payload: AuthPayload) => Promise<void>;
   logout: () => void;
   createTeam: (name: string) => Promise<void>;
+  joinTeam: (code: string) => Promise<void>;
 }
 export const useUserStore = create<UserState>((set, get) => ({
   profile: null,
@@ -84,6 +85,19 @@ export const useUserStore = create<UserState>((set, get) => ({
       set({ isLoading: false });
     } catch (e) {
       set({ error: (e as Error).message, isLoading: false });
+    }
+  },
+  joinTeam: async (code) => {
+    const { profile } = get();
+    if (!profile) return;
+    set({ isLoading: true });
+    try {
+      await api.joinTeam(code, profile.id, profile.username);
+      await get().refreshProfile();
+      set({ isLoading: false });
+    } catch (e) {
+      set({ error: (e as Error).message, isLoading: false });
+      throw e;
     }
   }
 }));

@@ -221,6 +221,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
                   // Schedule next attempt
                   reconnectTimeoutRef.current = setTimeout(() => {
                       if (isMountedRef.current) {
+                          setStatus('connecting'); // Explicitly show connecting state during retry wait
                           setRetryCount(prev => prev + 1);
                       }
                   }, delay);
@@ -288,10 +289,15 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         </div>
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-display font-bold text-slate-800">
-            {status === 'connecting' ? (retryCount > 0 ? `Reconnecting (Attempt ${retryCount}/5)...` : 'Connecting to Server...') : 'Searching for Opponent...'}
+            {status === 'connecting' ? 'Connecting to Server...' : 'Searching for Opponent...'}
           </h2>
           <p className="text-slate-500">Mode: {mode}</p>
-          {queueCount > 0 && (
+          {retryCount > 0 && (
+             <p className="text-sm font-bold text-amber-500 animate-pulse">
+                Connection unstable. Retrying (Attempt {retryCount}/5)...
+             </p>
+          )}
+          {status === 'searching' && queueCount > 0 && (
               <p className="text-sm font-bold text-haxball-blue animate-pulse">
                   {queueCount} Player{queueCount !== 1 ? 's' : ''} in Queue
               </p>

@@ -36,6 +36,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   const [finalStats, setFinalStats] = useState<Record<string, PlayerMatchStats> | undefined>(undefined);
   const [winner, setWinner] = useState<'red' | 'blue' | null>(null);
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' | 'spectator' } | null>(null);
+  const [isWaitingForOpponent, setIsWaitingForOpponent] = useState(false);
   const socketRef = useRef<GameSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   // Auto-scroll chat
@@ -55,6 +56,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         if (msg.type !== 'match_found' && msg.type !== 'match_started') return;
         setMatchInfo({ matchId: msg.matchId, team: msg.team });
         setStatus('playing');
+        setIsWaitingForOpponent(false);
         if (msg.team === 'spectator') {
             toast.info('Spectating Match');
         } else {
@@ -108,6 +110,12 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             }
         }
     };
+    const onTournamentWaiting = (msg: WSMessage) => {
+        if (msg.type === 'tournament_waiting') {
+            setIsWaitingForOpponent(true);
+            setStatus('playing'); // Set to playing to avoid "Connecting" screen, but render waiting UI
+        }
+    };
     socket.on('match_found', onMatchFound);
     socket.on('match_started', onMatchFound);
     socket.on('queue_update', onQueueUpdate);
@@ -116,6 +124,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     socket.on('game_over', onGameOver);
     socket.on('chat', onChat);
     socket.on('error', onError);
+    socket.on('tournament_waiting', onTournamentWaiting);
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/api/ws`;
@@ -230,6 +239,25 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
                 <RefreshCw className="w-4 h-4 mr-2" /> Retry Connection
             </Button>
         </div>
+      </div>
+    );
+  }
+  if (isWaitingForOpponent) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-6 animate-fade-in">
+        <div className="relative">
+          <div className="absolute inset-0 bg-yellow-500/20 rounded-full animate-ping" />
+          <div className="relative bg-white p-4 rounded-full shadow-lg border-4 border-yellow-100">
+            <Loader2 className="w-12 h-12 animate-spin text-yellow-500" />
+          </div>
+        </div>
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-display font-bold text-slate-800">
+            Waiting for Opponent...
+          </h2>
+          <p className="text-slate-500">Your opponent is connecting to the server.</p>
+        </div>
+        <Button variant="ghost" onClick={onExit}>Cancel</Button>
       </div>
     );
   }

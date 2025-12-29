@@ -181,6 +181,7 @@ export interface LobbyInfo {
 export type WSMessage =
   | { type: 'join_queue'; mode: GameMode; userId: string; username: string }
   | { type: 'join_match'; matchId: string; userId: string; username: string } // New for Tournament
+  | { type: 'tournament_waiting' } // New: Waiting for opponent in tournament
   | { type: 'leave_queue' }
   | { type: 'queue_update'; count: number }
   | { type: 'create_lobby'; userId: string; username: string }

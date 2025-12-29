@@ -36,6 +36,7 @@ export class GlobalDurableObject extends DurableObject {
     currentSlot: number = 0;
     tournamentStatus: 'open' | 'in_progress' | 'completed' = 'open';
     bracket: TournamentMatch[] = [];
+    pendingTournamentMatches: Map<string, { userId: string; ws: WebSocket; username: string; team: 'red' | 'blue'; jersey?: string }[]> = new Map();
     constructor(ctx: DurableObjectState, env: any) {
         super(ctx, env);
         this.queues.set('1v1', []);
@@ -78,6 +79,7 @@ export class GlobalDurableObject extends DurableObject {
                 case 'join_match': {
                     // Direct join for Tournament matches
                     if (!msg.matchId || !msg.userId) return;
+                    // 1. Check active matches (reconnect)
                     const match = this.matches.get(msg.matchId);
                     if (match) {
                         // Match already running, reconnect
@@ -88,12 +90,40 @@ export class GlobalDurableObject extends DurableObject {
                             // Send current state
                             ws.send(JSON.stringify({ type: 'game_state', state: match.gameState }));
                         }
-                    } else {
-                        // Check if it's a tournament match waiting to start
-                        const tMatch = this.bracket.find(m => m.id === msg.matchId);
-                        if (tMatch && tMatch.status === 'in_progress') {
-                            // Match should be created by now, if not, something is wrong or it's creating
-                            // For now, we rely on joinTournamentMatch HTTP to trigger creation
+                        return;
+                    } 
+                    // 2. Check pending tournament matches
+                    const tMatch = this.bracket.find(m => m.id === msg.matchId);
+                    if (tMatch && tMatch.status === 'in_progress') {
+                        // Determine team
+                        let team: 'red' | 'blue' | null = null;
+                        if (tMatch.player1?.userId === msg.userId) team = 'red';
+                        else if (tMatch.player2?.userId === msg.userId) team = 'blue';
+                        if (!team) return; // User not in this match
+                        // Get pending list
+                        let pending = this.pendingTournamentMatches.get(msg.matchId) || [];
+                        // Remove existing connection for this user if any (reconnect during pending)
+                        pending = pending.filter(p => p.userId !== msg.userId);
+                        const profile = await this.getUserProfile(msg.userId);
+                        pending.push({ 
+                            userId: msg.userId, 
+                            ws, 
+                            username: msg.username, 
+                            team, 
+                            jersey: profile.jersey 
+                        });
+                        this.pendingTournamentMatches.set(msg.matchId, pending);
+                        this.sessions.set(ws, { userId: msg.userId, matchId: msg.matchId });
+                        // Check if ready to start (both players connected)
+                        const p1 = pending.find(p => p.team === 'red');
+                        const p2 = pending.find(p => p.team === 'blue');
+                        if (p1 && p2) {
+                            // Start Match
+                            this.startMatch([p1, p2], [], '1v1', RANKED_SETTINGS, msg.matchId);
+                            this.pendingTournamentMatches.delete(msg.matchId);
+                        } else {
+                            // Wait for opponent
+                            ws.send(JSON.stringify({ type: 'tournament_waiting' }));
                         }
                     }
                     break;
@@ -155,7 +185,7 @@ export class GlobalDurableObject extends DurableObject {
                             sender: sender.username,
                             team: sender.team
                         });
-                        lobby.players.forEach(p => { try { p.ws.send(chatMsg); } catch(e){} });
+                        lobby.players.forEach(p => { try { p.ws.send(chatMsg); } catch(e){ /* empty */ } });
                     }
                 }
             }
@@ -174,6 +204,19 @@ export class GlobalDurableObject extends DurableObject {
                     if (lobby.hostId === session.userId) lobby.hostId = lobby.players[0].id;
                     this.broadcastLobbyUpdate(lobby);
                 }
+            }
+        }
+        // Clean up pending tournament matches
+        for (const [matchId, players] of this.pendingTournamentMatches.entries()) {
+            const idx = players.findIndex(p => p.ws === ws);
+            if (idx !== -1) {
+                players.splice(idx, 1);
+                if (players.length === 0) {
+                    this.pendingTournamentMatches.delete(matchId);
+                } else {
+                    this.pendingTournamentMatches.set(matchId, players);
+                }
+                break; // Found and removed
             }
         }
         this.sessions.delete(ws);
@@ -205,7 +248,7 @@ export class GlobalDurableObject extends DurableObject {
     broadcastQueueStatus(mode: GameMode) {
         const queue = this.queues.get(mode) || [];
         const msg = JSON.stringify({ type: 'queue_update', count: queue.length });
-        queue.forEach(p => { try { p.ws.send(msg); } catch(e){} });
+        queue.forEach(p => { try { p.ws.send(msg); } catch(e){ /* empty */ } });
     }
     checkQueue(mode: GameMode) {
         const queue = this.queues.get(mode) || [];
@@ -272,7 +315,7 @@ export class GlobalDurableObject extends DurableObject {
         if (lobby && lobby.hostId === session.userId && targetId !== session.userId) {
             const idx = lobby.players.findIndex(p => p.id === targetId);
             if (idx !== -1) {
-                try { lobby.players[idx].ws.send(JSON.stringify({ type: 'kicked' })); } catch(e){}
+                try { lobby.players[idx].ws.send(JSON.stringify({ type: 'kicked' })); } catch(e){ /* empty */ }
                 lobby.players.splice(idx, 1);
                 this.broadcastLobbyUpdate(lobby);
             }
@@ -304,7 +347,7 @@ export class GlobalDurableObject extends DurableObject {
             settings: lobby.settings
         };
         const msg = JSON.stringify({ type: 'lobby_update', state });
-        lobby.players.forEach(p => { try { p.ws.send(msg); } catch(e){} });
+        lobby.players.forEach(p => { try { p.ws.send(msg); } catch(e){ /* empty */ } });
     }
     async getLobbies(): Promise<LobbyInfo[]> {
         const lobbies: LobbyInfo[] = [];
@@ -434,8 +477,7 @@ export class GlobalDurableObject extends DurableObject {
         // If we have 5 players:
         // M1: P1 vs P2
         // M2: P3 vs P4
-        // M3: P5 vs Bye (P5 advances)
-        // M4: Bye vs Bye (Should not happen if logic correct)
+        // M3: P5 vs Bye (P5 advances)\n        // M4: Bye vs Bye (Should not happen if logic correct)
         // Correct logic for N players:
         // We need N-1 matches total in single elimination.
         // But for the bracket structure, we model rounds.

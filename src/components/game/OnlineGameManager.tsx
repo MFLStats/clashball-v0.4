@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameCanvas } from './GameCanvas';
 import { GameState } from '@shared/physics';
 import { WSMessage, GameMode, PlayerMatchStats } from '@shared/types';
@@ -46,94 +46,8 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     isMountedRef.current = true;
     return () => { isMountedRef.current = false; };
   }, []);
-  const connect = () => {
-    if (!userId || !username) {
-        toast.error("User profile missing. Cannot join queue.");
-        onExit();
-        return;
-    }
-    // Prevent duplicate connections if already connected or connecting
-    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
-        return;
-    }
-    setStatus('connecting');
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/ws`;
-    console.log(`Connecting to WebSocket: ${wsUrl}`);
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-    ws.onopen = () => {
-      if (!isMountedRef.current) {
-          ws.close();
-          return;
-      }
-      setStatus('searching');
-      // Join Queue
-      ws.send(JSON.stringify({
-        type: 'join_queue',
-        mode,
-        userId,
-        username
-      } satisfies WSMessage));
-    };
-    ws.onmessage = (event) => {
-      if (!isMountedRef.current) return;
-      try {
-        const msg = JSON.parse(event.data) as WSMessage;
-        handleMessage(msg);
-      } catch (e) {
-        console.error('Failed to parse WS message', e);
-      }
-    };
-    ws.onclose = (event) => {
-      if (!isMountedRef.current) return;
-      console.log('WebSocket closed', event.code, event.reason);
-      // Only show error if it wasn't a clean close initiated by us (usually)
-      // But since we don't have a manual disconnect button that sets a flag yet,
-      // we assume any close while mounted is an error or server disconnect.
-      if (status !== 'error') {
-          setStatus('error');
-      }
-      wsRef.current = null;
-    };
-    ws.onerror = (error) => {
-      console.error('WebSocket connection error', error);
-      if (isMountedRef.current) {
-          setStatus('error');
-      }
-    };
-  };
-  // Initial Connection
-  useEffect(() => {
-    if (connectionLock.current) return;
-    connectionLock.current = true;
-    connect();
-    return () => {
-      connectionLock.current = false;
-      if (wsRef.current) {
-        // Try to leave queue gracefully
-        if (wsRef.current.readyState === WebSocket.OPEN) {
-            try {
-                wsRef.current.send(JSON.stringify({ type: 'leave_queue' } satisfies WSMessage));
-            } catch (e) { /* ignore */ }
-        }
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-    };
-  }, [mode, userId, username]);
-  // Ping Loop
-  useEffect(() => {
-    const interval = setInterval(() => {
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            lastPingTimeRef.current = Date.now();
-            wsRef.current.send(JSON.stringify({ type: 'ping' }));
-        }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
-  const handleMessage = (msg: WSMessage) => {
+  // Memoized Message Handler
+  const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
       case 'match_started':
       case 'match_found': {
@@ -201,8 +115,95 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         break;
       }
     }
-  };
-  const handleInput = (input: { move: { x: number; y: number }; kick: boolean }) => {
+  }, []);
+  // Memoized Connect Function
+  const connect = useCallback(() => {
+    if (!userId || !username) {
+        toast.error("User profile missing. Cannot join queue.");
+        onExit();
+        return;
+    }
+    // Prevent duplicate connections if already connected or connecting
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
+        return;
+    }
+    setStatus('connecting');
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/api/ws`;
+    console.log(`Connecting to WebSocket: ${wsUrl}`);
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+    ws.onopen = () => {
+      if (!isMountedRef.current) {
+          ws.close();
+          return;
+      }
+      setStatus('searching');
+      // Join Queue
+      ws.send(JSON.stringify({
+        type: 'join_queue',
+        mode,
+        userId,
+        username
+      } satisfies WSMessage));
+    };
+    ws.onmessage = (event) => {
+      if (!isMountedRef.current) return;
+      try {
+        const msg = JSON.parse(event.data) as WSMessage;
+        handleMessage(msg);
+      } catch (e) {
+        console.error('Failed to parse WS message', e);
+      }
+    };
+    ws.onclose = (event) => {
+      if (!isMountedRef.current) return;
+      console.log('WebSocket closed', event.code, event.reason);
+      // Only show error if it wasn't a clean close initiated by us (usually)
+      if (status !== 'error') {
+          setStatus('error');
+      }
+      wsRef.current = null;
+    };
+    ws.onerror = (error) => {
+      console.error('WebSocket connection error', error);
+      if (isMountedRef.current) {
+          setStatus('error');
+      }
+    };
+  }, [userId, username, mode, onExit, handleMessage, status]);
+  // Initial Connection
+  useEffect(() => {
+    if (connectionLock.current) return;
+    connectionLock.current = true;
+    connect();
+    return () => {
+      connectionLock.current = false;
+      if (wsRef.current) {
+        // Try to leave queue gracefully
+        if (wsRef.current.readyState === WebSocket.OPEN) {
+            try {
+                wsRef.current.send(JSON.stringify({ type: 'leave_queue' } satisfies WSMessage));
+            } catch (e) { /* ignore */ }
+        }
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [connect]);
+  // Ping Loop
+  useEffect(() => {
+    const interval = setInterval(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            lastPingTimeRef.current = Date.now();
+            wsRef.current.send(JSON.stringify({ type: 'ping' }));
+        }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+  // Memoized Input Handler
+  const handleInput = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'input',
@@ -210,8 +211,9 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         kick: input.kick
       } satisfies WSMessage));
     }
-  };
-  const sendChat = (e: React.FormEvent) => {
+  }, []);
+  // Memoized Chat Sender
+  const sendChat = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || !wsRef.current) return;
     wsRef.current.send(JSON.stringify({
@@ -219,14 +221,15 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       message: chatInput
     } satisfies WSMessage));
     setChatInput('');
-  };
-  const handleRetry = () => {
+  }, [chatInput]);
+  // Memoized Retry Handler
+  const handleRetry = useCallback(() => {
       if (wsRef.current) {
           wsRef.current.close();
           wsRef.current = null;
       }
       connect();
-  };
+  }, [connect]);
   if (status === 'connecting' || status === 'searching') {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-6 animate-fade-in">

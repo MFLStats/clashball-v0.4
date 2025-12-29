@@ -177,12 +177,11 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
         ws.onclose = () => {
             if (isMountedRef.current && view !== 'menu') {
                 // Handle unexpected disconnects if needed
-                // For now, we might just let the user know or auto-reconnect logic could go here
             }
         };
     });
   }, [handleMessage, view]);
-  const createLobby = async () => {
+  const createLobby = useCallback(async () => {
     if (!profile) {
         toast.error("You must be logged in to create a lobby");
         return;
@@ -200,8 +199,8 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
         toast.error("Failed to connect to server");
         setIsConnecting(false);
     }
-  };
-  const joinLobby = async (code?: string) => {
+  }, [profile, connectWS]);
+  const joinLobby = useCallback(async (code?: string) => {
     const targetCode = code || joinCode;
     if (!profile) {
         toast.error("You must be logged in to join a lobby");
@@ -225,37 +224,37 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
         toast.error("Failed to connect to server");
         setIsConnecting(false);
     }
-  };
-  const startMatch = () => {
+  }, [profile, joinCode, connectWS]);
+  const startMatch = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: 'start_lobby_match' }));
     }
-  };
-  const updateSettings = (settings: Partial<LobbySettings>) => {
+  }, []);
+  const updateSettings = useCallback((settings: Partial<LobbySettings>) => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({
               type: 'update_lobby_settings',
               settings
           }));
       }
-  };
-  const switchTeam = (team: LobbyTeam) => {
+  }, []);
+  const switchTeam = useCallback((team: LobbyTeam) => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({
               type: 'switch_team',
               team
           }));
       }
-  };
-  const kickPlayer = (targetId: string) => {
+  }, []);
+  const kickPlayer = useCallback((targetId: string) => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({
               type: 'kick_player',
               targetId
           }));
       }
-  };
-  const handleInput = (input: { move: { x: number; y: number }; kick: boolean }) => {
+  }, []);
+  const handleInput = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'input',
@@ -263,8 +262,8 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
         kick: input.kick
       }));
     }
-  };
-  const sendChat = (e: React.FormEvent) => {
+  }, []);
+  const sendChat = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || !wsRef.current) return;
     wsRef.current.send(JSON.stringify({
@@ -272,19 +271,19 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
       message: chatInput
     }));
     setChatInput('');
-  };
-  const copyCode = () => {
+  }, [chatInput]);
+  const copyCode = useCallback(() => {
       if (lobbyState?.code) {
           navigator.clipboard.writeText(lobbyState.code);
           toast.success('Lobby code copied!');
       }
-  };
-  const handleLeaveGame = () => {
+  }, [lobbyState?.code]);
+  const handleLeaveGame = useCallback(() => {
       setView('lobby');
       setGameState(null);
       setMatchInfo(null);
       setWinner(null);
-  };
+  }, []);
   // Cleanup
   useEffect(() => {
       return () => {

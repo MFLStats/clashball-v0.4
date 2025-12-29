@@ -154,7 +154,7 @@ export class GlobalDurableObject extends DurableObject {
                                         team: 'red' // Default color for lobby chat
                                     });
                                     lobby.players.forEach(p => {
-                                        try { p.ws.send(chatMsg); } catch(e) {}
+                                        try { p.ws.send(chatMsg); } catch(e) { /* ignore send errors */ }
                                     });
                                 }
                             }
@@ -319,7 +319,7 @@ export class GlobalDurableObject extends DurableObject {
         // Notify target
         try {
             targetPlayer.ws.send(JSON.stringify({ type: 'kicked' }));
-        } catch(e) {}
+        } catch(e) { /* ignore send errors */ }
         // Remove from lobby
         lobby.players.splice(targetIndex, 1);
         // Clear session for target

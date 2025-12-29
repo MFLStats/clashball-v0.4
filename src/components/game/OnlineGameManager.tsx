@@ -25,6 +25,9 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   const userId = profile?.id;
   const username = profile?.username;
   const [status, setStatus] = useState<'connecting' | 'searching' | 'playing' | 'error'>('connecting');
+  // Connection state
+  const [retryCount, setRetryCount] = useState(0);
+  const isMountedRef = useRef(true);
   // Refs for stable access in effects/callbacks
   const statusRef = useRef(status);
   const onExitRef = useRef(onExit);
@@ -36,6 +39,13 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   useEffect(() => {
     onExitRef.current = onExit;
   }, [onExit]);
+  // Mount tracking
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   const [queueCount, setQueueCount] = useState(0);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -54,21 +64,6 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
-  // Connection Timeout Logic
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      // Only timeout if we are stuck in connecting state (socket not open)
-      // If we are 'searching', the socket IS open, so we shouldn't timeout the connection
-      if (statusRef.current === 'connecting') {
-        if (wsRef.current?.readyState !== WebSocket.OPEN) {
-            setStatus('error');
-            toast.error('Connection timed out. Please try again.');
-            wsRef.current?.close();
-        }
-      }
-    }, 15000); // 15 seconds timeout
-    return () => clearTimeout(timer);
-  }, []);
   // Message Handler - Stable Ref
   const handleMessageRef = useRef<(msg: WSMessage) => void>(() => {});
   // Update the handler ref whenever dependencies change (like matchInfo state updates)
@@ -151,6 +146,8 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   }, []);
   // Main WebSocket Connection Effect
   useEffect(() => {
+    // Reset status on retry
+    setStatus('connecting');
     if (!userId || !username) {
         toast.error("User profile missing. Cannot join queue.");
         onExitRef.current();
@@ -161,7 +158,19 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     const host = window.location.host;
     const ws = new WebSocket(`${protocol}//${host}/api/ws`);
     wsRef.current = ws;
+    // Connection Timeout Logic
+    const connectionTimeout = setTimeout(() => {
+        if (isMountedRef.current && ws.readyState !== WebSocket.OPEN) {
+             setStatus('error');
+             toast.error('Connection timed out.');
+             ws.close();
+        }
+    }, 15000);
     ws.onopen = () => {
+      if (!isMountedRef.current) {
+          ws.close();
+          return;
+      }
       setStatus('searching');
       // Join Queue
       ws.send(JSON.stringify({
@@ -172,6 +181,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       } satisfies WSMessage));
     };
     ws.onmessage = (event) => {
+      if (!isMountedRef.current) return;
       try {
         const msg = JSON.parse(event.data) as WSMessage;
         handleMessageRef.current(msg);
@@ -180,8 +190,20 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       }
     };
     ws.onclose = (event) => {
+      if (!isMountedRef.current) return;
       if (!event.wasClean) {
           console.warn('WebSocket closed unexpectedly', event.code, event.reason);
+          // Retry logic for 1006 (Abnormal Closure)
+          if (event.code === 1006 && retryCount < 1) {
+              console.log('Attempting reconnection...');
+              // Small delay to prevent tight loop
+              setTimeout(() => {
+                  if (isMountedRef.current) {
+                      setRetryCount(prev => prev + 1);
+                  }
+              }, 1000);
+              return;
+          }
           if (statusRef.current !== 'error') {
              setStatus('error');
              toast.error('Disconnected from server');
@@ -189,18 +211,23 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       }
     };
     ws.onerror = () => {
-      setStatus('error');
-      toast.error('Connection error');
+      if (!isMountedRef.current) return;
+      console.error('WebSocket connection error');
     };
     return () => {
+      clearTimeout(connectionTimeout);
       // Cleanup: Leave queue if searching
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'leave_queue' } satisfies WSMessage));
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        if (ws.readyState === WebSocket.OPEN) {
+            try {
+                ws.send(JSON.stringify({ type: 'leave_queue' } satisfies WSMessage));
+            } catch (e) { /* ignore */ }
+        }
         ws.close();
       }
     };
-    // CRITICAL: Only depend on stable IDs/Modes. Do NOT depend on onExit or handleMessage directly.
-  }, [mode, userId, username]);
+    // CRITICAL: Only depend on stable IDs/Modes and retryCount.
+  }, [mode, userId, username, retryCount]);
   const handleInput = (input: { move: { x: number; y: number }; kick: boolean }) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({

@@ -79,7 +79,7 @@ export class Match {
         }
     }
   }
-  handleChat(userId: string, message: string) {
+  handleChat(userId: string, message: string, scope: 'all' | 'team' = 'all') {
     let senderName = 'Unknown';
     let team: 'red' | 'blue' | 'spectator' = 'spectator';
     if (this.players.has(userId)) {
@@ -95,12 +95,38 @@ export class Match {
     }
     // Basic sanitization (truncate)
     const cleanMessage = message.slice(0, 100);
-    this.broadcast({
+    const msg: WSMessage = {
         type: 'chat',
         message: cleanMessage,
         sender: senderName,
-        team: team
-    });
+        team: team,
+        scope: scope
+    };
+    const str = JSON.stringify(msg);
+    // Broadcast based on scope
+    if (scope === 'team' && team !== 'spectator') {
+        // Send only to teammates
+        this.players.forEach((p) => {
+            if (p.team === team) {
+                try { p.ws.send(str); } catch (e) { /* ignore */ }
+            }
+        });
+        // Spectators don't see team chat usually, or maybe they see all?
+        // For now, strict team chat.
+    } else {
+        // Send to everyone
+        this.broadcast(msg);
+    }
+  }
+  handleEmote(userId: string, emoji: string) {
+      if (this.players.has(userId) || this.spectators.has(userId)) {
+          // Broadcast emote to everyone
+          this.broadcast({
+              type: 'emote',
+              emoji: emoji,
+              userId: userId
+          });
+      }
   }
   private update(dt: number) {
     // Run physics with delta time

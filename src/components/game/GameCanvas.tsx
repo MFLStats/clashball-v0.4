@@ -21,6 +21,13 @@ interface GameCanvasProps {
   onLeave?: () => void;
   onPlayAgain?: () => void;
   mode?: GameMode;
+  emoteEvent?: { userId: string; emoji: string; id: string } | null;
+}
+interface ActiveEmote {
+    id: string;
+    userId: string;
+    emoji: string;
+    startTime: number;
 }
 export function GameCanvas({
   onGameEnd,
@@ -34,7 +41,8 @@ export function GameCanvas({
   finalStats,
   onLeave,
   onPlayAgain,
-  mode = '1v1'
+  mode = '1v1',
+  emoteEvent
 }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -57,6 +65,8 @@ export function GameCanvas({
   const [isPaused, setIsPaused] = useState(false);
   const [gameOver, setGameOver] = useState<'red' | 'blue' | null>(null);
   const [isOvertime, setIsOvertime] = useState(false);
+  // Emotes
+  const activeEmotesRef = useRef<ActiveEmote[]>([]);
   // STRICT ZUSTAND RULE: Select primitives individually
   const showNames = useSettingsStore(s => s.showNames);
   const particles = useSettingsStore(s => s.particles);
@@ -74,6 +84,15 @@ export function GameCanvas({
   useEffect(() => {
     latestExternalStateRef.current = externalState || null;
   }, [externalState]);
+  // Handle Emote Events
+  useEffect(() => {
+      if (emoteEvent) {
+          activeEmotesRef.current.push({
+              ...emoteEvent,
+              startTime: Date.now()
+          });
+      }
+  }, [emoteEvent]);
   // Initialize Local Stats
   useEffect(() => {
     if (!externalState) {
@@ -433,6 +452,31 @@ export function GameCanvas({
         ctx.fillText('SPECTATING', width / 2, 20);
         ctx.restore();
     }
+    // --- 9. Draw Emotes ---
+    const now = Date.now();
+    // Filter expired emotes (2 seconds)
+    activeEmotesRef.current = activeEmotesRef.current.filter(e => now - e.startTime < 2000);
+    activeEmotesRef.current.forEach(emote => {
+        const player = state.players.find(p => p.id === emote.userId);
+        if (player) {
+            const px = player.pos.x * scaleX;
+            const py = player.pos.y * scaleY;
+            const elapsed = now - emote.startTime;
+            const progress = elapsed / 2000;
+            // Float up animation
+            const offsetY = 40 + (progress * 50);
+            const opacity = 1 - Math.pow(progress, 3); // Fade out near end
+            ctx.save();
+            ctx.font = '40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.globalAlpha = opacity;
+            ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            ctx.shadowBlur = 4;
+            ctx.fillText(emote.emoji, px, py - offsetY);
+            ctx.restore();
+        }
+    });
   }, [currentUserId, showNames]);
   // Game Loop
   useEffect(() => {

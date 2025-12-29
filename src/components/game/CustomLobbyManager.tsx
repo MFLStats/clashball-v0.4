@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, ArrowLeft, Users, Copy, Play, Send, KeyRound, Crown, RefreshCw, LogIn, Settings, Clock, Trophy, Map as MapIcon, X, Eye, Share2 } from 'lucide-react';
+import { Loader2, ArrowLeft, Users, Copy, Play, Send, KeyRound, Crown, RefreshCw, LogIn, Settings, Clock, Trophy, Map as MapIcon, X, Eye, Share2, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { SoundEngine } from '@/lib/audio';
 import { cn } from '@/lib/utils';
@@ -24,7 +24,9 @@ interface ChatMessage {
   sender: string;
   message: string;
   team: 'red' | 'blue' | 'spectator';
+  scope?: 'all' | 'team';
 }
+const EMOTES = ['😀', '��', '😡', '😭', '😎', '👍', '👎', '⚽'];
 export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerProps) {
   const profile = useUserStore(s => s.profile);
   const [view, setView] = useState<'menu' | 'lobby' | 'game'>('menu');
@@ -38,7 +40,9 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' | 'spectator' } | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [chatScope, setChatScope] = useState<'all' | 'team'>('all');
   const [winner, setWinner] = useState<'red' | 'blue' | null>(null);
+  const [emoteEvent, setEmoteEvent] = useState<{ userId: string; emoji: string; id: string } | null>(null);
   const socketRef = useRef<GameSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
@@ -120,9 +124,19 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
             id: crypto.randomUUID(),
             sender: msg.sender || 'Unknown',
             message: msg.message,
-            team: msg.team || 'spectator'
+            team: msg.team || 'spectator',
+            scope: msg.scope
           }
         ]);
+    };
+    const onEmote = (msg: WSMessage) => {
+        if (msg.type === 'emote' && msg.userId) {
+            setEmoteEvent({
+                userId: msg.userId,
+                emoji: msg.emoji,
+                id: crypto.randomUUID()
+            });
+        }
     };
     const onKicked = (msg: WSMessage) => {
         if (msg.type === 'kicked') {
@@ -145,6 +159,7 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
     socket.on('game_events', onGameEvents);
     socket.on('game_over', onGameOver);
     socket.on('chat', onChat);
+    socket.on('emote', onEmote);
     socket.on('kicked', onKicked);
     socket.on('error', onError);
     return () => {
@@ -228,15 +243,23 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
     if (!chatInput.trim()) return;
     socketRef.current?.send({
       type: 'chat',
-      message: chatInput
+      message: chatInput,
+      scope: chatScope
     });
     setChatInput('');
-  }, [chatInput]);
+  }, [chatInput, chatScope]);
   const handleQuickChat = useCallback((message: string) => {
     socketRef.current?.send({
       type: 'chat',
-      message
+      message,
+      scope: chatScope
     });
+  }, [chatScope]);
+  const handleEmoteClick = useCallback((emoji: string) => {
+      socketRef.current?.send({
+          type: 'emote',
+          emoji
+      });
   }, []);
   const copyCode = useCallback(() => {
       if (lobbyState?.code) {
@@ -498,6 +521,9 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                               <div className="flex-1 overflow-y-auto space-y-1 pr-2 scrollbar-hide">
                                   {chatMessages.map(msg => (
                                       <div key={msg.id} className="text-xs">
+                                          {msg.scope === 'team' && (
+                                              <span className="text-[10px] font-bold bg-yellow-500/20 text-yellow-400 px-1 rounded mr-2 border border-yellow-500/30">TEAM</span>
+                                          )}
                                           <span className={cn(
                                               "font-bold mr-2",
                                               msg.team === 'red' ? 'text-red-400' :
@@ -510,17 +536,25 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                   ))}
                                   <div ref={chatEndRef} />
                               </div>
-                              <form onSubmit={sendChat} className="flex gap-2">
-                                  <Input
-                                      value={chatInput}
-                                      onChange={e => setChatInput(e.target.value)}
-                                      placeholder="Message..."
-                                      className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 h-8 text-xs"
-                                  />
-                                  <Button type="submit" size="icon" className="h-8 w-8 bg-slate-800 hover:bg-slate-700">
-                                      <Send className="w-3 h-3" />
-                                  </Button>
-                              </form>
+                              <div className="flex gap-2 items-center">
+                                  <Tabs value={chatScope} onValueChange={(v) => setChatScope(v as 'all' | 'team')} className="w-24 shrink-0">
+                                      <TabsList className="grid w-full grid-cols-2 h-8 bg-slate-950 border border-slate-700">
+                                          <TabsTrigger value="all" className="text-[10px] font-bold data-[state=active]:bg-slate-800 h-6">All</TabsTrigger>
+                                          <TabsTrigger value="team" className="text-[10px] font-bold data-[state=active]:bg-slate-800 h-6">Team</TabsTrigger>
+                                      </TabsList>
+                                  </Tabs>
+                                  <form onSubmit={sendChat} className="flex gap-2 flex-1">
+                                      <Input
+                                          value={chatInput}
+                                          onChange={e => setChatInput(e.target.value)}
+                                          placeholder="Message..."
+                                          className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 h-8 text-xs"
+                                      />
+                                      <Button type="submit" size="icon" className="h-8 w-8 bg-slate-800 hover:bg-slate-700">
+                                          <Send className="w-3 h-3" />
+                                      </Button>
+                                  </form>
+                              </div>
                           </CardContent>
                       </Card>
                   </div>
@@ -696,6 +730,7 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
             winningScore={lobbyState?.settings.scoreLimit ?? 3}
             currentUserId={profile?.id}
             onLeave={handleLeaveGame}
+            emoteEvent={emoteEvent}
         />
       </div>
       {/* Chat Section - Moved Below Canvas */}
@@ -703,6 +738,9 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
           <div className="h-32 overflow-y-auto bg-black/30 rounded-lg p-2 space-y-1 scrollbar-hide border border-white/5">
               {chatMessages.map(msg => (
                   <div key={msg.id} className="text-sm text-slate-200">
+                      {msg.scope === 'team' && (
+                          <span className="text-[10px] font-bold bg-yellow-500/20 text-yellow-400 px-1 rounded mr-2 border border-yellow-500/30">TEAM</span>
+                      )}
                       <span className={cn("font-bold mr-2",
                           msg.team === 'red' ? 'text-red-400' :
                           msg.team === 'blue' ? 'text-blue-400' : 'text-slate-400'
@@ -715,18 +753,42 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
               <div ref={chatEndRef} />
           </div>
           <div className="flex flex-col gap-2">
+              {/* Emote Bar */}
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                  {EMOTES.map(emoji => (
+                      <button
+                          key={emoji}
+                          onClick={() => handleEmoteClick(emoji)}
+                          className="text-xl hover:scale-125 transition-transform p-1"
+                      >
+                          {emoji}
+                      </button>
+                  ))}
+              </div>
               <QuickChat onSelect={handleQuickChat} />
-              <form onSubmit={sendChat} className="flex gap-2">
-                  <Input
-                      value={chatInput}
-                      onChange={e => setChatInput(e.target.value)}
-                      placeholder="Type a message..."
-                      className="bg-slate-950 border-slate-700 text-white placeholder:text-slate-500 h-10"
-                  />
-                  <Button type="submit" size="icon" className="h-10 w-10 bg-slate-800 hover:bg-slate-700 border border-slate-700">
-                      <Send className="w-4 h-4" />
-                  </Button>
-              </form>
+              <div className="flex gap-2 items-center">
+                  <Tabs value={chatScope} onValueChange={(v) => setChatScope(v as 'all' | 'team')} className="w-32 shrink-0">
+                      <TabsList className="grid w-full grid-cols-2 h-10 bg-slate-950 border border-slate-700">
+                          <TabsTrigger value="all" className="text-xs font-bold data-[state=active]:bg-slate-800">
+                              <Globe className="w-3 h-3 mr-1" /> All
+                          </TabsTrigger>
+                          <TabsTrigger value="team" className="text-xs font-bold data-[state=active]:bg-slate-800">
+                              <Users className="w-3 h-3 mr-1" /> Team
+                          </TabsTrigger>
+                      </TabsList>
+                  </Tabs>
+                  <form onSubmit={sendChat} className="flex gap-2 flex-1">
+                      <Input
+                          value={chatInput}
+                          onChange={e => setChatInput(e.target.value)}
+                          placeholder={chatScope === 'team' ? "Message Team..." : "Message All..."}
+                          className="bg-slate-950 border-slate-700 text-white placeholder:text-slate-500 h-10"
+                      />
+                      <Button type="submit" size="icon" className="h-10 w-10 bg-slate-800 hover:bg-slate-700 border border-slate-700">
+                          <Send className="w-4 h-4" />
+                      </Button>
+                  </form>
+              </div>
           </div>
       </div>
     </div>

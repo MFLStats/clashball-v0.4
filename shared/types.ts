@@ -180,8 +180,8 @@ export interface LobbyInfo {
 // --- Multiplayer Types ---
 export type WSMessage =
   | { type: 'join_queue'; mode: GameMode; userId: string; username: string }
-  | { type: 'join_match'; matchId: string; userId: string; username: string } // New for Tournament
-  | { type: 'tournament_waiting' } // New: Waiting for opponent in tournament
+  | { type: 'join_match'; matchId: string; userId: string; username: string }
+  | { type: 'tournament_waiting' }
   | { type: 'leave_queue' }
   | { type: 'queue_update'; count: number }
   | { type: 'create_lobby'; userId: string; username: string }
@@ -201,4 +201,5 @@ export type WSMessage =
   | { type: 'error'; message: string }
   | { type: 'ping' }
   | { type: 'pong' }
-  | { type: 'chat'; message: string; sender?: string; team?: 'red' | 'blue' | 'spectator' };
+  | { type: 'chat'; message: string; sender?: string; team?: 'red' | 'blue' | 'spectator'; scope?: 'all' | 'team' }
+  | { type: 'emote'; emoji: string; userId?: string };

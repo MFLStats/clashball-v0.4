@@ -91,7 +91,7 @@ export class GlobalDurableObject extends DurableObject {
                             ws.send(JSON.stringify({ type: 'game_state', state: match.gameState }));
                         }
                         return;
-                    } 
+                    }
                     // 2. Check pending tournament matches
                     const tMatch = this.bracket.find(m => m.id === msg.matchId);
                     if (tMatch && tMatch.status === 'in_progress') {
@@ -105,12 +105,12 @@ export class GlobalDurableObject extends DurableObject {
                         // Remove existing connection for this user if any (reconnect during pending)
                         pending = pending.filter(p => p.userId !== msg.userId);
                         const profile = await this.getUserProfile(msg.userId);
-                        pending.push({ 
-                            userId: msg.userId, 
-                            ws, 
-                            username: msg.username, 
-                            team, 
-                            jersey: profile.jersey 
+                        pending.push({
+                            userId: msg.userId,
+                            ws,
+                            username: msg.username,
+                            team,
+                            jersey: profile.jersey
                         });
                         this.pendingTournamentMatches.set(msg.matchId, pending);
                         this.sessions.set(ws, { userId: msg.userId, matchId: msg.matchId });
@@ -163,6 +163,9 @@ export class GlobalDurableObject extends DurableObject {
                 case 'chat':
                     this.handleChat(ws, msg);
                     break;
+                case 'emote':
+                    this.handleEmote(ws, msg.emoji);
+                    break;
             }
         } catch (err) {
             console.error("[DurableObject] Error handling message:", err);
@@ -173,7 +176,7 @@ export class GlobalDurableObject extends DurableObject {
         if (session) {
             if (session.matchId) {
                 const match = this.matches.get(session.matchId);
-                if (match) match.handleChat(session.userId, msg.message);
+                if (match) match.handleChat(session.userId, msg.message, msg.scope);
             } else if (session.lobbyCode) {
                 const lobby = this.lobbies.get(session.lobbyCode);
                 if (lobby) {
@@ -183,10 +186,34 @@ export class GlobalDurableObject extends DurableObject {
                             type: 'chat',
                             message: msg.message.slice(0, 100),
                             sender: sender.username,
-                            team: sender.team
+                            team: sender.team,
+                            scope: msg.scope
                         });
-                        lobby.players.forEach(p => { try { p.ws.send(chatMsg); } catch(e){ /* empty */ } });
+                        // Filter recipients if team scope
+                        lobby.players.forEach(p => {
+                            if (msg.scope === 'team' && p.team !== sender.team) return;
+                            try { p.ws.send(chatMsg); } catch(e){ /* empty */ }
+                        });
                     }
+                }
+            }
+        }
+    }
+    handleEmote(ws: WebSocket, emoji: string) {
+        const session = this.sessions.get(ws);
+        if (session) {
+            if (session.matchId) {
+                const match = this.matches.get(session.matchId);
+                if (match) match.handleEmote(session.userId, emoji);
+            } else if (session.lobbyCode) {
+                const lobby = this.lobbies.get(session.lobbyCode);
+                if (lobby) {
+                    const msg = JSON.stringify({
+                        type: 'emote',
+                        emoji: emoji,
+                        userId: session.userId
+                    });
+                    lobby.players.forEach(p => { try { p.ws.send(msg); } catch(e){ /* empty */ } });
                 }
             }
         }
@@ -493,20 +520,6 @@ export class GlobalDurableObject extends DurableObject {
         const matches: TournamentMatch[] = [];
         const byes = size - count;
         // Create matches
-        // We fill the bracket. Some slots are players, some are Byes (null).
-        // Standard seeding: 1 vs Size, 2 vs Size-1 etc. But here random shuffle is fine for MVP.
-        // We need to pair them up.
-        // If we have Byes, they should be distributed.
-        // E.g. 5 players, size 8. 3 Byes.
-        // M1: P1 vs P2
-        // M2: P3 vs P4
-        // M3: P5 vs Bye (P5 advances)
-        // M4: Bye vs Bye (Should not happen if logic correct)
-        // Correct logic for N players:
-        // We need N-1 matches total in single elimination.
-        // But for the bracket structure, we model rounds.
-        // Let's stick to: Pair 0-1, 2-3, etc.
-        // If a slot is empty, it's a Bye.
         const slots: (TournamentParticipant | null)[] = new Array(size).fill(null);
         for (let i = 0; i < count; i++) {
             slots[i] = shuffled[i];
@@ -652,26 +665,6 @@ export class GlobalDurableObject extends DurableObject {
         // Check if both ready
         if (match.p1Ready && match.p2Ready) {
             match.status = 'in_progress';
-            // Start the actual game session
-            // We create a Match object so they can connect via WS
-            const p1 = match.player1!;
-            const p2 = match.player2!;
-            // We need WS connections, but we don't have them yet.
-            // The players will connect via WS using `join_match` message after this HTTP call returns success.
-            // So we just prepare the Match object in `matches` map with empty sockets, waiting for reconnection?
-            // No, `Match` constructor expects sockets.
-            // We can't create `Match` yet.
-            // We set status to `in_progress`.
-            // The clients will see this status, then connect via WS sending `join_match`.
-            // The `handleMessage` for `join_match` will need to handle the case where `Match` object doesn't exist yet.
-            // It should create it on the first connection?
-            // Or we create a placeholder.
-            // Let's create the match with dummy sockets? No, that breaks `Match` logic.
-            // We will create the match when the FIRST player connects via WS.
-            // See `handleMessage` -> `join_match`.
-            // Actually, `handleMessage` logic I wrote earlier checks `this.matches.get`.
-            // I need to update `handleMessage` to create the match if it's in `bracket` as `in_progress` but not in `matches`.
-            // For now, just update state.
         }
         return this.getTournamentState();
     }

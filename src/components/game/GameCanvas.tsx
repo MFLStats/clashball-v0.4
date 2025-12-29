@@ -204,7 +204,17 @@ export function GameCanvas({
       const r = p.radius * scaleX;
       // Classic Haxball Colors
       const color = p.team === 'red' ? '#e56e56' : '#5689e5';
-      // Kick Indicator (White Ring)
+      // Kick Range Ring (New Feature)
+      // Visualizes the effective kick distance
+      const kickRange = (p.radius + state.ball.radius + PhysicsEngine.KICK_TOLERANCE) * scaleX;
+      ctx.beginPath();
+      ctx.arc(x, y, kickRange, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.stroke();
+      ctx.setLineDash([]); // Reset dash
+      // Kick Indicator (White Ring on Player)
       if (p.isKicking) {
         ctx.beginPath();
         ctx.arc(x, y, r + 6, 0, Math.PI * 2);
@@ -452,21 +462,21 @@ export function GameCanvas({
     lastTimeRef.current = performance.now();
   };
   // Format time remaining
-  const timeRemaining = latestExternalStateRef.current
-    ? latestExternalStateRef.current.timeRemaining
+  const timeRemaining = latestExternalStateRef.current 
+    ? latestExternalStateRef.current.timeRemaining 
     : gameStateRef.current.timeRemaining;
   const minutes = Math.floor(Math.max(0, timeRemaining) / 60);
   const seconds = Math.floor(Math.max(0, timeRemaining) % 60);
   // Prepare data for summary
   const summaryStats = finalStats || localStatsRef.current;
-  const summaryPlayers = externalState
+  const summaryPlayers = externalState 
     ? externalState.players.map(p => ({ id: p.id, username: p.username, team: p.team }))
     : gameStateRef.current.players.map(p => ({ id: p.id, username: p.username, team: p.team }));
   // Determine user team for victory/defeat message
   // In local mode, user is always 'red' (p1)
   // In online mode, we need to find the user in the players list
-  const userTeam = externalState
-    ? summaryPlayers.find(p => p.id === currentUserId)?.team
+  const userTeam = externalState 
+    ? summaryPlayers.find(p => p.id === currentUserId)?.team 
     : 'red';
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-4xl mx-auto">
@@ -501,7 +511,7 @@ export function GameCanvas({
         <TouchControls onUpdate={handleTouchUpdate} />
         {/* Post Match Summary Overlay */}
         {gameOver && (
-            <PostMatchSummary
+            <PostMatchSummary 
                 winner={gameOver}
                 userTeam={userTeam}
                 score={score}

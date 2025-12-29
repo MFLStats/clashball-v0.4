@@ -45,6 +45,9 @@ export class PhysicsEngine {
   // Arcade Physics Constants - Tuned for Timestep Independence (Units per Second)
   static readonly PLAYER_RADIUS = 15;
   static readonly BALL_RADIUS = 10;
+  // Kick Mechanics
+  static readonly KICK_TOLERANCE = 5; // Extra range for kicking
+  static readonly KICK_STRENGTH = 360;
   // Field Dimensions
   static readonly FIELD_WIDTH = 1200;
   static readonly FIELD_HEIGHT = 600;
@@ -55,8 +58,6 @@ export class PhysicsEngine {
   // Damping Base (Applied per 1/60s)
   static readonly PLAYER_DAMPING_BASE = 0.90;
   static readonly BALL_DAMPING_BASE = 0.990;
-  // Kick Strength (Instantaneous Velocity Change)
-  static readonly KICK_STRENGTH = 360;
   static readonly WALL_BOUNCE = 0.75;
   static readonly PLAYER_BOUNCE = 0.5;
   // Velocity threshold for stopping
@@ -176,7 +177,7 @@ export class PhysicsEngine {
     }
     // Goal Detection & X-Axis Walls
     const checkGoal = (isLeft: boolean) => {
-        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 &&
+        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 && 
                        b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
         if (isGoal) {
             const scoringTeam = isLeft ? 'blue' : 'red';
@@ -188,8 +189,8 @@ export class PhysicsEngine {
                 if (b.lastTouch.team === scoringTeam) {
                     scorerId = b.lastTouch.id;
                     // Check Assist
-                    if (b.previousTouch &&
-                        b.previousTouch.team === scoringTeam &&
+                    if (b.previousTouch && 
+                        b.previousTouch.team === scoringTeam && 
                         b.previousTouch.id !== scorerId &&
                         Math.abs(b.lastTouch.time - b.previousTouch.time) < this.ASSIST_WINDOW) {
                         assisterId = b.previousTouch.id;
@@ -219,14 +220,36 @@ export class PhysicsEngine {
         b.vel.x *= -this.WALL_BOUNCE;
         events.push({ type: 'wall' });
     }
-    // --- 3. Player-Ball Collision (Impulse Based) ---
+    // --- 3. Player-Ball Interaction (Kick & Collision) ---
     newState.players.forEach(p => {
       const dx = b.pos.x - p.pos.x;
       const dy = b.pos.y - p.pos.y;
       const distSq = dx*dx + dy*dy;
+      const dist = Math.sqrt(distSq);
+      // A. Kick Mechanic (Check tolerance zone)
+      // Radius + Ball Radius + Tolerance
+      const kickRange = p.radius + b.radius + this.KICK_TOLERANCE;
+      if (p.isKicking && dist <= kickRange) {
+        // Calculate normal from player to ball
+        const nx = dx / (dist || 1);
+        const ny = dy / (dist || 1);
+        // Apply Kick Impulse
+        b.vel.x += nx * this.KICK_STRENGTH;
+        b.vel.y += ny * this.KICK_STRENGTH;
+        // Update touch info for kick
+        if (b.lastTouch?.id !== p.id) {
+            b.previousTouch = b.lastTouch;
+        }
+        b.lastTouch = {
+            id: p.id,
+            team: p.team,
+            time: newState.timeRemaining
+        };
+        events.push({ type: 'kick' });
+      }
+      // B. Collision Resolution (Standard Dribble)
       const minDist = p.radius + b.radius;
-      if (distSq < minDist * minDist) {
-        const dist = Math.sqrt(distSq);
+      if (dist < minDist) {
         // Collision Normal (from player to ball)
         const nx = dx / (dist || 1);
         const ny = dy / (dist || 1);
@@ -239,6 +262,7 @@ export class PhysicsEngine {
         const relVelY = b.vel.y - p.vel.y;
         const velAlongNormal = relVelX * nx + relVelY * ny;
         // Only resolve if moving towards each other
+        // If we just kicked, velAlongNormal is likely > 0 (separating), so this is skipped
         if (velAlongNormal < 0) {
             // Calculate impulse scalar
             const j = -(1 + this.PLAYER_BOUNCE) * velAlongNormal;
@@ -248,27 +272,18 @@ export class PhysicsEngine {
             // Add some of player's velocity directly for "grip" feel
             b.vel.x += p.vel.x * 0.2;
             b.vel.y += p.vel.y * 0.2;
-            // Update Touch History
+            // Update Touch History (if not already updated by kick this frame)
+            // Note: If kicked, we updated above. If just dribbling, update here.
+            // We can check if we just kicked, but updating again with same data is fine/idempotent for this tick
             if (b.lastTouch?.id !== p.id) {
                 b.previousTouch = b.lastTouch;
             }
             b.lastTouch = {
                 id: p.id,
                 team: p.team,
-                time: newState.timeRemaining // Use game time
+                time: newState.timeRemaining
             };
-            // Event
-            if (p.isKicking) {
-                events.push({ type: 'kick' });
-            } else {
-                events.push({ type: 'player' });
-            }
-        }
-        // 3. Kick Mechanic
-        if (p.isKicking) {
-            // Add strong impulse in normal direction
-            b.vel.x += nx * this.KICK_STRENGTH;
-            b.vel.y += ny * this.KICK_STRENGTH;
+            events.push({ type: 'player' });
         }
       }
     });

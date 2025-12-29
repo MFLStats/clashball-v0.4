@@ -11,7 +11,7 @@ import { CustomLobbyBanner } from '@/components/home/CustomLobbyBanner';
 import { AuthDialog } from '@/components/auth/AuthDialog';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
 import { Button } from '@/components/ui/button';
-import { Trophy, ArrowLeft, Crown, LogOut, BarChart2, Target, Shield, Swords, Users } from 'lucide-react';
+import { Trophy, ArrowLeft, Crown, LogOut, BarChart2, Target } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { api } from '@/lib/api';
@@ -21,12 +21,12 @@ import { OrientationLock } from '@/components/ui/orientation-lock';
 import { TournamentPage } from '@/pages/TournamentPage';
 import { Leaderboard } from '@/components/ranked/Leaderboard';
 import { SoundEngine } from '@/lib/audio';
-import { cn } from '@/lib/utils';
 import { GameModeSelector } from '@/components/game/GameModeSelector';
 type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'custom_lobby' | 'ranked' | 'tournament_mode' | 'tournament_lobby' | 'leaderboard';
 export function HomePage() {
   const [view, setView] = useState<ViewState>('lobby');
   const [selectedMode, setSelectedMode] = useState<GameMode>('1v1');
+  const [showAuth, setShowAuth] = useState(false);
   // STRICT ZUSTAND RULE: Select primitives individually
   const profile = useUserStore(s => s.profile);
   const isAuthenticated = useUserStore(s => s.isAuthenticated);
@@ -73,8 +73,37 @@ export function HomePage() {
     }
   };
   const startOnlineGame = (mode: GameMode) => {
+    if (!profile) {
+      setShowAuth(true);
+      toast.info('Please sign in or play as guest to join ranked matches');
+      return;
+    }
     setSelectedMode(mode);
     setView('online_game');
+  };
+  const handleOnlineSelectClick = () => {
+    if (!profile) {
+      setShowAuth(true);
+      toast.info('Please sign in or play as guest to play online');
+      return;
+    }
+    setView('online_select');
+  };
+  const handleCustomLobbyClick = () => {
+    if (!profile) {
+      setShowAuth(true);
+      toast.info('Please sign in or play as guest to join lobbies');
+      return;
+    }
+    setView('custom_lobby');
+  };
+  const handleRankedClick = () => {
+    if (!profile) {
+      setShowAuth(true);
+      toast.info('Please sign in to view your profile');
+      return;
+    }
+    setView('ranked');
   };
   const renderContent = () => {
     switch (view) {
@@ -104,7 +133,7 @@ export function HomePage() {
         );
       case 'online_select':
         return (
-          <GameModeSelector 
+          <GameModeSelector
             onSelect={startOnlineGame}
             onBack={() => setView('lobby')}
           />
@@ -194,15 +223,13 @@ export function HomePage() {
                                     <LogOut className="w-3 h-3" />
                                 </Button>
                             ) : (
-                                <AuthDialog trigger={
-                                    <Button variant="link" size="sm" className="h-6 px-2 text-primary font-bold hover:text-primary/80 text-xs">
-                                    Sign In
-                                    </Button>
-                                } />
+                                <Button variant="ghost" size="icon" className="h-6 w-6 ml-1 text-slate-500 hover:text-red-400 hover:bg-slate-800/50 rounded-full" onClick={logout}>
+                                    <LogOut className="w-3 h-3" />
+                                </Button>
                             )}
                         </div>
                     ) : (
-                        <AuthDialog />
+                        <AuthDialog open={showAuth} onOpenChange={setShowAuth} />
                     )}
                     <SettingsDialog />
                 </div>
@@ -214,8 +241,8 @@ export function HomePage() {
                     <TournamentBanner />
                     {/* Primary Actions Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-64">
-                        <PlayOnlineBanner onClick={() => setView('online_select')} />
-                        <CustomLobbyBanner onClick={() => setView('custom_lobby')} />
+                        <PlayOnlineBanner onClick={handleOnlineSelectClick} />
+                        <CustomLobbyBanner onClick={handleCustomLobbyClick} />
                     </div>
                 </div>
                 {/* Right Column: Secondary Actions */}
@@ -249,7 +276,7 @@ export function HomePage() {
                         </div>
                     </button>
                     <button
-                        onClick={() => setView('ranked')}
+                        onClick={handleRankedClick}
                         className="group relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-left shadow-lg border border-slate-800 transition-all hover:border-slate-700 hover:bg-slate-800/50 flex-1"
                     >
                         <div className="flex items-center gap-4">

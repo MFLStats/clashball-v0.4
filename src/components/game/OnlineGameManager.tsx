@@ -43,6 +43,20 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+  // Connection Timeout Logic
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (status === 'connecting' || status === 'searching') {
+        // Only timeout if we haven't found a match yet and connection seems stuck
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+            setStatus('error');
+            toast.error('Connection timed out. Please try again.');
+            wsRef.current?.close();
+        }
+      }
+    }, 15000); // 15 seconds timeout
+    return () => clearTimeout(timer);
+  }, [status]);
   const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
       case 'match_found': {
@@ -123,7 +137,11 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     return () => clearInterval(interval);
   }, []);
   useEffect(() => {
-    if (!profile) return;
+    if (!profile) {
+        toast.error("User profile missing. Cannot join queue.");
+        onExit();
+        return;
+    }
     // Connect to WebSocket
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
@@ -147,9 +165,14 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         console.error('Failed to parse WS message', e);
       }
     };
-    ws.onclose = () => {
-      // If we were searching and component unmounts/closes, we might want to handle that
-      // But here we just check if it was an error close
+    ws.onclose = (event) => {
+      if (!event.wasClean) {
+          console.warn('WebSocket closed unexpectedly', event.code, event.reason);
+          if (status !== 'error') {
+             setStatus('error');
+             toast.error('Disconnected from server');
+          }
+      }
     };
     ws.onerror = () => {
       setStatus('error');
@@ -162,7 +185,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         ws.close();
       }
     };
-  }, [profile, mode, handleMessage]);
+  }, [profile, mode, handleMessage, onExit]);
   const handleInput = (input: { move: { x: number; y: number }; kick: boolean }) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({

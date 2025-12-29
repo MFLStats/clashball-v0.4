@@ -7,13 +7,18 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUserStore } from '@/store/useUserStore';
 import { COUNTRIES } from '@/lib/countries';
-import { Loader2, LogIn, UserPlus } from 'lucide-react';
+import { Loader2, LogIn, UserPlus, Gamepad2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Separator } from '@/components/ui/separator';
 interface AuthDialogProps {
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
-export function AuthDialog({ trigger }: AuthDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function AuthDialog({ trigger, open: controlledOpen, onOpenChange: setControlledOpen }: AuthDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = controlledOpen ?? internalOpen;
+  const setIsOpen = setControlledOpen ?? setInternalOpen;
   const [isLoading, setIsLoading] = useState(false);
   // Login State
   const [loginEmail, setLoginEmail] = useState('');
@@ -25,6 +30,7 @@ export function AuthDialog({ trigger }: AuthDialogProps) {
   const [signupCountry, setSignupCountry] = useState('US');
   const login = useUserStore(s => s.login);
   const signup = useUserStore(s => s.signup);
+  const guestLogin = useUserStore(s => s.guestLogin);
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -49,6 +55,19 @@ export function AuthDialog({ trigger }: AuthDialogProps) {
         country: signupCountry
       });
       toast.success('Account created successfully!');
+      setIsOpen(false);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  const handleGuestLogin = async () => {
+    setIsLoading(true);
+    try {
+      const randomNum = Math.floor(Math.random() * 10000);
+      await guestLogin(`Guest ${randomNum}`);
+      toast.success('Playing as Guest');
       setIsOpen(false);
     } catch (err) {
       toast.error((err as Error).message);
@@ -153,7 +172,7 @@ export function AuthDialog({ trigger }: AuthDialogProps) {
                     {COUNTRIES.map((c) => (
                       <SelectItem key={c.code} value={c.code} className="focus:bg-white/10 focus:text-white">
                         <div className="flex items-center gap-2">
-                          <img 
+                          <img
                             src={`https://flagcdn.com/w20/${c.code.toLowerCase()}.png`}
                             srcSet={`https://flagcdn.com/w40/${c.code.toLowerCase()}.png 2x`}
                             width="20"
@@ -174,6 +193,23 @@ export function AuthDialog({ trigger }: AuthDialogProps) {
             </form>
           </TabsContent>
         </Tabs>
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <Separator className="w-full bg-white/10" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-slate-900 px-2 text-slate-400">Or continue as</span>
+          </div>
+        </div>
+        <Button 
+          variant="secondary" 
+          className="w-full bg-slate-800 hover:bg-slate-700 text-white border border-slate-700"
+          onClick={handleGuestLogin}
+          disabled={isLoading}
+        >
+          {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Gamepad2 className="w-4 h-4 mr-2" />}
+          Play as Guest
+        </Button>
       </DialogContent>
     </Dialog>
   );

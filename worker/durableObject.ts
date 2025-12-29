@@ -71,6 +71,10 @@ export class GlobalDurableObject extends DurableObject {
         try {
             switch (msg.type) {
                 case 'join_queue': {
+                    if (!msg.userId || !msg.mode) {
+                        ws.send(JSON.stringify({ type: 'error', message: 'Invalid queue request: Missing userId or mode' }));
+                        return;
+                    }
                     this.addToQueue(ws, msg.userId, msg.username, msg.mode);
                     break;
                 }

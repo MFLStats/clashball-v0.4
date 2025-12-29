@@ -11,6 +11,7 @@ interface UserState {
   refreshProfile: () => Promise<void>;
   login: (payload: AuthPayload) => Promise<void>;
   signup: (payload: AuthPayload) => Promise<void>;
+  guestLogin: (username?: string) => Promise<void>;
   logout: () => void;
   createTeam: (name: string) => Promise<void>;
   joinTeam: (code: string) => Promise<void>;
@@ -26,12 +27,15 @@ export const useUserStore = create<UserState>((set, get) => ({
     if (storedId) {
       set({ isLoading: true });
       try {
+        // Fetch profile, backend handles creation if it doesn't exist for ID
         const profile = await api.getProfile(storedId, 'Player');
         const teams = await api.getUserTeams(storedId);
-        set({ profile, teams, isAuthenticated: !!profile.email, isLoading: false });
+        set({ profile, teams, isAuthenticated: true, isLoading: false });
       } catch (e) {
         console.error('Failed to init user', e);
-        set({ isLoading: false });
+        // If init fails (e.g. ID invalid), clear storage
+        localStorage.removeItem('kickstar_user_id');
+        set({ profile: null, teams: [], isAuthenticated: false, isLoading: false });
       }
     }
   },
@@ -66,6 +70,19 @@ export const useUserStore = create<UserState>((set, get) => ({
       localStorage.setItem('kickstar_user_id', userId);
       const teams = await api.getUserTeams(userId);
       set({ profile, teams, isAuthenticated: true, isLoading: false });
+    } catch (e) {
+      set({ error: (e as Error).message, isLoading: false });
+      throw e;
+    }
+  },
+  guestLogin: async (username = 'Guest') => {
+    set({ isLoading: true, error: null });
+    try {
+      const userId = crypto.randomUUID();
+      // Create a profile for this guest ID
+      const profile = await api.getProfile(userId, username);
+      localStorage.setItem('kickstar_user_id', userId);
+      set({ profile, teams: [], isAuthenticated: true, isLoading: false });
     } catch (e) {
       set({ error: (e as Error).message, isLoading: false });
       throw e;

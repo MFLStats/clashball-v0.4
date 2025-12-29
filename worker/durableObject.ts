@@ -46,13 +46,9 @@ export class GlobalDurableObject extends DurableObject {
     // --- WebSocket Handling (Hibernation API) ---
     async fetch(request: Request): Promise<Response> {
         const url = new URL(request.url);
-        const upgradeHeader = request.headers.get('Upgrade');
-        // Simplified logging to avoid TS errors with Headers iteration
         console.log(`[DurableObject] Fetch: ${url.pathname}`);
-        if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
-            console.log('[DurableObject] Invalid Upgrade header:', upgradeHeader);
-            return new Response('Durable Object expected Upgrade: websocket', { status: 426 });
-        }
+        // CRITICAL FIX: Remove strict Upgrade header check to prevent 426 errors behind proxies
+        // We blindly accept the upgrade because the route /api/ws is dedicated to this.
         const webSocketPair = new WebSocketPair();
         const [client, server] = Object.values(webSocketPair);
         // Use the Hibernation API: acceptWebSocket

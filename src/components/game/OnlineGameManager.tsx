@@ -38,7 +38,6 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   // Use the robust GameSocket class
   const socketRef = useRef<GameSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const lastPingTimeRef = useRef<number>(0);
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -110,12 +109,6 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             }
         }
     };
-    const onPong = (msg: WSMessage) => {
-        if (msg.type === 'pong') {
-            const rtt = Date.now() - lastPingTimeRef.current;
-            setPing(rtt);
-        }
-    };
     // Register Listeners
     socket.on('match_found', onMatchFound);
     socket.on('match_started', onMatchFound);
@@ -125,7 +118,6 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     socket.on('game_over', onGameOver);
     socket.on('chat', onChat);
     socket.on('error', onError);
-    socket.on('pong', onPong);
     // Connect
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
@@ -140,13 +132,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             username
         });
     });
-    // Ping Loop (Managed by GameSocket internally for keepalive, but we can do manual ping for RTT display)
-    const pingInterval = setInterval(() => {
-        lastPingTimeRef.current = Date.now();
-        socket.send({ type: 'ping' });
-    }, 2000);
     return () => {
-        clearInterval(pingInterval);
         socket.disconnect();
     };
   }, [userId, username, mode, onExit]);
@@ -177,7 +163,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   }, []);
   const handleRetry = () => {
       // Force re-mount to reconnect
-      window.location.reload(); 
+      window.location.reload();
   };
   if (status === 'connecting' || status === 'searching') {
     return (

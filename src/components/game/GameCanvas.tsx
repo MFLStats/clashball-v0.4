@@ -308,6 +308,21 @@ export function GameCanvas({
         ctx.fillText('GOAL!', 0, 0);
         ctx.restore();
     }
+    // --- 8. Spectator Overlay ---
+    // Check if we are in online mode (externalState exists) and user is NOT playing
+    const isOnline = !!latestExternalStateRef.current;
+    const isSpectating = isOnline && currentUserId && !state.players.some(p => p.id === currentUserId);
+    if (isSpectating) {
+        ctx.save();
+        ctx.font = 'bold 24px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 4;
+        ctx.fillText('SPECTATING', width / 2, 20);
+        ctx.restore();
+    }
   }, [currentUserId, showNames]);
   // Game Loop
   useEffect(() => {

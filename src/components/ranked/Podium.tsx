@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { LeaderboardEntry } from '@shared/types';
 import { RankBadge } from './RankBadge';
-import { Crown, Medal, Trophy } from 'lucide-react';
+import { Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 interface PodiumProps {
   topThree: LeaderboardEntry[];
@@ -26,14 +26,14 @@ export function Podium({ topThree }: PodiumProps) {
   };
   const itemVariants = {
     hidden: { y: 50, opacity: 0 },
-    visible: { 
-      y: 0, 
+    visible: {
+      y: 0,
       opacity: 1,
-      transition: { type: "spring", stiffness: 100, damping: 12 }
+      transition: { type: "spring" as const, stiffness: 100, damping: 12 }
     }
   };
   return (
-    <motion.div 
+    <motion.div
       className="flex justify-center items-end gap-4 md:gap-8 h-[350px] mb-12 px-4"
       variants={containerVariants}
       initial="hidden"
@@ -48,8 +48,8 @@ export function Podium({ topThree }: PodiumProps) {
         const heightClass = isFirst ? "h-[220px]" : isSecond ? "h-[180px]" : "h-[150px]";
         // Color themes
         const colorClass = isFirst 
-          ? "from-yellow-500/20 to-amber-500/5 border-yellow-500/30 shadow-yellow-500/10" 
-          : isSecond 
+          ? "from-yellow-500/20 to-amber-500/5 border-yellow-500/30 shadow-yellow-500/10"
+          : isSecond
             ? "from-slate-300/20 to-slate-400/5 border-slate-400/30 shadow-slate-400/10"
             : "from-amber-700/20 to-orange-800/5 border-amber-700/30 shadow-amber-700/10";
         const glowColor = isFirst ? "bg-yellow-500" : isSecond ? "bg-slate-300" : "bg-amber-700";
@@ -63,7 +63,7 @@ export function Podium({ topThree }: PodiumProps) {
           );
         }
         return (
-          <motion.div 
+          <motion.div
             key={player.userId}
             variants={itemVariants}
             className="relative flex flex-col items-center w-full max-w-[140px] md:max-w-[180px]"
@@ -83,7 +83,7 @@ export function Podium({ topThree }: PodiumProps) {
                 )}>
                    {player.country ? (
                       <img 
-                        src={`https://flagcdn.com/w80/${player.country.toLowerCase()}.png`} 
+                        src={`https://flagcdn.com/w80/${player.country.toLowerCase()}.png`}
                         alt={player.country}
                         className="w-full h-full object-cover opacity-90"
                       />

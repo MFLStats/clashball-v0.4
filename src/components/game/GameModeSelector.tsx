@@ -78,7 +78,7 @@ export function GameModeSelector({ onSelect, onBack }: GameModeSelectorProps) {
       y: 0,
       opacity: 1,
       transition: {
-        type: "spring",
+        type: "spring" as const,
         stiffness: 100,
         damping: 15
       }
@@ -104,7 +104,7 @@ export function GameModeSelector({ onSelect, onBack }: GameModeSelectorProps) {
         <div className="w-32 hidden md:block" /> {/* Spacer */}
       </div>
       {/* Grid */}
-      <motion.div 
+      <motion.div
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto px-4 w-full"
         variants={containerVariants}
         initial="hidden"

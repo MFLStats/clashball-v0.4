@@ -1,14 +1,21 @@
 import React, { useMemo } from 'react';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MatchHistoryEntry } from '@shared/types';
 import { TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig } from '@/components/ui/chart';
 interface RatingChartProps {
   currentRating: number;
   recentMatches: MatchHistoryEntry[];
   className?: string;
 }
+const chartConfig = {
+  rating: {
+    label: "Rating",
+    color: "hsl(var(--primary))",
+  },
+} satisfies ChartConfig;
 export function RatingChart({ currentRating, recentMatches, className }: RatingChartProps) {
   const data = useMemo(() => {
     // Start with current rating as the latest point
@@ -62,46 +69,44 @@ export function RatingChart({ currentRating, recentMatches, className }: RatingC
       </CardHeader>
       <CardContent>
         <div className="h-[250px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
+          <ChartContainer config={chartConfig} className="h-full w-full">
             <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
-                <linearGradient id="colorRating" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                <linearGradient id="fillRating" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--color-rating)" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="var(--color-rating)" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-              <XAxis 
-                dataKey="date" 
-                stroke="#64748b" 
-                fontSize={12} 
-                tickLine={false} 
+              <XAxis
+                dataKey="date"
+                stroke="#64748b"
+                fontSize={12}
+                tickLine={false}
                 axisLine={false}
                 minTickGap={30}
               />
-              <YAxis 
-                stroke="#64748b" 
-                fontSize={12} 
-                tickLine={false} 
+              <YAxis
+                stroke="#64748b"
+                fontSize={12}
+                tickLine={false}
                 axisLine={false}
                 domain={[domainMin, domainMax]}
               />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#f8fafc' }}
-                itemStyle={{ color: '#3b82f6' }}
-                labelStyle={{ color: '#94a3b8' }}
+              <ChartTooltip
+                cursor={false}
+                content={<ChartTooltipContent hideLabel />}
               />
               <Area
-                type="monotone"
                 dataKey="rating"
-                stroke="#3b82f6"
+                type="monotone"
+                stroke="var(--color-rating)"
                 strokeWidth={3}
-                fillOpacity={1}
-                fill="url(#colorRating)"
+                fill="url(#fillRating)"
                 animationDuration={1500}
               />
             </AreaChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         </div>
       </CardContent>
     </Card>

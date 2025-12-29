@@ -13,6 +13,7 @@ import '@/index.css'
 import { HomePage } from '@/pages/HomePage'
 import { TournamentPage } from '@/pages/TournamentPage'
 import { DemoModePage } from '@/pages/DemoModePage'
+import { NotFoundPage } from '@/pages/NotFoundPage'
 const router = createBrowserRouter([
   {
     path: "/",
@@ -29,6 +30,11 @@ const router = createBrowserRouter([
     element: <DemoModePage />,
     errorElement: <RouteErrorBoundary />,
   },
+  {
+    path: "*",
+    element: <NotFoundPage />,
+    errorElement: <RouteErrorBoundary />,
+  }
 ]);
 // Do not touch this code
 createRoot(document.getElementById('root')!).render(

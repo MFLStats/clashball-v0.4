@@ -6,48 +6,24 @@ export interface ActiveEmote {
     emoji: string;
     startTime: number;
 }
-// Team Color Definitions for Gradients
-const TEAM_COLORS = {
-    red: { base: '#e56e56', light: '#ff9e86', dark: '#c0392b' },
-    blue: { base: '#5689e5', light: '#86b9ff', dark: '#2980b9' }
-};
-export function createFieldCache(width: number, height: number, quality: 'high' | 'low'): HTMLCanvasElement {
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return canvas;
-    // --- 1. Draw Field (Checkerboard Pattern) ---
-    const tileSize = 100;
-    const cols = Math.ceil(width / tileSize);
-    const rows = Math.ceil(height / tileSize);
-    for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-            // Checkerboard logic
-            const isDark = (row + col) % 2 === 1;
-            ctx.fillStyle = isDark ? '#6c8655' : '#718c5a';
-            ctx.fillRect(col * tileSize, row * tileSize, tileSize, tileSize);
-        }
+export function drawField(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    // --- 1. Draw Field (Striped Turf) ---
+    const stripeCount = 7;
+    const stripeWidth = width / stripeCount;
+    for (let i = 0; i < stripeCount; i++) {
+        ctx.fillStyle = i % 2 === 0 ? '#718c5a' : '#6c8655';
+        ctx.fillRect(i * stripeWidth, 0, stripeWidth, height);
     }
-    // --- 1.5 Vignette Effect (Stronger for depth) ---
-    if (quality === 'high') {
-        const gradient = ctx.createRadialGradient(width / 2, height / 2, height / 3, width / 2, height / 2, width * 0.9);
-        gradient.addColorStop(0, 'transparent');
-        gradient.addColorStop(0.7, 'rgba(0,0,0,0.1)');
-        gradient.addColorStop(1, 'rgba(0,0,0,0.4)');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-    }
-    return canvas;
-}
-export function drawField(ctx: CanvasRenderingContext2D, fieldCache: HTMLCanvasElement) {
-    ctx.drawImage(fieldCache, 0, 0);
+    // --- 1.5 Vignette Effect ---
+    const gradient = ctx.createRadialGradient(width / 2, height / 2, height / 3, width / 2, height / 2, width * 0.8);
+    gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(1, 'rgba(0,0,0,0.3)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
 }
 export function drawLines(ctx: CanvasRenderingContext2D, width: number, height: number, scaleX: number) {
-    // --- 2. Draw Lines (White with Glow) ---
-    ctx.shadowColor = 'rgba(255, 255, 255, 0.3)';
-    ctx.shadowBlur = 10;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    // --- 2. Draw Lines (White) ---
+    ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
     // Border
@@ -61,8 +37,6 @@ export function drawLines(ctx: CanvasRenderingContext2D, width: number, height: 
     ctx.beginPath();
     ctx.arc(width / 2, height / 2, 70 * scaleX, 0, Math.PI * 2);
     ctx.stroke();
-    // Reset Shadow
-    ctx.shadowBlur = 0;
 }
 export function drawGoalNet(ctx: CanvasRenderingContext2D, field: Field, scaleX: number, scaleY: number) {
     const goalH = field.goalHeight * scaleY;
@@ -79,9 +53,9 @@ export function drawGoalNet(ctx: CanvasRenderingContext2D, field: Field, scaleX:
         ctx.lineTo(xBack, goalBottom - 10);
         ctx.lineTo(xFront, goalBottom);
         ctx.closePath();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.lineWidth = 2;
         ctx.stroke();
         // Draw Grid Pattern
@@ -98,7 +72,7 @@ export function drawGoalNet(ctx: CanvasRenderingContext2D, field: Field, scaleX:
             ctx.moveTo(x, goalTop);
             ctx.lineTo(x, goalBottom);
         }
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
         ctx.lineWidth = 1;
         ctx.stroke();
     };
@@ -138,17 +112,11 @@ export function drawGoalPosts(ctx: CanvasRenderingContext2D, field: Field, scale
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
         ctx.stroke();
-        // Posts (Circles with Gradient)
+        // Posts (Circles)
         field.goalPosts.forEach(post => {
-            const px = post.pos.x * scaleX;
-            const py = post.pos.y * scaleY;
-            const pr = post.radius * scaleX;
-            const gradient = ctx.createRadialGradient(px - pr * 0.3, py - pr * 0.3, pr * 0.1, px, py, pr);
-            gradient.addColorStop(0, '#f1f5f9'); // Slate-100
-            gradient.addColorStop(1, '#94a3b8'); // Slate-400
             ctx.beginPath();
-            ctx.arc(px, py, pr, 0, Math.PI * 2);
-            ctx.fillStyle = gradient;
+            ctx.arc(post.pos.x * scaleX, post.pos.y * scaleY, post.radius * scaleX, 0, Math.PI * 2);
+            ctx.fillStyle = '#e2e8f0'; // Slate-200
             ctx.fill();
             ctx.strokeStyle = '#000000';
             ctx.lineWidth = 2;
@@ -163,58 +131,51 @@ export function drawPlayers(
     showNames: boolean,
     scaleX: number,
     scaleY: number,
-    isLocalGame: boolean,
-    quality: 'high' | 'low'
+    isLocalGame: boolean
 ) {
     players.forEach((p, index) => {
         const x = p.pos.x * scaleX;
         const y = p.pos.y * scaleY;
         const r = p.radius * scaleX;
-        // Kick Range Ring (Visual Hint)
+        // Classic Haxball Colors
+        const color = p.team === 'red' ? '#e56e56' : '#5689e5';
+        // Kick Range Ring (New Feature)
+        // We need ball radius to calculate kick range accurately, but for visual we can approximate or pass ball radius if needed.
+        // Assuming standard ball radius for visual hint if not passed, but let's use a constant or pass it.
+        // Ideally we pass ball radius, but PhysicsEngine.BALL_RADIUS is available.
         const kickRange = (p.radius + PhysicsEngine.BALL_RADIUS + PhysicsEngine.KICK_TOLERANCE) * scaleX;
         ctx.beginPath();
         ctx.arc(x, y, kickRange, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
         ctx.stroke();
         ctx.setLineDash([]); // Reset dash
         // Kick Indicator (White Ring on Player)
         if (p.isKicking) {
             ctx.beginPath();
-            ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+            ctx.arc(x, y, r + 6, 0, Math.PI * 2);
             ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 3;
+            ctx.lineWidth = 4;
             ctx.stroke();
         }
         // Body
-        const colors = p.team === 'red' ? TEAM_COLORS.red : TEAM_COLORS.blue;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
-        if (quality === 'high') {
-            const gradient = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
-            gradient.addColorStop(0, colors.light);
-            gradient.addColorStop(0.5, colors.base);
-            gradient.addColorStop(1, colors.dark);
-            ctx.fillStyle = gradient;
-        } else {
-            ctx.fillStyle = colors.base;
-        }
+        ctx.fillStyle = color;
         ctx.fill();
         // Stroke (Black Border)
         ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.stroke();
         // Jersey Number (Custom or First 2 chars of username)
         const jerseyText = p.jersey || p.username.substring(0, 2).toUpperCase();
         ctx.font = 'bold 16px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        if (quality === 'high') {
-            ctx.shadowColor = 'rgba(0,0,0,0.5)';
-            ctx.shadowBlur = 2;
-        }
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 2;
         ctx.fillText(jerseyText, x, y);
         ctx.shadowBlur = 0;
         // Username (Conditional)
@@ -223,20 +184,20 @@ export function drawPlayers(
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom'; // Changed to bottom to sit above player
             ctx.fillStyle = '#ffffff';
-            if (quality === 'high') {
-                ctx.shadowColor = 'rgba(0,0,0,0.8)';
-                ctx.shadowBlur = 4;
-            }
-            ctx.fillText(p.username, x, y - r - 8);
+            ctx.shadowColor = 'rgba(0,0,0,0.8)';
+            ctx.shadowBlur = 4;
+            ctx.fillText(p.username, x, y - r - 10);
             ctx.shadowBlur = 0; // Reset shadow
         }
         // "YOU" Indicator
+        // If online: match ID.
+        // If local: match index 0 (Red 0).
         const isLocalPlayer = isLocalGame && index === 0;
         if ((currentUserId && p.id === currentUserId) || isLocalPlayer) {
             ctx.beginPath();
-            ctx.moveTo(x, y - r - 25);
-            ctx.lineTo(x - 5, y - r - 35);
-            ctx.lineTo(x + 5, y - r - 35);
+            ctx.moveTo(x, y - r - 30);
+            ctx.lineTo(x - 6, y - r - 40);
+            ctx.lineTo(x + 6, y - r - 40);
             ctx.closePath();
             ctx.fillStyle = '#fbbf24'; // Amber-400
             ctx.fill();
@@ -246,32 +207,21 @@ export function drawPlayers(
         }
     });
 }
-export function drawBall(ctx: CanvasRenderingContext2D, ball: Ball, scaleX: number, scaleY: number, quality: 'high' | 'low') {
+export function drawBall(ctx: CanvasRenderingContext2D, ball: Ball, scaleX: number, scaleY: number) {
+    // Explicitly reset shadow properties to prevent blur bleed from text
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     const bx = ball.pos.x * scaleX;
     const by = ball.pos.y * scaleY;
     const br = ball.radius * scaleX;
-    // Shadow (Contact Shadow) - Only in High Quality
-    if (quality === 'high') {
-        ctx.beginPath();
-        ctx.ellipse(bx, by + br * 0.2, br, br * 0.6, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.fill();
-    }
-    // Ball Body
     ctx.beginPath();
     ctx.arc(bx, by, br, 0, Math.PI * 2);
-    if (quality === 'high') {
-        const gradient = ctx.createRadialGradient(bx - br * 0.3, by - br * 0.3, br * 0.1, bx, by, br);
-        gradient.addColorStop(0, '#ffffff');
-        gradient.addColorStop(1, '#cbd5e1'); // Slate-300
-        ctx.fillStyle = gradient;
-    } else {
-        ctx.fillStyle = '#ffffff';
-    }
+    ctx.fillStyle = '#ffffff';
     ctx.fill();
-    // Stroke
     ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
     ctx.stroke();
 }
 export function drawOverlays(

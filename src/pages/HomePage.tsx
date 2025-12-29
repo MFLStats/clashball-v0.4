@@ -3,6 +3,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { GameCanvas } from '@/components/game/GameCanvas';
 import { Dashboard } from '@/components/ranked/Dashboard';
 import { OnlineGameManager } from '@/components/game/OnlineGameManager';
+import { CustomLobbyManager } from '@/components/game/CustomLobbyManager';
 import { TournamentManager } from '@/components/tournament/TournamentManager';
 import { TournamentBanner } from '@/components/tournament/TournamentBanner';
 import { AuthDialog } from '@/components/auth/AuthDialog';
@@ -14,7 +15,7 @@ import { toast } from 'sonner';
 import { GameMode } from '@shared/types';
 import { OrientationLock } from '@/components/ui/orientation-lock';
 import { TournamentPage } from '@/pages/TournamentPage';
-type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'ranked' | 'tournament_mode' | 'tournament_lobby';
+type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'custom_lobby' | 'ranked' | 'tournament_mode' | 'tournament_lobby';
 export function HomePage() {
   const [view, setView] = useState<ViewState>('lobby');
   const [selectedMode, setSelectedMode] = useState<GameMode>('1v1');
@@ -66,8 +67,8 @@ export function HomePage() {
         return (
           <div className="animate-fade-in space-y-6">
             <div className="flex items-center justify-between">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-100 text-slate-600 rounded-lg"
                 disabled={isProcessing}
@@ -79,7 +80,7 @@ export function HomePage() {
               </h2>
               <div className="w-24" />
             </div>
-            <GameCanvas 
+            <GameCanvas
                 onGameEnd={handleLocalGameEnd}
                 winningScore={3}
                 playerNames={{ red: 'You', blue: 'Bot (1200)' }}
@@ -90,8 +91,8 @@ export function HomePage() {
         return (
           <div className="animate-fade-in space-y-8">
              <div className="flex items-center justify-between">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-100 text-slate-600 rounded-lg"
               >
@@ -119,12 +120,18 @@ export function HomePage() {
         );
       case 'online_game':
         return (
-            <OnlineGameManager 
-                mode={selectedMode} 
+            <OnlineGameManager
+                mode={selectedMode}
                 onExit={async () => {
                     await refreshProfile();
                     setView('lobby');
-                }} 
+                }}
+            />
+        );
+      case 'custom_lobby':
+        return (
+            <CustomLobbyManager
+                onExit={() => setView('lobby')}
             />
         );
       case 'tournament_mode':
@@ -139,8 +146,8 @@ export function HomePage() {
         return (
           <div className="animate-fade-in space-y-6">
             <div className="flex items-center justify-between">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-100 text-slate-600 rounded-lg"
               >
@@ -164,7 +171,7 @@ export function HomePage() {
                 <Trophy className="w-16 h-16 text-haxball-blue" />
               </div>
               <h1 className="text-5xl md:text-7xl font-display font-bold text-slate-800 tracking-tight">
-                KickStar <span className="text-haxball-blue">League</span>
+                Clash<span className="text-haxball-blue">Ball</span>
               </h1>
               <p className="text-xl text-slate-500 font-medium max-w-md mx-auto">
                 Classic physics-based soccer. Pure skill, no gimmicks.
@@ -174,7 +181,7 @@ export function HomePage() {
                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm border border-slate-200 animate-fade-in">
                     <div className={`w-3 h-3 rounded-full ${stats.tier === 'Bronze' ? 'bg-amber-600' : 'bg-haxball-blue'}`} />
                     {profile.country && (
-                      <img 
+                      <img
                         src={`https://flagcdn.com/w20/${profile.country.toLowerCase()}.png`}
                         alt={profile.country}
                         className="w-5 h-auto rounded-sm"
@@ -203,14 +210,21 @@ export function HomePage() {
             </div>
             {/* Action Buttons */}
             <div className="flex flex-col gap-4 w-full max-w-md">
-              <button 
+              <button
                 onClick={() => setView('online_select')}
                 className="btn-kid-primary flex items-center justify-center gap-3 text-lg group w-full"
               >
                 <Globe className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
                 Play Online
               </button>
-              <button 
+              <button
+                onClick={() => setView('custom_lobby')}
+                className="btn-kid-secondary flex items-center justify-center gap-3 text-lg group w-full border-2 border-slate-300 hover:border-haxball-blue hover:text-haxball-blue"
+              >
+                <Users className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
+                Custom Lobby
+              </button>
+              <button
                 onClick={() => setView('tournament_mode')}
                 className="btn-kid-action flex items-center justify-center gap-3 text-lg group w-full"
               >
@@ -218,14 +232,14 @@ export function HomePage() {
                 Tournament Mode
               </button>
               <div className="flex gap-4">
-                <button 
+                <button
                     onClick={() => setView('local_game')}
                     className="btn-kid-secondary flex-1 flex items-center justify-center gap-3 text-lg"
                 >
                     <Monitor className="w-6 h-6" />
                     Practice
                 </button>
-                <button 
+                <button
                     onClick={() => setView('ranked')}
                     className="btn-kid-secondary flex-1 flex items-center justify-center gap-3 text-lg"
                 >
@@ -240,7 +254,7 @@ export function HomePage() {
                 <div className="w-2 h-2 rounded-full bg-green-500" />
                 Online
               </span>
-              <span>v1.1.0 Auth</span>
+              <span>v1.2.0 ClashBall</span>
             </div>
           </div>
         );

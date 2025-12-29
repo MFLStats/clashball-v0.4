@@ -1,8 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
-import type { 
-    DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage, 
-    GameMode, ModeStats, TeamProfile, AuthPayload, AuthResponse, 
-    TournamentState, TournamentParticipant 
+import type {
+    DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage,
+    GameMode, ModeStats, TeamProfile, AuthPayload, AuthResponse,
+    TournamentState, TournamentParticipant, LobbyState
 } from '@shared/types';
 import { MOCK_ITEMS } from '@shared/mock-data';
 import { Match } from './match';
@@ -11,11 +11,18 @@ const TAU = 0.5;
 const VOLATILITY_DEFAULT = 0.06;
 const RATING_DEFAULT = 1200;
 const RD_DEFAULT = 350;
+interface Lobby {
+    code: string;
+    hostId: string;
+    players: { id: string; ws: WebSocket; username: string }[];
+    status: 'waiting' | 'playing';
+}
 export class GlobalDurableObject extends DurableObject {
     // State
     queues: Map<GameMode, { userId: string; ws: WebSocket; username: string }[]> = new Map();
     matches: Map<string, Match> = new Map();
-    sessions: Map<WebSocket, { userId: string; matchId?: string }> = new Map();
+    sessions: Map<WebSocket, { userId: string; matchId?: string; lobbyCode?: string }> = new Map();
+    lobbies: Map<string, Lobby> = new Map();
     // Tournament State (In-memory for active pool, could be persisted if needed)
     tournamentParticipants: TournamentParticipant[] = [];
     constructor(ctx: DurableObjectState, env: any) {
@@ -59,65 +66,117 @@ export class GlobalDurableObject extends DurableObject {
         });
     }
     handleMessage(ws: WebSocket, msg: WSMessage) {
-        switch (msg.type) {
-            case 'join_queue': {
-                this.addToQueue(ws, msg.userId, msg.username, msg.mode);
-                break;
-            }
-            case 'leave_queue': {
-                this.removeFromQueue(ws);
-                break;
-            }
-            case 'input': {
-                const session = this.sessions.get(ws);
-                if (session && session.matchId) {
-                    const match = this.matches.get(session.matchId);
-                    if (match) {
-                        match.handleInput(session.userId, { move: msg.move, kick: msg.kick });
-                    }
+        try {
+            switch (msg.type) {
+                case 'join_queue': {
+                    this.addToQueue(ws, msg.userId, msg.username, msg.mode);
+                    break;
                 }
-                break;
-            }
-            case 'ping': {
-                ws.send(JSON.stringify({ type: 'pong' }));
-                break;
-            }
-            case 'chat': {
-                const session = this.sessions.get(ws);
-                if (session && session.matchId) {
-                    const match = this.matches.get(session.matchId);
-                    if (match) {
-                        match.handleChat(session.userId, msg.message);
-                    }
+                case 'leave_queue': {
+                    this.removeFromQueue(ws);
+                    break;
                 }
-                break;
+                case 'create_lobby': {
+                    this.handleCreateLobby(ws, msg.userId, msg.username);
+                    break;
+                }
+                case 'join_lobby': {
+                    this.handleJoinLobby(ws, msg.code, msg.userId, msg.username);
+                    break;
+                }
+                case 'start_lobby_match': {
+                    this.handleStartLobbyMatch(ws);
+                    break;
+                }
+                case 'input': {
+                    const session = this.sessions.get(ws);
+                    if (session && session.matchId) {
+                        const match = this.matches.get(session.matchId);
+                        if (match) {
+                            match.handleInput(session.userId, { move: msg.move, kick: msg.kick });
+                        }
+                    }
+                    break;
+                }
+                case 'ping': {
+                    ws.send(JSON.stringify({ type: 'pong' }));
+                    break;
+                }
+                case 'chat': {
+                    const session = this.sessions.get(ws);
+                    if (session && session.matchId) {
+                        const match = this.matches.get(session.matchId);
+                        if (match) {
+                            match.handleChat(session.userId, msg.message);
+                        }
+                    }
+                    break;
+                }
             }
+        } catch (err) {
+            console.error("Error handling message:", err);
+            ws.send(JSON.stringify({ type: 'error', message: 'Internal server error processing message' }));
         }
     }
     handleDisconnect(ws: WebSocket) {
         this.removeFromQueue(ws);
         const session = this.sessions.get(ws);
+        // Handle Lobby Disconnect
+        if (session && session.lobbyCode) {
+            const lobby = this.lobbies.get(session.lobbyCode);
+            if (lobby) {
+                lobby.players = lobby.players.filter(p => p.ws !== ws);
+                if (lobby.players.length === 0) {
+                    this.lobbies.delete(session.lobbyCode);
+                } else {
+                    // If host left, assign new host
+                    if (lobby.hostId === session.userId) {
+                        lobby.hostId = lobby.players[0].id;
+                    }
+                    this.broadcastLobbyUpdate(lobby);
+                }
+            }
+        }
         if (session && session.matchId) {
             // Handle player disconnect during match (pause? forfeit?)
             // For MVP, we just let the match continue or end
         }
         this.sessions.delete(ws);
     }
+    // --- Queue Logic ---
     addToQueue(ws: WebSocket, userId: string, username: string, mode: GameMode) {
         // Remove from other queues first
         this.removeFromQueue(ws);
         const queue = this.queues.get(mode) || [];
-        queue.push({ userId, ws, username });
-        this.queues.set(mode, queue);
-        this.sessions.set(ws, { userId });
-        this.checkQueue(mode);
+        // Prevent duplicates
+        if (!queue.find(p => p.userId === userId)) {
+            queue.push({ userId, ws, username });
+            this.queues.set(mode, queue);
+            this.sessions.set(ws, { userId });
+            // Broadcast queue update
+            this.broadcastQueueStatus(mode);
+            this.checkQueue(mode);
+        }
     }
     removeFromQueue(ws: WebSocket) {
+        let updatedMode: GameMode | null = null;
         this.queues.forEach((queue, mode) => {
             const idx = queue.findIndex(p => p.ws === ws);
             if (idx !== -1) {
                 queue.splice(idx, 1);
+                updatedMode = mode;
             }
+        });
+        if (updatedMode) {
+            this.broadcastQueueStatus(updatedMode);
+        }
+    }
+    broadcastQueueStatus(mode: GameMode) {
+        const queue = this.queues.get(mode) || [];
+        const count = queue.length;
+        const msg = JSON.stringify({ type: 'queue_update', count });
+        queue.forEach(p => {
+            try { p.ws.send(msg); } catch(e) {}
         });
     }
     checkQueue(mode: GameMode) {
@@ -125,9 +184,91 @@ export class GlobalDurableObject extends DurableObject {
         const requiredPlayers = mode === '1v1' ? 2 : mode === '2v2' ? 4 : mode === '3v3' ? 6 : 8;
         if (queue.length >= requiredPlayers) {
             const players = queue.splice(0, requiredPlayers);
+            // Update queue status for remaining players
+            this.broadcastQueueStatus(mode);
             this.startMatch(players, mode);
         }
     }
+    // --- Lobby Logic ---
+    handleCreateLobby(ws: WebSocket, userId: string, username: string) {
+        // Generate 6-char code
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let code = '';
+        for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+        // Ensure uniqueness (simple check)
+        while (this.lobbies.has(code)) {
+            code = '';
+            for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        const lobby: Lobby = {
+            code,
+            hostId: userId,
+            players: [{ id: userId, ws, username }],
+            status: 'waiting'
+        };
+        this.lobbies.set(code, lobby);
+        this.sessions.set(ws, { userId, lobbyCode: code });
+        this.broadcastLobbyUpdate(lobby);
+    }
+    handleJoinLobby(ws: WebSocket, code: string, userId: string, username: string) {
+        const lobby = this.lobbies.get(code.toUpperCase());
+        if (!lobby) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Lobby not found' }));
+            return;
+        }
+        if (lobby.status !== 'waiting') {
+            ws.send(JSON.stringify({ type: 'error', message: 'Match already in progress' }));
+            return;
+        }
+        if (lobby.players.length >= 8) { // Max 4v4
+            ws.send(JSON.stringify({ type: 'error', message: 'Lobby is full' }));
+            return;
+        }
+        // Add player
+        lobby.players.push({ id: userId, ws, username });
+        this.sessions.set(ws, { userId, lobbyCode: code });
+        this.broadcastLobbyUpdate(lobby);
+    }
+    handleStartLobbyMatch(ws: WebSocket) {
+        const session = this.sessions.get(ws);
+        if (!session || !session.lobbyCode) return;
+        const lobby = this.lobbies.get(session.lobbyCode);
+        if (!lobby) return;
+        if (lobby.hostId !== session.userId) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Only host can start match' }));
+            return;
+        }
+        if (lobby.players.length < 2) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Need at least 2 players' }));
+            return;
+        }
+        lobby.status = 'playing';
+        this.broadcastLobbyUpdate(lobby);
+        // Determine mode based on player count
+        const count = lobby.players.length;
+        const mode: GameMode = count <= 2 ? '1v1' : count <= 4 ? '2v2' : count <= 6 ? '3v3' : '4v4';
+        // Start Match
+        // We need to map lobby players to match players format
+        const matchPlayers = lobby.players.map(p => ({
+            userId: p.id,
+            ws: p.ws,
+            username: p.username
+        }));
+        this.startMatch(matchPlayers, mode);
+    }
+    broadcastLobbyUpdate(lobby: Lobby) {
+        const state: LobbyState = {
+            code: lobby.code,
+            hostId: lobby.hostId,
+            players: lobby.players.map(p => ({ id: p.id, username: p.username })),
+            status: lobby.status
+        };
+        const msg = JSON.stringify({ type: 'lobby_update', state });
+        lobby.players.forEach(p => {
+            try { p.ws.send(msg); } catch(e) {}
+        });
+    }
+    // --- Match Logic ---
     startMatch(players: { userId: string; ws: WebSocket; username: string }[], mode: GameMode) {
         const matchId = crypto.randomUUID();
         const matchPlayers = players.map((p, i) => ({

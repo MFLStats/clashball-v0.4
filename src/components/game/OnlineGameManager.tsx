@@ -11,6 +11,7 @@ import { SoundEngine } from '@/lib/audio';
 interface OnlineGameManagerProps {
   mode: GameMode;
   onExit: () => void;
+  matchId?: string; // Optional: If provided, we are reconnecting or joining specific match
 }
 interface ChatMessage {
   id: string;
@@ -18,9 +19,10 @@ interface ChatMessage {
   message: string;
   team: 'red' | 'blue';
 }
-export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
+export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerProps) {
   const profile = useUserStore(s => s.profile);
   const [status, setStatus] = useState<'connecting' | 'searching' | 'playing' | 'error'>('connecting');
+  const [queueCount, setQueueCount] = useState(0);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -45,6 +47,10 @@ export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
         matchInfoRef.current = info;
         setStatus('playing');
         toast.success(`Match Found! You are Team ${msg.team.toUpperCase()}`);
+        break;
+      }
+      case 'queue_update': {
+        setQueueCount(msg.count);
         break;
       }
       case 'game_state': {
@@ -169,6 +175,11 @@ export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
             {status === 'connecting' ? 'Connecting to Server...' : 'Searching for Opponent...'}
           </h2>
           <p className="text-slate-500">Mode: {mode}</p>
+          {queueCount > 0 && (
+              <p className="text-sm font-bold text-haxball-blue animate-pulse">
+                  {queueCount} Player{queueCount !== 1 ? 's' : ''} in Queue
+              </p>
+          )}
         </div>
         <Button variant="ghost" onClick={onExit}>Cancel</Button>
       </div>

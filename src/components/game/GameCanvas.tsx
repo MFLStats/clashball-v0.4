@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Play, RotateCcw, Trophy } from 'lucide-react';
 import { TouchControls } from './TouchControls';
 import { SoundEngine } from '@/lib/audio';
-
 interface GameCanvasProps {
   onGameEnd?: (winner: 'red' | 'blue') => void;
   winningScore?: number;
@@ -15,7 +14,6 @@ interface GameCanvasProps {
   playerNames?: { red: string; blue: string };
   currentUserId?: string;
 }
-
 export function GameCanvas({
   onGameEnd,
   winningScore = 3,
@@ -37,11 +35,9 @@ export function GameCanvas({
   });
   const lastTimeRef = useRef<number>(0);
   const latestExternalStateRef = useRef<GameState | null>(null);
-
   const [score, setScore] = useState({ red: 0, blue: 0 });
   const [isPaused, setIsPaused] = useState(false);
   const [gameOver, setGameOver] = useState<'red' | 'blue' | null>(null);
-
   // Initialize Audio on Mount
   useEffect(() => {
     const initAudio = () => SoundEngine.init();
@@ -52,12 +48,10 @@ export function GameCanvas({
       window.removeEventListener('keydown', initAudio);
     };
   }, []);
-
   // Sync external state ref
   useEffect(() => {
     latestExternalStateRef.current = externalState || null;
   }, [externalState]);
-
   // Handle Game Over Logic
   const handleGameOver = useCallback((winner: 'red' | 'blue') => {
     setGameOver(winner);
@@ -70,11 +64,14 @@ export function GameCanvas({
     });
     if (onGameEnd) onGameEnd(winner);
   }, [onGameEnd]);
-
   // Input Handling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (gameOver) return;
+      // Prevent scrolling with Space
+      if (e.code === 'Space') {
+        e.preventDefault();
+      }
       keysRef.current[e.code] = true;
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -87,7 +84,6 @@ export function GameCanvas({
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, [gameOver]);
-
   // Update local names if provided
   useEffect(() => {
     if (!externalState && playerNames) {
@@ -98,21 +94,17 @@ export function GameCanvas({
         if (p2) p2.username = playerNames.blue;
     }
   }, [playerNames, externalState]);
-
   // Handle Touch Input Update
   const handleTouchUpdate = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
     touchInputRef.current = input;
   }, []);
-
   // Render Function (Wrapped in useCallback to fix lint error)
   const render = useCallback((ctx: CanvasRenderingContext2D, state: GameState) => {
     const { width, height } = ctx.canvas;
     const scaleX = width / state.field.width;
     const scaleY = height / state.field.height;
-
     // Clear
     ctx.clearRect(0, 0, width, height);
-
     // --- 1. Draw Field (Striped Turf) ---
     const stripeCount = 7;
     const stripeWidth = width / stripeCount;
@@ -120,34 +112,27 @@ export function GameCanvas({
         ctx.fillStyle = i % 2 === 0 ? '#718c5a' : '#6c8655';
         ctx.fillRect(i * stripeWidth, 0, stripeWidth, height);
     }
-
     // --- 2. Draw Lines (White) ---
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
-
     // Border
     ctx.strokeRect(5, 5, width - 10, height - 10);
-
     // Center Line
     ctx.beginPath();
     ctx.moveTo(width / 2, 5);
     ctx.lineTo(width / 2, height - 5);
     ctx.stroke();
-
     // Center Circle
     ctx.beginPath();
     ctx.arc(width / 2, height / 2, 70 * scaleX, 0, Math.PI * 2);
     ctx.stroke();
-
     // --- 3. Draw Goals ---
     const goalH = state.field.goalHeight * scaleY;
     const goalTop = (height - goalH) / 2;
-
     // Goal Posts (Simple Black Lines)
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 4;
-
     // Left Goal
     ctx.beginPath();
     ctx.moveTo(5, goalTop);
@@ -155,7 +140,6 @@ export function GameCanvas({
     ctx.lineTo(0, goalTop + goalH);
     ctx.lineTo(5, goalTop + goalH);
     ctx.stroke();
-
     // Right Goal
     ctx.beginPath();
     ctx.moveTo(width - 5, goalTop);
@@ -163,36 +147,35 @@ export function GameCanvas({
     ctx.lineTo(width, goalTop + goalH);
     ctx.lineTo(width - 5, goalTop + goalH);
     ctx.stroke();
-
     // --- 4. Draw Players ---
     state.players.forEach(p => {
       const x = p.pos.x * scaleX;
       const y = p.pos.y * scaleY;
       const r = p.radius * scaleX;
-
       // Classic Haxball Colors
       const color = p.team === 'red' ? '#e56e56' : '#5689e5';
-
-      // Kick Indicator (White Ring)
+      // Kick Indicator (White Ring + Glow)
       if (p.isKicking) {
         ctx.beginPath();
-        ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+        ctx.arc(x, y, r + 6, 0, Math.PI * 2);
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 4;
         ctx.stroke();
+        // Glow effect
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
       }
-
       // Body
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
-
       // Stroke (Black Border)
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 3;
       ctx.stroke();
-
       // Username
       ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'center';
@@ -201,7 +184,6 @@ export function GameCanvas({
       ctx.shadowBlur = 4;
       ctx.fillText(p.username, x, y - r - 10);
       ctx.shadowBlur = 0; // Reset shadow
-
       // "YOU" Indicator
       if (currentUserId && p.id === currentUserId) {
           ctx.beginPath();
@@ -216,13 +198,11 @@ export function GameCanvas({
           ctx.stroke();
       }
     });
-
     // --- 5. Draw Ball ---
     const b = state.ball;
     const bx = b.pos.x * scaleX;
     const by = b.pos.y * scaleY;
     const br = b.radius * scaleX;
-
     ctx.beginPath();
     ctx.arc(bx, by, br, 0, Math.PI * 2);
     ctx.fillStyle = '#ffffff';
@@ -231,16 +211,13 @@ export function GameCanvas({
     ctx.lineWidth = 2.5;
     ctx.stroke();
   }, [currentUserId]);
-
   // Game Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
-
     // Initialize time
     lastTimeRef.current = performance.now();
-
     const loop = () => {
       if (isPaused || gameOver) {
         if (!gameOver) {
@@ -249,25 +226,20 @@ export function GameCanvas({
         }
         return;
       }
-
       // Calculate Delta Time
       const now = performance.now();
       let dt = (now - lastTimeRef.current) / 1000; // Seconds
       lastTimeRef.current = now;
-
       // Cap dt to prevent physics explosions (e.g. tab backgrounded)
       if (dt > 0.1) dt = 0.1;
-
       // 1. Process Input
       const p1Input = { move: { x: 0, y: 0 }, kick: false };
-
       // Keyboard Input
       if (keysRef.current['ArrowUp'] || keysRef.current['KeyW']) p1Input.move.y -= 1;
       if (keysRef.current['ArrowDown'] || keysRef.current['KeyS']) p1Input.move.y += 1;
       if (keysRef.current['ArrowLeft'] || keysRef.current['KeyA']) p1Input.move.x -= 1;
       if (keysRef.current['ArrowRight'] || keysRef.current['KeyD']) p1Input.move.x += 1;
       if (keysRef.current['Space'] || keysRef.current['KeyX']) p1Input.kick = true;
-
       // Touch Input (Merge/Override)
       if (Math.abs(touchInputRef.current.move.x) > 0 || Math.abs(touchInputRef.current.move.y) > 0) {
         p1Input.move = touchInputRef.current.move;
@@ -275,21 +247,18 @@ export function GameCanvas({
       if (touchInputRef.current.kick) {
         p1Input.kick = true;
       }
-
       if (onInput) {
         // Online Mode: Send input to server
         onInput(p1Input);
       } else {
         // Local Mode: Update local ref
         gameStateRef.current.players[0].input = p1Input;
-
         // Bot Logic for P2 (Local only)
         const ball = gameStateRef.current.ball;
         const p2 = gameStateRef.current.players[1];
         const dx = ball.pos.x - p2.pos.x;
         const dy = ball.pos.y - p2.pos.y;
         const dist = Math.sqrt(dx*dx + dy*dy);
-
         // Difficulty Settings
         let reactionDist = 400;
         let kickChance = 0.05;
@@ -300,7 +269,6 @@ export function GameCanvas({
             reactionDist = 1000; // Always tracks
             kickChance = 0.15;
         }
-
         const botMove = { x: 0, y: 0 };
         // Only move if ball is within reaction distance
         if (dist < reactionDist) {
@@ -310,20 +278,17 @@ export function GameCanvas({
         const botKick = dist < 30 && Math.random() < kickChance;
         gameStateRef.current.players[1].input = { move: botMove, kick: botKick };
       }
-
       // 2. State Update & Interpolation
       const targetState = latestExternalStateRef.current;
       if (targetState) {
         // Online Mode: Lerp displayState towards targetState
         const factor = 0.2; // Smoothing factor
         const current = displayStateRef.current;
-
         // Lerp Ball
         current.ball.pos.x += (targetState.ball.pos.x - current.ball.pos.x) * factor;
         current.ball.pos.y += (targetState.ball.pos.y - current.ball.pos.y) * factor;
         // Sync other ball props
         current.ball.radius = targetState.ball.radius;
-
         // Lerp Players
         const newPlayers = targetState.players.map(tp => {
             const cp = current.players.find(p => p.id === tp.id);
@@ -352,7 +317,6 @@ export function GameCanvas({
         const { state: newState, events } = PhysicsEngine.update(gameStateRef.current, dt);
         gameStateRef.current = newState;
         displayStateRef.current = newState;
-
         // Play Local Sounds
         events.forEach(event => {
             switch (event.type) {
@@ -364,9 +328,7 @@ export function GameCanvas({
             }
         });
       }
-
       const currentState = displayStateRef.current;
-
       // Check for score change (Visual only for online, authoritative for local)
       if (currentState.score.red !== score.red || currentState.score.blue !== score.blue) {
         setScore(currentState.score);
@@ -386,7 +348,6 @@ export function GameCanvas({
             }
         }
       }
-
       // Check for Time Limit (Local Mode)
       if (!targetState && currentState.status === 'ended' && !gameOver) {
           if (currentState.score.red > currentState.score.blue) {
@@ -397,16 +358,13 @@ export function GameCanvas({
               handleGameOver('red'); // Draw default
           }
       }
-
       // 3. Render
       render(ctx, currentState);
       requestRef.current = requestAnimationFrame(loop);
     };
-
     requestRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(requestRef.current);
   }, [score, isPaused, gameOver, winningScore, onInput, handleGameOver, botDifficulty, render]);
-
   const handleReset = () => {
     gameStateRef.current = PhysicsEngine.createInitialState();
     displayStateRef.current = PhysicsEngine.createInitialState();
@@ -415,14 +373,12 @@ export function GameCanvas({
     setIsPaused(false);
     lastTimeRef.current = performance.now();
   };
-
   // Format time remaining
   const timeRemaining = latestExternalStateRef.current
     ? latestExternalStateRef.current.timeRemaining
     : gameStateRef.current.timeRemaining;
   const minutes = Math.floor(Math.max(0, timeRemaining) / 60);
   const seconds = Math.floor(Math.max(0, timeRemaining) % 60);
-
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-4xl mx-auto">
       {/* Scoreboard - Classic Style */}
@@ -444,7 +400,6 @@ export function GameCanvas({
           <div className="w-6 h-6 rounded-full bg-haxball-blue border-2 border-black" />
         </div>
       </div>
-
       {/* Game Area */}
       <div ref={containerRef} className="game-container group relative">
         <canvas
@@ -453,10 +408,8 @@ export function GameCanvas({
           height={600}
           className="w-full h-full object-contain"
         />
-
         {/* Touch Controls Overlay */}
         <TouchControls onUpdate={handleTouchUpdate} />
-
         {/* Game Over Overlay */}
         {gameOver && (
             <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center animate-fade-in z-30">
@@ -470,7 +423,6 @@ export function GameCanvas({
                 </Button>
             </div>
         )}
-
         {/* Controls Overlay (Visible on Hover/Pause) */}
         {!gameOver && !externalState && (
             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-30">
@@ -483,7 +435,6 @@ export function GameCanvas({
             </div>
         )}
       </div>
-
       <div className="text-sm text-slate-500 font-medium font-mono bg-slate-100 px-4 py-2 rounded-full border border-slate-200 hidden md:block">
         Controls: WASD to Move • SPACE to Kick
       </div>

@@ -91,10 +91,22 @@ export interface GameEvent {
   type: GameEventType;
   team?: 'red' | 'blue'; // For goals
 }
+// --- Lobby Types ---
+export interface LobbyState {
+    code: string;
+    hostId: string;
+    players: { id: string; username: string }[];
+    status: 'waiting' | 'playing';
+}
 // --- Multiplayer Types ---
 export type WSMessage =
   | { type: 'join_queue'; mode: GameMode; userId: string; username: string }
   | { type: 'leave_queue' }
+  | { type: 'queue_update'; count: number }
+  | { type: 'create_lobby'; userId: string; username: string }
+  | { type: 'join_lobby'; code: string; userId: string; username: string }
+  | { type: 'lobby_update'; state: LobbyState }
+  | { type: 'start_lobby_match' }
   | { type: 'input'; move: { x: number; y: number }; kick: boolean }
   | { type: 'match_found'; matchId: string; team: 'red' | 'blue'; opponent?: string }
   | { type: 'game_state'; state: any } // Typed as 'any' here to avoid circular dependency, but effectively GameState

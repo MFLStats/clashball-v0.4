@@ -1,789 +1,355 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameCanvas } from './GameCanvas';
-import { WSMessage, LobbyState, LobbyInfo, LobbySettings, LobbyTeam } from '@shared/types';
+import { GameState } from '@shared/physics';
+import { WSMessage, LobbyState, GameEvent } from '@shared/types';
 import { useUserStore } from '@/store/useUserStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Slider } from '@/components/ui/slider';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, ArrowLeft, Users, Copy, Play, Send, KeyRound, Crown, RefreshCw, LogIn, Settings, Clock, Trophy, Map as MapIcon, X, Eye, Share2, Globe } from 'lucide-react';
+import { Loader2, ArrowLeft, Users, Copy, Play, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { SoundEngine } from '@/lib/audio';
-import { cn } from '@/lib/utils';
-import { api } from '@/lib/api';
-import { QuickChat } from './QuickChat';
-import { GameSocket } from '@/lib/game-socket';
 interface CustomLobbyManagerProps {
   onExit: () => void;
-  initialCode?: string;
 }
 interface ChatMessage {
   id: string;
   sender: string;
   message: string;
-  team: 'red' | 'blue' | 'spectator';
-  scope?: 'all' | 'team';
+  team: 'red' | 'blue';
 }
-const EMOTES = ['😀', '😂', '😡', '😭', '😎', '👍', '👎', '⚽'];
-export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerProps) {
+export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
   const profile = useUserStore(s => s.profile);
   const [view, setView] = useState<'menu' | 'lobby' | 'game'>('menu');
   const [lobbyState, setLobbyState] = useState<LobbyState | null>(null);
-  const [joinCode, setJoinCode] = useState(initialCode || '');
+  const [joinCode, setJoinCode] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
-  const [lobbies, setLobbies] = useState<LobbyInfo[]>([]);
-  const [isLoadingLobbies, setIsLoadingLobbies] = useState(false);
-  // Use state for socket
-  const [socket, setSocket] = useState<GameSocket | null>(null);
   // Game State
-  const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' | 'spectator' } | null>(null);
+  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' } | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
-  const [chatScope, setChatScope] = useState<'all' | 'team'>('all');
-  const [winner, setWinner] = useState<'red' | 'blue' | null>(null);
-  const [emoteEvent, setEmoteEvent] = useState<{ userId: string; emoji: string; id: string } | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const isMountedRef = useRef(true);
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
+  const connectWS = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return wsRef.current;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const ws = new WebSocket(`${protocol}//${host}/api/ws`);
+    wsRef.current = ws;
+    ws.onmessage = (event) => {
+        try {
+            const msg = JSON.parse(event.data) as WSMessage;
+            handleMessage(msg);
+        } catch (e) {
+            console.error('Failed to parse WS message', e);
+        }
+    };
+    ws.onerror = () => {
+        toast.error('Connection error');
+        setIsConnecting(false);
+    };
+    return ws;
   }, []);
-  // Poll lobbies
-  const fetchLobbies = useCallback(async () => {
-    if (view !== 'menu' || !isMountedRef.current) return;
-    setIsLoadingLobbies(true);
-    try {
-      const data = await api.getLobbies();
-      if (isMountedRef.current) setLobbies(data);
-    } catch (error) {
-      console.error('Failed to fetch lobbies', error);
-    } finally {
-      if (isMountedRef.current) setIsLoadingLobbies(false);
-    }
-  }, [view]);
-  useEffect(() => {
-    fetchLobbies();
-    const interval = setInterval(fetchLobbies, 5000);
-    return () => clearInterval(interval);
-  }, [fetchLobbies]);
-  // Initialize Socket
-  useEffect(() => {
-    if (!profile) return;
-    const newSocket = new GameSocket();
-    const onLobbyUpdate = (msg: WSMessage) => {
-        if (msg.type === 'lobby_update') {
+  const handleMessage = useCallback((msg: WSMessage) => {
+    switch (msg.type) {
+        case 'lobby_update': {
             setLobbyState(msg.state);
             setView('lobby');
             setIsConnecting(false);
+            break;
         }
-    };
-    const onMatchStarted = (msg: WSMessage) => {
-        if (msg.type === 'match_found' || msg.type === 'match_started') {
+        case 'match_found': {
             setMatchInfo({ matchId: msg.matchId, team: msg.team });
             setView('game');
-            if (msg.team === 'spectator') {
-                toast.info('Spectating Match');
-            } else {
-                toast.success('Match Starting!');
-            }
+            toast.success('Match Starting!');
+            break;
         }
-    };
-    const onGameEvents = (msg: WSMessage) => {
-        if (msg.type !== 'game_events') return;
-        msg.events.forEach(event => {
-            switch (event.type) {
-                case 'kick': SoundEngine.playKick(); break;
-                case 'wall': SoundEngine.playWall(); break;
-                case 'player': SoundEngine.playPlayer(); break;
-                case 'goal': SoundEngine.playGoal(); break;
-                case 'whistle': SoundEngine.playWhistle(); break;
-            }
-        });
-    };
-    const onGameOver = (msg: WSMessage) => {
-        if (msg.type === 'game_over') {
-            SoundEngine.playWhistle();
-            setWinner(msg.winner);
+        case 'game_state': {
+            setGameState(msg.state);
+            break;
         }
-    };
-    const onChat = (msg: WSMessage) => {
-        if (msg.type !== 'chat') return;
-        setChatMessages(prev => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            sender: msg.sender || 'Unknown',
-            message: msg.message,
-            team: msg.team || 'spectator',
-            scope: msg.scope
-          }
-        ]);
-    };
-    const onEmote = (msg: WSMessage) => {
-        if (msg.type === 'emote' && msg.userId) {
-            setEmoteEvent({
-                userId: msg.userId,
-                emoji: msg.emoji,
-                id: crypto.randomUUID()
+        case 'game_events': {
+            msg.events.forEach(event => {
+                switch (event.type) {
+                    case 'kick': SoundEngine.playKick(); break;
+                    case 'wall': SoundEngine.playWall(); break;
+                    case 'player': SoundEngine.playPlayer(); break;
+                    case 'goal': SoundEngine.playGoal(); break;
+                    case 'whistle': SoundEngine.playWhistle(); break;
+                }
             });
+            break;
         }
-    };
-    const onKicked = (msg: WSMessage) => {
-        if (msg.type === 'kicked') {
-            toast.error('You have been kicked from the lobby.');
-            setView('menu');
-            setLobbyState(null);
-            setIsConnecting(false);
+        case 'game_over': {
+            SoundEngine.playWhistle();
+            toast(msg.winner === matchInfo?.team ? 'VICTORY!' : 'DEFEAT', {
+              description: `Winner: ${msg.winner.toUpperCase()}`
+            });
+            setTimeout(() => {
+                // Return to lobby view instead of exiting completely
+                setView('lobby');
+                setGameState(null);
+                setMatchInfo(null);
+            }, 3000);
+            break;
         }
-    };
-    const onError = (msg: WSMessage) => {
-        if (msg.type === 'error') {
+        case 'chat': {
+            setChatMessages(prev => [
+              ...prev,
+              {
+                id: crypto.randomUUID(),
+                sender: msg.sender || 'Unknown',
+                message: msg.message,
+                team: msg.team || 'red'
+              }
+            ]);
+            break;
+        }
+        case 'error': {
             toast.error(msg.message);
             setIsConnecting(false);
+            break;
         }
-    };
-    newSocket.on('lobby_update', onLobbyUpdate);
-    newSocket.on('match_started', onMatchStarted);
-    newSocket.on('match_found', onMatchStarted);
-    newSocket.on('game_events', onGameEvents);
-    newSocket.on('game_over', onGameOver);
-    newSocket.on('chat', onChat);
-    newSocket.on('emote', onEmote);
-    newSocket.on('kicked', onKicked);
-    newSocket.on('error', onError);
-    // Connect immediately to be ready
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/ws`;
-    newSocket.connect(wsUrl, profile.id, profile.username);
-    setSocket(newSocket);
-    return () => {
-        newSocket.disconnect();
-        setSocket(null);
-    };
-  }, [profile?.id, profile?.username]); // Fixed dependency array
-  const createLobby = useCallback(async () => {
-    if (!profile) {
-        toast.error("You must be logged in to create a lobby");
-        return;
+        case 'ping': {
+            wsRef.current?.send(JSON.stringify({ type: 'pong' }));
+            break;
+        }
     }
-    if (!socket) {
-        toast.error("Connection not ready");
-        return;
-    }
+  }, [matchInfo]);
+  const createLobby = () => {
+    if (!profile) return;
     setIsConnecting(true);
-    socket.send({
-        type: 'create_lobby',
-        userId: profile.id,
-        username: profile.username
-    });
-  }, [profile, socket]);
-  const joinLobby = useCallback(async (code?: string) => {
-    const targetCode = code || joinCode;
-    if (!profile) {
-        toast.error("You must be logged in to join a lobby");
-        return;
+    const ws = connectWS();
+    if (ws) {
+        ws.onopen = () => {
+            ws.send(JSON.stringify({
+                type: 'create_lobby',
+                userId: profile.id,
+                username: profile.username
+            }));
+        };
+        // If already open
+        if (ws.readyState === WebSocket.OPEN) {
+             ws.send(JSON.stringify({
+                type: 'create_lobby',
+                userId: profile.id,
+                username: profile.username
+            }));
+        }
     }
-    if (!targetCode) {
-        toast.error("Please enter a lobby code");
-        return;
-    }
-    if (!socket) {
-        toast.error("Connection not ready");
-        return;
-    }
+  };
+  const joinLobby = () => {
+    if (!profile || !joinCode) return;
     setIsConnecting(true);
-    socket.send({
-        type: 'join_lobby',
-        code: targetCode,
-        userId: profile.id,
-        username: profile.username
-    });
-  }, [profile, joinCode, socket]);
-  const startMatch = useCallback(() => {
-    socket?.send({ type: 'start_lobby_match' });
-  }, [socket]);
-  const updateSettings = useCallback((settings: Partial<LobbySettings>) => {
-      socket?.send({
-          type: 'update_lobby_settings',
-          settings
-      });
-  }, [socket]);
-  const switchTeam = useCallback((team: LobbyTeam) => {
-      socket?.send({
-          type: 'switch_team',
-          team
-      });
-  }, [socket]);
-  const kickPlayer = useCallback((targetId: string) => {
-      socket?.send({
-          type: 'kick_player',
-          targetId
-      });
-  }, [socket]);
-  const handleInput = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
-    socket?.send({
+    const ws = connectWS();
+    if (ws) {
+        const sendJoin = () => {
+            ws.send(JSON.stringify({
+                type: 'join_lobby',
+                code: joinCode,
+                userId: profile.id,
+                username: profile.username
+            }));
+        };
+        if (ws.readyState === WebSocket.OPEN) sendJoin();
+        else ws.onopen = sendJoin;
+    }
+  };
+  const startMatch = () => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'start_lobby_match' }));
+    }
+  };
+  const handleInput = (input: { move: { x: number; y: number }; kick: boolean }) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
         type: 'input',
         move: input.move,
         kick: input.kick
-    });
-  }, [socket]);
-  const sendChat = useCallback((e: React.FormEvent) => {
+      }));
+    }
+  };
+  const sendChat = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim()) return;
-    socket?.send({
+    if (!chatInput.trim() || !wsRef.current) return;
+    wsRef.current.send(JSON.stringify({
       type: 'chat',
-      message: chatInput,
-      scope: chatScope
-    });
+      message: chatInput
+    }));
     setChatInput('');
-  }, [chatInput, chatScope, socket]);
-  const handleQuickChat = useCallback((message: string) => {
-    socket?.send({
-      type: 'chat',
-      message,
-      scope: chatScope
-    });
-  }, [chatScope, socket]);
-  const handleEmoteClick = useCallback((emoji: string) => {
-      socket?.send({
-          type: 'emote',
-          emoji
-      });
-  }, [socket]);
-  const copyCode = useCallback(() => {
+  };
+  const copyCode = () => {
       if (lobbyState?.code) {
           navigator.clipboard.writeText(lobbyState.code);
           toast.success('Lobby code copied!');
       }
-  }, [lobbyState?.code]);
-  const copyLink = useCallback(() => {
-      if (lobbyState?.code) {
-          const url = `${window.location.origin}/?lobby=${lobbyState.code}`;
-          navigator.clipboard.writeText(url);
-          toast.success('Invite link copied!');
-      }
-  }, [lobbyState?.code]);
-  const handleLeaveGame = useCallback(() => {
-      setView('lobby');
-      setMatchInfo(null);
-      setWinner(null);
+  };
+  // Cleanup
+  useEffect(() => {
+      return () => {
+          if (wsRef.current) {
+              wsRef.current.close();
+          }
+      };
   }, []);
   if (view === 'menu') {
       return (
-        <div className="flex flex-col items-center min-h-[60vh] space-y-8 animate-fade-in w-full">
-            <div className="flex items-center justify-between w-full max-w-4xl">
-                <Button variant="ghost" onClick={onExit} className="text-slate-300 hover:bg-white/10">
+        <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-8 animate-fade-in">
+            <div className="flex items-center justify-between w-full max-w-md">
+                <Button variant="ghost" onClick={onExit}>
                     <ArrowLeft className="mr-2 h-4 w-4" /> Back
                 </Button>
-                <h2 className="text-2xl font-display font-bold text-white">Custom Lobby</h2>
+                <h2 className="text-2xl font-display font-bold text-slate-800">Custom Lobby</h2>
                 <div className="w-20" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
                 {/* Create */}
-                <button
-                    onClick={createLobby}
-                    disabled={isConnecting || !socket}
-                    className="group relative overflow-hidden rounded-3xl bg-slate-900 border border-slate-800 p-8 text-left transition-all hover:border-primary/50 hover:shadow-lg hover:scale-[1.02]"
-                >
-                    <div className="absolute right-0 top-0 p-6 opacity-10 transition-transform group-hover:scale-110 group-hover:opacity-20">
-                        <Users className="h-32 w-32 text-white" />
-                    </div>
-                    <div className="relative z-10 flex flex-col items-center text-center space-y-4">
-                        <div className="p-4 bg-blue-500/10 rounded-full text-blue-400 border border-blue-500/20">
+                <Card className="hover:border-haxball-blue transition-colors cursor-pointer" onClick={createLobby}>
+                    <CardContent className="p-8 flex flex-col items-center text-center space-y-4">
+                        <div className="p-4 bg-blue-100 rounded-full text-haxball-blue">
                             <Users className="w-8 h-8" />
                         </div>
-                        <div>
-                            <h3 className="text-2xl font-bold text-white">Create Lobby</h3>
-                            <p className="text-slate-400 mt-2">Host a private match and invite friends with a code.</p>
-                        </div>
-                        {isConnecting ? <Loader2 className="w-6 h-6 animate-spin text-primary" /> : null}
-                    </div>
-                </button>
+                        <h3 className="text-xl font-bold text-slate-800">Create Lobby</h3>
+                        <p className="text-slate-500">Host a private match and invite friends with a code.</p>
+                        <Button className="w-full btn-kid-primary" disabled={isConnecting}>
+                            {isConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create'}
+                        </Button>
+                    </CardContent>
+                </Card>
                 {/* Join */}
-                <div className="group relative overflow-hidden rounded-3xl bg-slate-900 border border-slate-800 p-8 text-left transition-all hover:border-emerald-500/50 hover:shadow-lg">
-                    <div className="absolute right-0 top-0 p-6 opacity-10 transition-transform group-hover:scale-110 group-hover:opacity-20">
-                        <KeyRound className="h-32 w-32 text-white" />
-                    </div>
-                    <div className="relative z-10 flex flex-col items-center text-center space-y-4">
-                        <div className="p-4 bg-emerald-500/10 rounded-full text-emerald-400 border border-emerald-500/20">
-                            <KeyRound className="w-8 h-8" />
+                <Card>
+                    <CardContent className="p-8 flex flex-col items-center text-center space-y-4">
+                        <div className="p-4 bg-green-100 rounded-full text-green-600">
+                            <Send className="w-8 h-8" />
                         </div>
-                        <div>
-                            <h3 className="text-2xl font-bold text-white">Join Lobby</h3>
-                            <p className="text-slate-400 mt-2">Enter a code to join an existing lobby.</p>
-                        </div>
-                        <div className="flex gap-2 w-full max-w-xs mt-4">
-                            <Input
-                                placeholder="ENTER CODE"
-                                className="text-center uppercase font-mono font-bold tracking-widest bg-slate-950/50 border-slate-700 text-white h-12"
+                        <h3 className="text-xl font-bold text-slate-800">Join Lobby</h3>
+                        <p className="text-slate-500">Enter a code to join an existing lobby.</p>
+                        <div className="flex gap-2 w-full">
+                            <Input 
+                                placeholder="ENTER CODE" 
+                                className="text-center uppercase font-mono font-bold tracking-widest"
                                 value={joinCode}
                                 onChange={e => setJoinCode(e.target.value.toUpperCase())}
                                 maxLength={6}
                             />
-                            <Button onClick={() => joinLobby()} disabled={isConnecting || joinCode.length !== 6 || !socket} className="btn-kid-primary h-12 px-6">
+                            <Button onClick={joinLobby} disabled={isConnecting || joinCode.length !== 6} className="btn-kid-secondary">
                                 {isConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Join'}
                             </Button>
                         </div>
-                    </div>
-                </div>
-            </div>
-            {/* Public Lobbies List */}
-            <div className="w-full max-w-4xl space-y-4">
-                <div className="flex items-center justify-between px-2">
-                    <h3 className="text-xl font-display font-bold text-white flex items-center gap-2">
-                        <Users className="w-5 h-5 text-purple-400" />
-                        Public Lobbies
-                    </h3>
-                    <Button variant="ghost" size="sm" onClick={fetchLobbies} disabled={isLoadingLobbies} className="text-slate-400 hover:text-white">
-                        <RefreshCw className={cn("w-4 h-4 mr-2", isLoadingLobbies && "animate-spin")} />
-                        Refresh
-                    </Button>
-                </div>
-                <div className="grid grid-cols-1 gap-3">
-                    {lobbies.length === 0 ? (
-                        <div className="text-center py-12 bg-slate-900/50 rounded-2xl border border-dashed border-slate-800 text-slate-500">
-                            No public lobbies found. Create one to start playing!
-                        </div>
-                    ) : (
-                        lobbies.map((lobby) => (
-                            <div key={lobby.code} className="flex items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-xl hover:border-purple-500/30 transition-colors group">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400 font-bold border border-purple-500/20">
-                                        {lobby.hostName.charAt(0).toUpperCase()}
-                                    </div>
-                                    <div>
-                                        <div className="font-bold text-white flex items-center gap-2">
-                                            {lobby.hostName}'s Lobby
-                                            <span className="text-xs font-mono bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">
-                                                {lobby.code}
-                                            </span>
-                                        </div>
-                                        <div className="text-sm text-slate-400">
-                                            Waiting for players...
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <div className="text-right">
-                                        <div className="text-sm font-bold text-slate-300">
-                                            {lobby.playerCount} / {lobby.maxPlayers}
-                                        </div>
-                                        <div className="text-xs text-slate-500 uppercase font-bold">Players</div>
-                                    </div>
-                                    <Button
-                                        onClick={() => joinLobby(lobby.code)}
-                                        disabled={isConnecting || lobby.playerCount >= lobby.maxPlayers || !socket}
-                                        className="bg-purple-600 hover:bg-purple-500 text-white"
-                                    >
-                                        <LogIn className="w-4 h-4 mr-2" /> Join
-                                    </Button>
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </div>
+                    </CardContent>
+                </Card>
             </div>
         </div>
       );
   }
   if (view === 'lobby' && lobbyState) {
       const isHost = lobbyState.hostId === profile?.id;
-      const redPlayers = lobbyState.players.filter(p => p.team === 'red');
-      const bluePlayers = lobbyState.players.filter(p => p.team === 'blue');
-      const spectators = lobbyState.players.filter(p => p.team === 'spectator');
-      const myTeam = lobbyState.players.find(p => p.id === profile?.id)?.team;
-      const maxPerTeam = lobbyState.settings.fieldSize === 'small' ? 2 : lobbyState.settings.fieldSize === 'medium' ? 3 : 4;
-      const canStart = redPlayers.length > 0 && bluePlayers.length > 0;
       return (
-          <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
+          <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
               <div className="flex items-center justify-between">
-                  <Button variant="ghost" onClick={onExit} className="text-slate-300 hover:bg-white/10">
+                  <Button variant="ghost" onClick={onExit}>
                       <ArrowLeft className="mr-2 h-4 w-4" /> Leave Lobby
                   </Button>
-                  <div className="flex items-center gap-3 bg-slate-900 px-6 py-3 rounded-xl border border-slate-800 shadow-lg">
-                      <span className="text-slate-400 font-bold text-sm uppercase tracking-wider">Lobby Code</span>
-                      <div className="h-4 w-px bg-slate-700" />
-                      <span className="font-mono font-bold text-2xl text-white tracking-widest">{lobbyState.code}</span>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 ml-2 text-slate-400 hover:text-white hover:bg-slate-800" onClick={copyCode}>
-                          <Copy className="w-4 h-4" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-800" onClick={copyLink}>
-                          <Share2 className="w-4 h-4" />
+                  <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200">
+                      <span className="text-slate-500 font-bold text-sm">LOBBY CODE:</span>
+                      <span className="font-mono font-bold text-xl text-slate-800 tracking-widest">{lobbyState.code}</span>
+                      <Button size="icon" variant="ghost" className="h-6 w-6 ml-2" onClick={copyCode}>
+                          <Copy className="w-3 h-3" />
                       </Button>
                   </div>
-                  {isHost && (
-                      <Button onClick={startMatch} disabled={!canStart} className="btn-kid-primary px-8">
-                          <Play className="w-4 h-4 mr-2" /> Start Match
-                      </Button>
-                  )}
               </div>
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                  {/* Left Column: Red Team */}
-                  <Card className="bg-slate-900 border-red-900/50 shadow-xl overflow-hidden flex flex-col h-[500px]">
-                      <CardHeader className="bg-red-950/30 border-b border-red-900/30 py-4">
-                          <div className="flex justify-between items-center">
-                              <CardTitle className="text-red-400 font-bold uppercase tracking-wider text-sm">Team Red</CardTitle>
-                              <span className="text-xs font-mono text-red-500 bg-red-950/50 px-2 py-1 rounded border border-red-900/50">
-                                  {redPlayers.length} / {maxPerTeam}
-                              </span>
-                          </div>
-                          <Button
-                              size="sm"
-                              className="w-full mt-2 bg-red-600 hover:bg-red-500 text-white border border-red-400/20"
-                              disabled={myTeam === 'red' || redPlayers.length >= maxPerTeam}
-                              onClick={() => switchTeam('red')}
-                          >
-                              Join Red
-                          </Button>
-                      </CardHeader>
-                      <CardContent className="p-4 flex-1 overflow-y-auto space-y-2">
-                          {redPlayers.map(p => (
-                              <div key={p.id} className="flex items-center gap-3 p-3 bg-red-950/20 rounded-lg border border-red-900/20">
-                                  <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center font-bold text-red-400 text-xs border border-red-500/30">
-                                      {p.username.charAt(0).toUpperCase()}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                      <div className="font-bold text-red-100 truncate">{p.username}</div>
-                                      {p.id === lobbyState.hostId && (
-                                          <div className="text-[10px] font-bold text-yellow-500 flex items-center gap-1">
-                                              <Crown className="w-3 h-3" /> HOST
-                                          </div>
-                                      )}
-                                  </div>
-                                  {isHost && p.id !== profile?.id && (
-                                      <Button size="icon" variant="ghost" className="h-6 w-6 text-red-400 hover:bg-red-900/50" onClick={() => kickPlayer(p.id)}>
-                                          <X className="w-3 h-3" />
-                                      </Button>
-                                  )}
-                              </div>
-                          ))}
-                      </CardContent>
-                  </Card>
-                  {/* Middle Column: Spectators & Chat */}
-                  <div className="lg:col-span-2 flex flex-col gap-6 h-[500px]">
-                      {/* Spectators */}
-                      <Card className="bg-slate-900 border-slate-800 shadow-xl overflow-hidden flex-1">
-                          <CardHeader className="bg-slate-950/50 border-b border-slate-800 py-4">
-                              <div className="flex justify-between items-center">
-                                  <CardTitle className="text-slate-400 font-bold uppercase tracking-wider text-sm flex items-center gap-2">
-                                      <Eye className="w-4 h-4" /> Spectators
-                                  </CardTitle>
-                                  <span className="text-xs font-mono text-slate-500 bg-slate-950 px-2 py-1 rounded border border-slate-800">
-                                      {spectators.length}
-                                  </span>
-                              </div>
-                              <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  className="w-full mt-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
-                                  disabled={myTeam === 'spectator'}
-                                  onClick={() => switchTeam('spectator')}
-                              >
-                                  Spectate
+              <Card>
+                  <CardHeader>
+                      <CardTitle className="flex justify-between items-center">
+                          <span>Players ({lobbyState.players.length}/8)</span>
+                          {isHost && (
+                              <Button onClick={startMatch} disabled={lobbyState.players.length < 2} className="btn-kid-primary">
+                                  <Play className="w-4 h-4 mr-2" /> Start Match
                               </Button>
-                          </CardHeader>
-                          <CardContent className="p-4 overflow-y-auto h-[150px]">
-                              <div className="flex flex-wrap gap-2">
-                                  {spectators.map(p => (
-                                      <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-full border border-slate-700/50">
-                                          <span className="text-xs font-bold text-slate-300">{p.username}</span>
-                                          {isHost && p.id !== profile?.id && (
-                                              <button onClick={() => kickPlayer(p.id)} className="text-slate-500 hover:text-red-400">
-                                                  <X className="w-3 h-3" />
-                                              </button>
-                                          )}
-                                      </div>
-                                  ))}
-                                  {spectators.length === 0 && (
-                                      <div className="w-full text-center text-slate-600 italic text-xs py-4">No spectators</div>
-                                  )}
-                              </div>
-                          </CardContent>
-                      </Card>
-                      {/* Chat */}
-                      <Card className="bg-slate-900 border-slate-800 shadow-xl flex flex-col flex-1 min-h-0">
-                          <CardHeader className="bg-slate-950/50 border-b border-slate-800 py-2">
-                              <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wider">Lobby Chat</CardTitle>
-                          </CardHeader>
-                          <CardContent className="flex-1 p-3 flex flex-col gap-2 overflow-hidden">
-                              <div className="flex-1 overflow-y-auto space-y-1 pr-2 scrollbar-hide">
-                                  {chatMessages.map(msg => (
-                                      <div key={msg.id} className="text-xs">
-                                          {msg.scope === 'team' && (
-                                              <span className="text-[10px] font-bold bg-yellow-500/20 text-yellow-400 px-1 rounded mr-2 border border-yellow-500/30">TEAM</span>
-                                          )}
-                                          <span className={cn(
-                                              "font-bold mr-2",
-                                              msg.team === 'red' ? 'text-red-400' :
-                                              msg.team === 'blue' ? 'text-blue-400' : 'text-slate-400'
-                                          )}>
-                                              {msg.sender}:
-                                          </span>
-                                          <span className="text-slate-300">{msg.message}</span>
-                                      </div>
-                                  ))}
-                                  <div ref={chatEndRef} />
-                              </div>
-                              <div className="flex gap-2 items-center">
-                                  <Tabs value={chatScope} onValueChange={(v) => setChatScope(v as 'all' | 'team')} className="w-24 shrink-0">
-                                      <TabsList className="grid w-full grid-cols-2 h-8 bg-slate-950 border border-slate-700">
-                                          <TabsTrigger value="all" className="text-[10px] font-bold data-[state=active]:bg-slate-800 h-6">All</TabsTrigger>
-                                          <TabsTrigger value="team" className="text-[10px] font-bold data-[state=active]:bg-slate-800 h-6">Team</TabsTrigger>
-                                      </TabsList>
-                                  </Tabs>
-                                  <form onSubmit={sendChat} className="flex gap-2 flex-1">
-                                      <Input
-                                          value={chatInput}
-                                          onChange={e => setChatInput(e.target.value)}
-                                          placeholder="Message..."
-                                          className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 h-8 text-xs"
-                                      />
-                                      <Button type="submit" size="icon" className="h-8 w-8 bg-slate-800 hover:bg-slate-700">
-                                          <Send className="w-3 h-3" />
-                                      </Button>
-                                  </form>
-                              </div>
-                          </CardContent>
-                      </Card>
-                  </div>
-                  {/* Right Column: Blue Team */}
-                  <Card className="bg-slate-900 border-blue-900/50 shadow-xl overflow-hidden flex flex-col h-[500px]">
-                      <CardHeader className="bg-blue-950/30 border-b border-blue-900/30 py-4">
-                          <div className="flex justify-between items-center">
-                              <CardTitle className="text-blue-400 font-bold uppercase tracking-wider text-sm">Team Blue</CardTitle>
-                              <span className="text-xs font-mono text-blue-500 bg-blue-950/50 px-2 py-1 rounded border border-blue-900/50">
-                                  {bluePlayers.length} / {maxPerTeam}
-                              </span>
-                          </div>
-                          <Button
-                              size="sm"
-                              className="w-full mt-2 bg-blue-600 hover:bg-blue-500 text-white border border-blue-400/20"
-                              disabled={myTeam === 'blue' || bluePlayers.length >= maxPerTeam}
-                              onClick={() => switchTeam('blue')}
-                          >
-                              Join Blue
-                          </Button>
-                      </CardHeader>
-                      <CardContent className="p-4 flex-1 overflow-y-auto space-y-2">
-                          {bluePlayers.map(p => (
-                              <div key={p.id} className="flex items-center gap-3 p-3 bg-blue-950/20 rounded-lg border border-blue-900/20">
-                                  <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center font-bold text-blue-400 text-xs border border-blue-500/30">
-                                      {p.username.charAt(0).toUpperCase()}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                      <div className="font-bold text-blue-100 truncate">{p.username}</div>
-                                      {p.id === lobbyState.hostId && (
-                                          <div className="text-[10px] font-bold text-yellow-500 flex items-center gap-1">
-                                              <Crown className="w-3 h-3" /> HOST
-                                          </div>
-                                      )}
-                                  </div>
-                                  {isHost && p.id !== profile?.id && (
-                                      <Button size="icon" variant="ghost" className="h-6 w-6 text-blue-400 hover:bg-blue-900/50" onClick={() => kickPlayer(p.id)}>
-                                          <X className="w-3 h-3" />
-                                      </Button>
-                                  )}
-                              </div>
-                          ))}
-                      </CardContent>
-                  </Card>
-              </div>
-              {/* Settings Panel (Bottom) */}
-              <Card className="bg-slate-900 border-slate-800 shadow-xl mt-6">
-                  <CardHeader className="bg-slate-950/50 border-b border-slate-800 py-3">
-                      <CardTitle className="flex items-center gap-2 text-white text-sm">
-                          <Settings className="w-4 h-4 text-slate-400" />
-                          Match Settings
+                          )}
                       </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-6">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                          {/* Score Limit */}
-                          <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2 text-white font-bold text-sm">
-                                      <Trophy className="w-4 h-4 text-yellow-500" />
-                                      Score Limit
+                  <CardContent>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {lobbyState.players.map(p => (
+                              <div key={p.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                                  <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600">
+                                      {p.username.charAt(0).toUpperCase()}
                                   </div>
-                                  <span className="font-mono text-primary font-bold text-sm">
-                                      {lobbyState.settings.scoreLimit === 0 ? 'Unlimited' : lobbyState.settings.scoreLimit}
-                                  </span>
+                                  <span className="font-bold text-slate-700">{p.username}</span>
+                                  {p.id === lobbyState.hostId && (
+                                      <span className="ml-auto text-xs font-bold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">HOST</span>
+                                  )}
                               </div>
-                              {isHost ? (
-                                  <Slider
-                                      value={[lobbyState.settings.scoreLimit]}
-                                      min={0}
-                                      max={10}
-                                      step={1}
-                                      onValueChange={(vals) => updateSettings({ scoreLimit: vals[0] })}
-                                      className="py-2"
-                                  />
-                              ) : (
-                                  <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                      <div
-                                          className="h-full bg-slate-600"
-                                          style={{ width: `${(lobbyState.settings.scoreLimit / 10) * 100}%` }}
-                                      />
-                                  </div>
-                              )}
-                          </div>
-                          {/* Time Limit */}
-                          <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2 text-white font-bold text-sm">
-                                      <Clock className="w-4 h-4 text-blue-500" />
-                                      Time Limit
-                                  </div>
-                                  <span className="font-mono text-primary font-bold text-sm">
-                                      {lobbyState.settings.timeLimit === 0 ? 'Unlimited' : `${Math.floor(lobbyState.settings.timeLimit / 60)}m`}
-                                  </span>
+                          ))}
+                          {Array.from({ length: Math.max(0, 8 - lobbyState.players.length) }).map((_, i) => (
+                              <div key={`empty-${i}`} className="flex items-center gap-3 p-3 border-2 border-dashed border-slate-100 rounded-lg opacity-50">
+                                  <div className="w-8 h-8 rounded-full bg-slate-50" />
+                                  <span className="text-slate-300 font-medium italic">Waiting...</span>
                               </div>
-                              {isHost ? (
-                                  <Slider
-                                      value={[lobbyState.settings.timeLimit]}
-                                      min={0}
-                                      max={600}
-                                      step={60}
-                                      onValueChange={(vals) => updateSettings({ timeLimit: vals[0] })}
-                                      className="py-2"
-                                  />
-                              ) : (
-                                  <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                      <div
-                                          className="h-full bg-slate-600"
-                                          style={{ width: `${(lobbyState.settings.timeLimit / 600) * 100}%` }}
-                                      />
-                                  </div>
-                              )}
-                          </div>
-                          {/* Field Size */}
-                          <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2 text-white font-bold text-sm">
-                                      <MapIcon className="w-4 h-4 text-emerald-500" />
-                                      Field Size
-                                  </div>
-                                  <span className="font-mono text-primary font-bold uppercase text-sm">
-                                      {lobbyState.settings.fieldSize || 'Medium'}
-                                  </span>
-                              </div>
-                              {isHost ? (
-                                  <Tabs
-                                      value={lobbyState.settings.fieldSize || 'medium'}
-                                      onValueChange={(val) => updateSettings({ fieldSize: val as any })}
-                                      className="w-full"
-                                  >
-                                      <TabsList className="grid w-full grid-cols-3 bg-slate-950 border border-slate-800 h-8">
-                                          <TabsTrigger value="small" className="text-[10px] font-bold h-6">Small</TabsTrigger>
-                                          <TabsTrigger value="medium" className="text-[10px] font-bold h-6">Medium</TabsTrigger>
-                                          <TabsTrigger value="large" className="text-[10px] font-bold h-6">Large</TabsTrigger>
-                                      </TabsList>
-                                  </Tabs>
-                              ) : (
-                                  <div className="w-full bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs font-bold text-slate-400 uppercase">
-                                      {lobbyState.settings.fieldSize || 'Medium'}
-                                  </div>
-                              )}
-                          </div>
+                          ))}
                       </div>
                   </CardContent>
               </Card>
+              {!isHost && (
+                  <div className="text-center text-slate-500 animate-pulse">
+                      Waiting for host to start the match...
+                  </div>
+              )}
           </div>
       );
   }
-  // Game View
+  // Game View (Reusing GameCanvas logic)
   return (
-    <div className="flex flex-col gap-4 animate-fade-in max-w-4xl mx-auto w-full">
+    <div className="space-y-4 animate-fade-in relative">
       <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => setView('lobby')} className="text-slate-300 hover:bg-white/10">
+        <Button variant="ghost" onClick={() => setView('lobby')}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Return to Lobby
         </Button>
         <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-slate-400">YOU ARE</span>
-            <span className={cn(
-                "px-3 py-1 rounded-full text-white font-bold text-sm shadow-lg",
-                matchInfo?.team === 'red' ? 'bg-red-500 shadow-red-500/20' :
-                matchInfo?.team === 'blue' ? 'bg-blue-500 shadow-blue-500/20' :
-                'bg-slate-700 shadow-slate-500/20'
-            )}>
-                {matchInfo?.team === 'spectator' ? 'SPECTATING' : `TEAM ${matchInfo?.team.toUpperCase()}`}
+            <span className="text-sm font-bold text-slate-500">YOU ARE</span>
+            <span className={`px-3 py-1 rounded-full text-white font-bold text-sm ${matchInfo?.team === 'red' ? 'bg-red-500' : 'bg-blue-500'}`}>
+                TEAM {matchInfo?.team.toUpperCase()}
             </span>
         </div>
       </div>
-      <div className="relative rounded-xl overflow-hidden shadow-2xl border border-slate-800">
+      <div className="relative">
         <GameCanvas
-            externalWinner={winner}
-            onInput={matchInfo?.team === 'spectator' ? undefined : handleInput}
-            winningScore={lobbyState?.settings.scoreLimit ?? 3}
+            externalState={gameState}
+            onInput={handleInput}
+            winningScore={3}
             currentUserId={profile?.id}
-            onLeave={handleLeaveGame}
-            emoteEvent={emoteEvent}
-            socket={socket ?? undefined}
         />
-      </div>
-      {/* Chat Section - Moved Below Canvas */}
-      <div className="w-full bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col gap-3 shadow-lg">
-          <div className="h-32 overflow-y-auto bg-black/30 rounded-lg p-2 space-y-1 scrollbar-hide border border-white/5">
-              {chatMessages.map(msg => (
-                  <div key={msg.id} className="text-sm text-slate-200">
-                      {msg.scope === 'team' && (
-                          <span className="text-[10px] font-bold bg-yellow-500/20 text-yellow-400 px-1 rounded mr-2 border border-yellow-500/30">TEAM</span>
-                      )}
-                      <span className={cn("font-bold mr-2",
-                          msg.team === 'red' ? 'text-red-400' :
-                          msg.team === 'blue' ? 'text-blue-400' : 'text-slate-400'
-                      )}>
-                          {msg.sender}:
-                      </span>
-                      <span>{msg.message}</span>
-                  </div>
-              ))}
-              <div ref={chatEndRef} />
-          </div>
-          <div className="flex flex-col gap-2">
-              {/* Emote Bar */}
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                  {EMOTES.map(emoji => (
-                      <button
-                          key={emoji}
-                          onClick={() => handleEmoteClick(emoji)}
-                          className="text-xl hover:scale-125 transition-transform p-1"
-                      >
-                          {emoji}
-                      </button>
-                  ))}
-              </div>
-              <QuickChat onSelect={handleQuickChat} />
-              <div className="flex gap-2 items-center">
-                  <Tabs value={chatScope} onValueChange={(v) => setChatScope(v as 'all' | 'team')} className="w-32 shrink-0">
-                      <TabsList className="grid w-full grid-cols-2 h-10 bg-slate-950 border border-slate-700">
-                          <TabsTrigger value="all" className="text-xs font-bold data-[state=active]:bg-slate-800">
-                              <Globe className="w-3 h-3 mr-1" /> All
-                          </TabsTrigger>
-                          <TabsTrigger value="team" className="text-xs font-bold data-[state=active]:bg-slate-800">
-                              <Users className="w-3 h-3 mr-1" /> Team
-                          </TabsTrigger>
-                      </TabsList>
-                  </Tabs>
-                  <form onSubmit={sendChat} className="flex gap-2 flex-1">
-                      <Input
-                          value={chatInput}
-                          onChange={e => setChatInput(e.target.value)}
-                          placeholder={chatScope === 'team' ? "Message Team..." : "Message All..."}
-                          className="bg-slate-950 border-slate-700 text-white placeholder:text-slate-500 h-10"
-                      />
-                      <Button type="submit" size="icon" className="h-10 w-10 bg-slate-800 hover:bg-slate-700 border border-slate-700">
-                          <Send className="w-4 h-4" />
-                      </Button>
-                  </form>
-              </div>
-          </div>
+        {/* Chat Overlay */}
+        <div className="absolute bottom-4 left-4 w-80 max-h-64 flex flex-col gap-2 z-20">
+            <div className="flex-1 overflow-y-auto bg-black/40 backdrop-blur-sm rounded-lg p-2 space-y-1 scrollbar-hide">
+                {chatMessages.map(msg => (
+                    <div key={msg.id} className="text-sm text-white drop-shadow-md">
+                        <span className={`font-bold ${msg.team === 'red' ? 'text-red-300' : 'text-blue-300'}`}>
+                            {msg.sender}:
+                        </span>
+                        <span className="ml-1">{msg.message}</span>
+                    </div>
+                ))}
+                <div ref={chatEndRef} />
+            </div>
+            <form onSubmit={sendChat} className="flex gap-2">
+                <Input
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    placeholder="Type a message..."
+                    className="bg-black/40 border-white/20 text-white placeholder:text-white/50 h-8 text-sm"
+                />
+                <Button type="submit" size="sm" className="h-8 w-8 p-0 bg-white/20 hover:bg-white/30">
+                    <Send className="w-3 h-3" />
+                </Button>
+            </form>
+        </div>
       </div>
     </div>
   );

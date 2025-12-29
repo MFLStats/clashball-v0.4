@@ -23,6 +23,11 @@ interface ChatMessage {
 export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerProps) {
   const profile = useUserStore(s => s.profile);
   const [status, setStatus] = useState<'connecting' | 'searching' | 'playing' | 'error'>('connecting');
+  // Ref to track status without triggering re-renders in effects
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
   const [queueCount, setQueueCount] = useState(0);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -46,7 +51,8 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   // Connection Timeout Logic
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (status === 'connecting' || status === 'searching') {
+      // Check ref instead of state to avoid dependency loop
+      if (statusRef.current === 'connecting' || statusRef.current === 'searching') {
         // Only timeout if we haven't found a match yet and connection seems stuck
         if (wsRef.current?.readyState !== WebSocket.OPEN) {
             setStatus('error');
@@ -56,7 +62,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       }
     }, 15000); // 15 seconds timeout
     return () => clearTimeout(timer);
-  }, [status]);
+  }, []); // Run once on mount
   const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
       case 'match_found': {
@@ -88,7 +94,6 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         break;
       }
       case 'game_over': {
-        const currentTeam = matchInfoRef.current?.team;
         SoundEngine.playWhistle();
         // Store stats for summary
         if (msg.stats) {
@@ -168,7 +173,8 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     ws.onclose = (event) => {
       if (!event.wasClean) {
           console.warn('WebSocket closed unexpectedly', event.code, event.reason);
-          if (status !== 'error') {
+          // Check ref to avoid dependency on status state
+          if (statusRef.current !== 'error') {
              setStatus('error');
              toast.error('Disconnected from server');
           }

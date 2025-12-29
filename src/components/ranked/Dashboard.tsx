@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { RankBadge } from './RankBadge';
 import { MatchHistory } from './MatchHistory';
 import { TeamDetailsDialog } from './TeamDetailsDialog';
+import { RatingChart } from './RatingChart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -75,7 +76,7 @@ export function Dashboard() {
   const winRate = totalMatches > 0 ? Math.round((careerStats.wins / totalMatches) * 100) : 0;
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-12">
-        {/* 1. Hero Section - Redesigned without Avatar */}
+        {/* 1. Hero Section */}
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-slate-700 shadow-2xl">
             {/* Background Pattern */}
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 z-0" />
@@ -93,8 +94,8 @@ export function Dashboard() {
                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
                         {profile.country && (
                             <Badge variant="secondary" className="bg-slate-800/80 text-slate-300 border-slate-700 px-3 py-1.5 text-sm">
-                                <img
-                                    src={`https://flagcdn.com/w20/${profile.country.toLowerCase()}.png`}
+                                <img 
+                                    src={`https://flagcdn.com/w20/${profile.country.toLowerCase()}.png`} 
                                     alt={profile.country}
                                     className="w-4 h-auto mr-2 rounded-sm"
                                 />
@@ -198,6 +199,12 @@ export function Dashboard() {
                         </CardContent>
                     </Card>
                 </div>
+                {/* Rating Chart Section */}
+                <RatingChart 
+                    currentRating={profile.stats['1v1'].rating} 
+                    recentMatches={profile.recentMatches.filter(m => m.mode === '1v1')} 
+                    className="bg-slate-900 border-slate-800"
+                />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Card className="bg-slate-900 border-slate-800 h-full">
                         <CardHeader>
@@ -318,8 +325,8 @@ export function Dashboard() {
                         <CardContent>
                             <form onSubmit={handleCreateTeam} className="flex gap-4 items-center">
                                 <div className="flex-1">
-                                    <Input
-                                        placeholder="Enter team name..."
+                                    <Input 
+                                        placeholder="Enter team name..." 
                                         value={newTeamName}
                                         onChange={(e) => setNewTeamName(e.target.value)}
                                         className="bg-slate-950 border-slate-700 text-white placeholder:text-slate-600"
@@ -340,8 +347,8 @@ export function Dashboard() {
                         <CardContent>
                             <form onSubmit={handleJoinTeam} className="flex gap-4 items-center">
                                 <div className="flex-1">
-                                    <Input
-                                        placeholder="ENTER CODE"
+                                    <Input 
+                                        placeholder="ENTER CODE" 
                                         value={joinCode}
                                         onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                                         maxLength={6}
@@ -366,8 +373,8 @@ export function Dashboard() {
                         </Card>
                     ) : (
                         teams.map((team) => (
-                            <Card
-                                key={team.id}
+                            <Card 
+                                key={team.id} 
                                 className="bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors cursor-pointer group"
                                 onClick={() => {
                                     setSelectedTeam(team);
@@ -400,10 +407,10 @@ export function Dashboard() {
                 </div>
             </TabsContent>
         </Tabs>
-        <TeamDetailsDialog
-            team={selectedTeam}
-            open={isJoinDialogOpen}
-            onOpenChange={setIsJoinDialogOpen}
+        <TeamDetailsDialog 
+            team={selectedTeam} 
+            open={isJoinDialogOpen} 
+            onOpenChange={setIsJoinDialogOpen} 
         />
     </div>
   );

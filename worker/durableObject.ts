@@ -20,7 +20,8 @@ interface Lobby {
 }
 export class GlobalDurableObject extends DurableObject {
     // State
-    queues: Map<GameMode, { userId: string; ws: WebSocket; username: string }[]> = new Map();
+    // Updated queue to store rating for matchmaking
+    queues: Map<GameMode, { userId: string; ws: WebSocket; username: string; rating: number }[]> = new Map();
     matches: Map<string, Match> = new Map();
     sessions: Map<WebSocket, { userId: string; matchId?: string; lobbyCode?: string }> = new Map();
     lobbies: Map<string, Lobby> = new Map();
@@ -58,7 +59,7 @@ export class GlobalDurableObject extends DurableObject {
         ws.addEventListener('message', async (event) => {
             try {
                 const msg = JSON.parse(event.data as string) as WSMessage;
-                this.handleMessage(ws, msg);
+                await this.handleMessage(ws, msg);
             } catch (e) {
                 console.error('WS Error:', e);
             }
@@ -67,7 +68,7 @@ export class GlobalDurableObject extends DurableObject {
             this.handleDisconnect(ws);
         });
     }
-    handleMessage(ws: WebSocket, msg: WSMessage) {
+    async handleMessage(ws: WebSocket, msg: WSMessage) {
         try {
             switch (msg.type) {
                 case 'join_queue': {
@@ -75,7 +76,10 @@ export class GlobalDurableObject extends DurableObject {
                         ws.send(JSON.stringify({ type: 'error', message: 'Invalid queue request: Missing userId or mode' }));
                         return;
                     }
-                    this.addToQueue(ws, msg.userId, msg.username, msg.mode);
+                    // Fetch user profile to get rating
+                    const profile = await this.getUserProfile(msg.userId);
+                    const rating = profile.stats[msg.mode].rating;
+                    this.addToQueue(ws, msg.userId, msg.username, msg.mode, rating);
                     break;
                 }
                 case 'leave_queue': {
@@ -150,13 +154,15 @@ export class GlobalDurableObject extends DurableObject {
         this.sessions.delete(ws);
     }
     // --- Queue Logic ---
-    addToQueue(ws: WebSocket, userId: string, username: string, mode: GameMode) {
+    addToQueue(ws: WebSocket, userId: string, username: string, mode: GameMode, rating: number) {
         // Remove from other queues first
         this.removeFromQueue(ws);
         const queue = this.queues.get(mode) || [];
         // Prevent duplicates
         if (!queue.find(p => p.userId === userId)) {
-            queue.push({ userId, ws, username });
+            queue.push({ userId, ws, username, rating });
+            // Sort queue by rating to group similar skill levels
+            queue.sort((a, b) => a.rating - b.rating);
             this.queues.set(mode, queue);
             this.sessions.set(ws, { userId });
             // Broadcast queue update
@@ -189,6 +195,9 @@ export class GlobalDurableObject extends DurableObject {
         const queue = this.queues.get(mode) || [];
         const requiredPlayers = mode === '1v1' ? 2 : mode === '2v2' ? 4 : mode === '3v3' ? 6 : 8;
         if (queue.length >= requiredPlayers) {
+            // Since queue is sorted by rating, taking adjacent players gives best match
+            // We take the first N players (lowest ratings)
+            // In a more advanced system, we might search for the tightest cluster
             const players = queue.splice(0, requiredPlayers);
             // Update queue status for remaining players
             this.broadcastQueueStatus(mode);

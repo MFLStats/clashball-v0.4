@@ -2,11 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Bracket, TournamentMatch } from './Bracket';
 import { GameCanvas } from '@/components/game/GameCanvas';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Trophy, Play, Clock } from 'lucide-react';
+import { ArrowLeft, Trophy, Play, Clock, Crown } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import confetti from 'canvas-confetti';
 import { useUserStore } from '@/store/useUserStore';
 import { TournamentParticipant } from '@shared/types';
+import { cn } from '@/lib/utils';
 interface TournamentManagerProps {
   onExit: () => void;
   participants?: TournamentParticipant[];
@@ -42,7 +43,6 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
         const availableBots = BOT_NAMES.filter(b => !allPlayers.some(p => p.name === b));
         const shuffledBots = [...availableBots].sort(() => Math.random() - 0.5).slice(0, needed);
         shuffledBots.forEach(botName => {
-            // Assign random rating for bots between 800 and 1400
             allPlayers.push({ name: botName, rating: Math.floor(Math.random() * 600) + 800 });
         });
     }
@@ -50,7 +50,6 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
     allPlayers.sort((a, b) => b.rating - a.rating);
     const seeds = allPlayers.slice(0, 8).map(p => p.name);
     // 3. Create Bracket with Seeding (1v8, 4v5, 2v7, 3v6)
-    // This order ensures 1 and 2 meet in finals
     const initialMatches: TournamentMatch[] = [
         { id: uuidv4(), round: 0, player1: seeds[0], player2: seeds[7], isUserMatch: seeds[0] === userTeamName || seeds[7] === userTeamName }, // 1 vs 8
         { id: uuidv4(), round: 0, player1: seeds[3], player2: seeds[4], isUserMatch: seeds[3] === userTeamName || seeds[4] === userTeamName }, // 4 vs 5
@@ -64,7 +63,6 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
     // Round 3 (Final) placeholder
     initialMatches.push({ id: uuidv4(), round: 2, player1: '', player2: '' });
     setMatches(initialMatches);
-    // Start Timer for Round 1
     setRoundStartTime(Date.now() + 120000); // 2 minutes from now
   }, [userTeamName, matches.length, participants, profile]);
   // Timer Logic
@@ -75,12 +73,11 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
         const diff = Math.max(0, roundStartTime - now);
         setTimeRemaining(diff);
         if (diff <= 0 && roundStartTime > 0) {
-            // Auto-start logic
             const userMatch = matches.find(m => m.round === currentRound && m.isUserMatch && !m.winner);
             if (userMatch) {
                 startUserMatch();
             }
-            setRoundStartTime(0); // Stop timer
+            setRoundStartTime(0);
         }
     }, 1000);
     return () => clearInterval(interval);
@@ -91,8 +88,6 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
     let changed = false;
     roundMatches.forEach(match => {
       if (match.isUserMatch) return; // Skip user match
-      // Simulate random winner based on seed/rating logic (higher seed wins 70% of time)
-      // For simplicity, random 50/50 here as we don't track ratings in match objects
       const winner = Math.random() > 0.5 ? match.player1 : match.player2;
       const score = {
         p1: winner === match.player1 ? 3 : Math.floor(Math.random() * 3),
@@ -130,7 +125,6 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
     }
     setMatches(newMatches);
     setCurrentRound(nextRound);
-    // Reset Timer for next round
     setRoundStartTime(Date.now() + 120000);
   };
   const handleUserMatchEnd = (winner: 'red' | 'blue', score: { red: number; blue: number }) => {
@@ -184,32 +178,39 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
     const currentMatch = matches.find(m => m.round === currentRound && m.isUserMatch);
     const opponentName = currentMatch ? (currentMatch.player1 === userTeamName ? currentMatch.player2 : currentMatch.player1) : 'Bot';
     return (
-      <div className="space-y-4 animate-fade-in">
+      <div className="space-y-4 animate-fade-in max-w-5xl mx-auto">
         <div className="flex items-center justify-between">
-          <Button variant="ghost" onClick={() => setTournamentState('bracket')}>
+          <Button variant="ghost" onClick={() => setTournamentState('bracket')} className="text-slate-300 hover:text-white">
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Bracket
           </Button>
-          <div className="text-xl font-display font-bold text-slate-800">
-            Round {currentRound + 1} vs {opponentName} ({difficulty.toUpperCase()})
+          <div className="text-xl font-display font-bold text-white">
+            Round {currentRound + 1} vs <span className="text-yellow-400">{opponentName}</span>
           </div>
         </div>
-        <GameCanvas
-            onGameEnd={handleUserMatchEnd}
-            winningScore={3}
-            botDifficulty={difficulty}
-            playerNames={{ red: userTeamName, blue: opponentName }}
-        />
+        <div className="border-4 border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+            <GameCanvas
+                onGameEnd={handleUserMatchEnd}
+                winningScore={3}
+                botDifficulty={difficulty}
+                playerNames={{ red: userTeamName, blue: opponentName }}
+            />
+        </div>
       </div>
     );
   }
   if (tournamentState === 'won') {
     return (
-        <div className="flex flex-col items-center justify-center h-[60vh] space-y-8 animate-scale-in">
-            <Trophy className="w-32 h-32 text-yellow-500 drop-shadow-lg animate-bounce" />
-            <h1 className="text-5xl font-display font-bold text-slate-800">CHAMPION!</h1>
-            <p className="text-xl text-slate-500">You have conquered the KickStar Cup!</p>
+        <div className="flex flex-col items-center justify-center h-[70vh] space-y-8 animate-scale-in text-center">
+            <div className="relative">
+                <div className="absolute inset-0 bg-yellow-500 blur-[100px] opacity-20 rounded-full animate-pulse" />
+                <Trophy className="w-48 h-48 text-yellow-400 drop-shadow-2xl animate-bounce relative z-10" />
+            </div>
+            <div>
+                <h1 className="text-7xl font-display font-bold text-white mb-4 text-glow">CHAMPION!</h1>
+                <p className="text-2xl text-slate-300">You have conquered the Blitz Cup!</p>
+            </div>
             <div className="flex gap-4">
-                <Button onClick={onExit} size="lg" className="btn-kid-primary">
+                <Button onClick={onExit} size="lg" className="h-16 px-12 text-xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 text-slate-900 hover:scale-105 transition-transform shadow-xl shadow-orange-500/20">
                     Return to Lobby
                 </Button>
             </div>
@@ -218,44 +219,62 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
   }
   if (tournamentState === 'lost') {
     return (
-        <div className="flex flex-col items-center justify-center h-[60vh] space-y-8 animate-fade-in">
-            <div className="text-6xl">💔</div>
-            <h1 className="text-4xl font-display font-bold text-slate-800">Eliminated</h1>
-            <p className="text-xl text-slate-500">Better luck next time!</p>
-            <Button onClick={onExit} size="lg" className="btn-kid-secondary">
+        <div className="flex flex-col items-center justify-center h-[70vh] space-y-8 animate-fade-in text-center">
+            <div className="text-8xl grayscale opacity-50">💔</div>
+            <div>
+                <h1 className="text-6xl font-display font-bold text-slate-500 mb-4">Eliminated</h1>
+                <p className="text-2xl text-slate-400">Better luck next time!</p>
+            </div>
+            <Button onClick={onExit} size="lg" variant="outline" className="h-14 px-10 text-lg border-slate-700 text-slate-300 hover:bg-slate-800">
                 Return to Lobby
             </Button>
         </div>
     );
   }
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in pb-12">
       <div className="flex items-center justify-between">
-        <Button variant="destructive" onClick={onExit} className="bg-red-600 hover:bg-red-700 text-white font-bold">
+        <Button variant="destructive" onClick={onExit} className="bg-red-900/50 hover:bg-red-900 text-red-200 border border-red-800">
           <ArrowLeft className="mr-2 h-4 w-4" /> Leave Tournament
         </Button>
         <div className="flex flex-col items-end">
-            <h2 className="text-2xl font-display font-bold text-slate-800">KickStar Cup</h2>
+            <h2 className="text-3xl font-display font-bold text-white tracking-wide">Blitz Cup</h2>
             {timeRemaining > 0 && (
-                <div className="flex items-center gap-2 text-blue-600 font-mono font-bold animate-pulse">
+                <div className="flex items-center gap-2 text-blue-400 font-mono font-bold animate-pulse bg-blue-900/20 px-3 py-1 rounded-full border border-blue-800/50 mt-2">
                     <Clock className="w-4 h-4" />
                     Next Round: {formatTime(timeRemaining)}
                 </div>
             )}
         </div>
       </div>
-      <div className="bg-slate-50 rounded-3xl p-8 border-4 border-slate-100 shadow-inner overflow-hidden">
+      {/* Bracket Container */}
+      <div className="bg-slate-950/50 rounded-3xl border border-white/5 shadow-2xl overflow-hidden relative">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 pointer-events-none" />
         <Bracket matches={matches} currentRound={currentRound} />
       </div>
       <div className="flex justify-center">
         <Button
             size="lg"
-            className="btn-kid-primary text-xl px-12 py-6 h-auto"
+            className={cn(
+                "h-20 px-16 text-2xl font-bold rounded-2xl shadow-2xl transition-all duration-300",
+                timeRemaining > 0 
+                    ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700" 
+                    : "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white hover:scale-105 hover:shadow-emerald-500/25 border-b-4 border-teal-800 active:border-b-0 active:translate-y-1"
+            )}
             onClick={startUserMatch}
-            disabled={timeRemaining > 0} // Optional: Disable until timer ends, or allow early start
+            disabled={timeRemaining > 0}
         >
-            <Play className="mr-2 w-6 h-6 fill-current" />
-            {timeRemaining > 0 ? `Auto-Start in ${formatTime(timeRemaining)}` : 'Play Next Match'}
+            {timeRemaining > 0 ? (
+                <span className="flex items-center gap-3">
+                    <Loader2 className="w-6 h-6 animate-spin" /> 
+                    Starting in {formatTime(timeRemaining)}
+                </span>
+            ) : (
+                <span className="flex items-center gap-3">
+                    <Play className="w-8 h-8 fill-current" /> 
+                    PLAY MATCH
+                </span>
+            )}
         </Button>
       </div>
     </div>

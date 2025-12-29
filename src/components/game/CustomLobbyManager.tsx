@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameCanvas } from './GameCanvas';
 import { GameState } from '@shared/physics';
-import { WSMessage, LobbyState, GameEvent } from '@shared/types';
+import { WSMessage, LobbyState } from '@shared/types';
 import { useUserStore } from '@/store/useUserStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,26 +35,6 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
-  const connectWS = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return wsRef.current;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const ws = new WebSocket(`${protocol}//${host}/api/ws`);
-    wsRef.current = ws;
-    ws.onmessage = (event) => {
-        try {
-            const msg = JSON.parse(event.data) as WSMessage;
-            handleMessage(msg);
-        } catch (e) {
-            console.error('Failed to parse WS message', e);
-        }
-    };
-    ws.onerror = () => {
-        toast.error('Connection error');
-        setIsConnecting(false);
-    };
-    return ws;
-  }, []);
   const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
         case 'lobby_update': {
@@ -121,6 +101,26 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
         }
     }
   }, [matchInfo]);
+  const connectWS = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return wsRef.current;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const ws = new WebSocket(`${protocol}//${host}/api/ws`);
+    wsRef.current = ws;
+    ws.onmessage = (event) => {
+        try {
+            const msg = JSON.parse(event.data) as WSMessage;
+            handleMessage(msg);
+        } catch (e) {
+            console.error('Failed to parse WS message', e);
+        }
+    };
+    ws.onerror = () => {
+        toast.error('Connection error');
+        setIsConnecting(false);
+    };
+    return ws;
+  }, [handleMessage]);
   const createLobby = () => {
     if (!profile) return;
     setIsConnecting(true);
@@ -230,8 +230,8 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                         <h3 className="text-xl font-bold text-slate-800">Join Lobby</h3>
                         <p className="text-slate-500">Enter a code to join an existing lobby.</p>
                         <div className="flex gap-2 w-full">
-                            <Input 
-                                placeholder="ENTER CODE" 
+                            <Input
+                                placeholder="ENTER CODE"
                                 className="text-center uppercase font-mono font-bold tracking-widest"
                                 value={joinCode}
                                 onChange={e => setJoinCode(e.target.value.toUpperCase())}

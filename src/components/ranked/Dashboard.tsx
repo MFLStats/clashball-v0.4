@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Trophy, TrendingUp, Loader2, Users, User, Shield, Plus } from 'lucide-react';
+import { Trophy, TrendingUp, Loader2, Users, User, Shield, Plus, Goal, HandHelping, Crown, AlertTriangle } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
 import { GameMode, ModeStats, TeamProfile } from '@shared/types';
 export function Dashboard() {
@@ -41,51 +41,101 @@ export function Dashboard() {
       : 0;
     return (
       <div className="space-y-8 animate-fade-in mt-6">
-        {/* Hero Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Main Rank Card */}
-          <Card className="md:col-span-2 card-kid border-slate-200 shadow-sm">
-            <CardContent className="p-6 flex items-center gap-8">
-              <RankBadge tier={stats.tier} division={stats.division} size="xl" />
-              <div className="flex-1 space-y-4">
+        {/* Ranked Performance Section */}
+        <div className="space-y-4">
+            <h3 className="text-xl font-display font-bold text-slate-800 px-2 flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-haxball-blue" />
+                Ranked Performance
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Main Rank Card */}
+            <Card className="md:col-span-2 card-kid border-slate-200 shadow-sm">
+                <CardContent className="p-6 flex items-center gap-8">
+                <RankBadge tier={stats.tier} division={stats.division} size="xl" />
+                <div className="flex-1 space-y-4">
+                    <div>
+                    <h2 className="text-3xl font-display font-bold text-slate-800">
+                        {stats.tier} {stats.division === 1 ? 'I' : stats.division === 2 ? 'II' : 'III'}
+                    </h2>
+                    <p className="text-slate-500 font-medium">Rating: {stats.rating} MMR</p>
+                    </div>
+                    <div className="space-y-2">
+                    <div className="flex justify-between text-sm font-bold text-slate-500">
+                        <span>Progress to Next Rank</span>
+                        <span>{progress}%</span>
+                    </div>
+                    <Progress value={progress} className="h-4 rounded-full bg-slate-100" />
+                    <p className="text-xs text-slate-400 text-right">Next Milestone: {nextMilestone} MMR</p>
+                    </div>
+                </div>
+                </CardContent>
+            </Card>
+            {/* Quick Win/Loss Stats */}
+            <div className="space-y-4">
+                <Card className="card-kid p-4 flex items-center gap-4 border-slate-200">
+                <div className="p-3 bg-green-100 rounded-xl text-green-600">
+                    <Trophy className="w-6 h-6" />
+                </div>
                 <div>
-                  <h2 className="text-3xl font-display font-bold text-slate-800">
-                    {stats.tier} {stats.division === 1 ? 'I' : stats.division === 2 ? 'II' : 'III'}
-                  </h2>
-                  <p className="text-slate-500 font-medium">Rating: {stats.rating} MMR</p>
+                    <p className="text-sm text-slate-500 font-bold">Total Wins</p>
+                    <p className="text-2xl font-display font-bold text-slate-800">{stats.wins}</p>
                 </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm font-bold text-slate-500">
-                    <span>Progress to Next Rank</span>
-                    <span>{progress}%</span>
-                  </div>
-                  <Progress value={progress} className="h-4 rounded-full bg-slate-100" />
-                  <p className="text-xs text-slate-400 text-right">Next Milestone: {nextMilestone} MMR</p>
+                </Card>
+                <Card className="card-kid p-4 flex items-center gap-4 border-slate-200">
+                <div className="p-3 bg-blue-100 rounded-xl text-blue-600">
+                    <TrendingUp className="w-6 h-6" />
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-          {/* Quick Stats */}
-          <div className="space-y-4">
-            <Card className="card-kid p-4 flex items-center gap-4 border-slate-200">
-              <div className="p-3 bg-green-100 rounded-xl text-green-600">
-                <Trophy className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm text-slate-500 font-bold">Total Wins</p>
-                <p className="text-2xl font-display font-bold text-slate-800">{stats.wins}</p>
-              </div>
-            </Card>
-            <Card className="card-kid p-4 flex items-center gap-4 border-slate-200">
-              <div className="p-3 bg-blue-100 rounded-xl text-blue-600">
-                <TrendingUp className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm text-slate-500 font-bold">Win Rate</p>
-                <p className="text-2xl font-display font-bold text-slate-800">{winRate}%</p>
-              </div>
-            </Card>
-          </div>
+                <div>
+                    <p className="text-sm text-slate-500 font-bold">Win Rate</p>
+                    <p className="text-2xl font-display font-bold text-slate-800">{winRate}%</p>
+                </div>
+                </Card>
+            </div>
+            </div>
+        </div>
+        {/* Career Statistics Section */}
+        <div className="space-y-4">
+            <h3 className="text-xl font-display font-bold text-slate-800 px-2 flex items-center gap-2">
+                <Users className="w-5 h-5 text-haxball-blue" />
+                Career Statistics
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 border-slate-200 hover:border-haxball-blue transition-colors">
+                    <div className="p-3 bg-emerald-100 rounded-full text-emerald-600 mb-1">
+                        <Goal className="w-6 h-6" />
+                    </div>
+                    <p className="text-2xl font-display font-bold text-slate-800">{stats.goals || 0}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Goals</p>
+                </Card>
+                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 border-slate-200 hover:border-haxball-blue transition-colors">
+                    <div className="p-3 bg-indigo-100 rounded-full text-indigo-600 mb-1">
+                        <HandHelping className="w-6 h-6" />
+                    </div>
+                    <p className="text-2xl font-display font-bold text-slate-800">{stats.assists || 0}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Assists</p>
+                </Card>
+                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 border-slate-200 hover:border-haxball-blue transition-colors">
+                    <div className="p-3 bg-amber-100 rounded-full text-amber-600 mb-1">
+                        <Crown className="w-6 h-6" />
+                    </div>
+                    <p className="text-2xl font-display font-bold text-slate-800">{stats.mvps || 0}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">MVPs</p>
+                </Card>
+                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 border-slate-200 hover:border-haxball-blue transition-colors">
+                    <div className="p-3 bg-sky-100 rounded-full text-sky-600 mb-1">
+                        <Shield className="w-6 h-6" />
+                    </div>
+                    <p className="text-2xl font-display font-bold text-slate-800">{stats.cleanSheets || 0}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Clean Sheets</p>
+                </Card>
+                <Card className="card-kid p-4 flex flex-col items-center text-center gap-2 border-slate-200 hover:border-haxball-blue transition-colors">
+                    <div className="p-3 bg-red-100 rounded-full text-red-600 mb-1">
+                        <AlertTriangle className="w-6 h-6" />
+                    </div>
+                    <p className="text-2xl font-display font-bold text-slate-800">{stats.ownGoals || 0}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Own Goals</p>
+                </Card>
+            </div>
         </div>
         {/* Tier Ladder Preview */}
         <div className="space-y-4">

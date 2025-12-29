@@ -176,7 +176,7 @@ export class GlobalDurableObject extends DurableObject {
         const count = queue.length;
         const msg = JSON.stringify({ type: 'queue_update', count });
         queue.forEach(p => {
-            try { p.ws.send(msg); } catch(e) {}
+            try { p.ws.send(msg); } catch(e) { /* empty */ }
         });
     }
     checkQueue(mode: GameMode) {
@@ -265,7 +265,7 @@ export class GlobalDurableObject extends DurableObject {
         };
         const msg = JSON.stringify({ type: 'lobby_update', state });
         lobby.players.forEach(p => {
-            try { p.ws.send(msg); } catch(e) {}
+            try { p.ws.send(msg); } catch(e) { /* empty */ }
         });
     }
     // --- Match Logic ---
@@ -278,9 +278,12 @@ export class GlobalDurableObject extends DurableObject {
             team: (i < players.length / 2 ? 'red' : 'blue') as 'red' | 'blue'
         }));
         const match = new Match(matchId, matchPlayers, (id, winner) => {
+            // Retrieve stats before deleting match
+            const matchInstance = this.matches.get(id);
+            const playerStats = matchInstance ? Object.fromEntries(matchInstance.matchStats) : undefined;
             this.matches.delete(id);
             // Fire and forget rating updates
-            this.ctx.waitUntil(this.handleMatchEnd(id, winner, matchPlayers, mode));
+            this.ctx.waitUntil(this.handleMatchEnd(id, winner, matchPlayers, mode, playerStats));
         });
         this.matches.set(matchId, match);
         // Notify players
@@ -296,7 +299,7 @@ export class GlobalDurableObject extends DurableObject {
         });
         match.start();
     }
-    async handleMatchEnd(matchId: string, winner: 'red' | 'blue', players: { id: string, team: 'red' | 'blue' }[], mode: GameMode) {
+    async handleMatchEnd(matchId: string, winner: 'red' | 'blue', players: { id: string, team: 'red' | 'blue' }[], mode: GameMode, playerStats?: any) {
         // 1. Get all user profiles to calculate team averages
         const playerProfiles = await Promise.all(players.map(p => this.getUserProfile(p.id)));
         const redPlayers = players.filter(p => p.team === 'red');
@@ -321,7 +324,8 @@ export class GlobalDurableObject extends DurableObject {
                 opponentRating,
                 result,
                 timestamp: Date.now(),
-                mode
+                mode,
+                playerStats // Pass the stats map
             });
         });
         await Promise.all(updates);
@@ -412,7 +416,12 @@ export class GlobalDurableObject extends DurableObject {
         wins: 0,
         losses: 0,
         tier: 'Silver',
-        division: 3
+        division: 3,
+        goals: 0,
+        assists: 0,
+        mvps: 0,
+        cleanSheets: 0,
+        ownGoals: 0
       };
       if (!profile) {
         // Create new profile
@@ -441,7 +450,12 @@ export class GlobalDurableObject extends DurableObject {
             wins: profile.wins || 0,
             losses: profile.losses || 0,
             tier: profile.tier || 'Silver',
-            division: profile.division || 3
+            division: profile.division || 3,
+            goals: 0,
+            assists: 0,
+            mvps: 0,
+            cleanSheets: 0,
+            ownGoals: 0
         };
         profile = {
             id: profile.id,
@@ -462,6 +476,16 @@ export class GlobalDurableObject extends DurableObject {
           profile.teams = [];
           await this.ctx.storage.put(key, profile);
       }
+      // Migration: Ensure new stats fields exist
+      ['1v1', '2v2', '3v3', '4v4'].forEach(mode => {
+          if (profile.stats[mode]) {
+              if (profile.stats[mode].goals === undefined) profile.stats[mode].goals = 0;
+              if (profile.stats[mode].assists === undefined) profile.stats[mode].assists = 0;
+              if (profile.stats[mode].mvps === undefined) profile.stats[mode].mvps = 0;
+              if (profile.stats[mode].cleanSheets === undefined) profile.stats[mode].cleanSheets = 0;
+              if (profile.stats[mode].ownGoals === undefined) profile.stats[mode].ownGoals = 0;
+          }
+      });
       return profile as UserProfile;
     }
     // --- Team Methods ---
@@ -474,7 +498,12 @@ export class GlobalDurableObject extends DurableObject {
             wins: 0,
             losses: 0,
             tier: 'Silver',
-            division: 3
+            division: 3,
+            goals: 0,
+            assists: 0,
+            mvps: 0,
+            cleanSheets: 0,
+            ownGoals: 0
         };
         const newTeam: TeamProfile = {
             id: teamId,
@@ -544,6 +573,15 @@ export class GlobalDurableObject extends DurableObject {
       stats.rd = newRD;
       if (match.result === 'win') stats.wins++;
       if (match.result === 'loss') stats.losses++;
+      // Update Advanced Stats
+      if (match.playerStats && match.playerStats[match.userId]) {
+          const pStats = match.playerStats[match.userId];
+          stats.goals = (stats.goals || 0) + pStats.goals;
+          stats.assists = (stats.assists || 0) + pStats.assists;
+          stats.ownGoals = (stats.ownGoals || 0) + pStats.ownGoals;
+          if (pStats.isMvp) stats.mvps = (stats.mvps || 0) + 1;
+          if (pStats.cleanSheet) stats.cleanSheets = (stats.cleanSheets || 0) + 1;
+      }
       // Recalculate Tier
       const { tier, division } = this.calculateTier(stats.rating);
       stats.tier = tier;

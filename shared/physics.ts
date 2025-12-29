@@ -16,10 +16,17 @@ export interface Player {
     kick: boolean;
   };
 }
+export interface BallTouch {
+  id: string;
+  team: 'red' | 'blue';
+  time: number;
+}
 export interface Ball {
   pos: Vector;
   vel: Vector;
   radius: number;
+  lastTouch: BallTouch | null;
+  previousTouch: BallTouch | null;
 }
 export interface Field {
   width: number;
@@ -43,21 +50,19 @@ export class PhysicsEngine {
   static readonly FIELD_HEIGHT = 600;
   static readonly GOAL_HEIGHT = 180;
   // Movement & Physics (Per Second)
-  // Previous: 3.5 units/frame * 60 = 210 units/sec
   static readonly PLAYER_MAX_SPEED = 210;
-  // Previous: 0.8 units/frame^2 * 60 * 60 = 2880 units/sec^2
   static readonly PLAYER_ACCELERATION = 2880;
   // Damping Base (Applied per 1/60s)
-  // We use Math.pow(BASE, dt * 60) to apply it correctly for any dt
   static readonly PLAYER_DAMPING_BASE = 0.90;
   static readonly BALL_DAMPING_BASE = 0.990;
   // Kick Strength (Instantaneous Velocity Change)
-  // Previous: 6.0 units/frame -> 360 units/sec
   static readonly KICK_STRENGTH = 360;
   static readonly WALL_BOUNCE = 0.75;
   static readonly PLAYER_BOUNCE = 0.5;
-  // Velocity threshold for stopping (approx 0.01 units/frame -> 0.6 units/sec)
+  // Velocity threshold for stopping
   static readonly STOP_THRESHOLD = 0.6;
+  // Assist Window (seconds)
+  static readonly ASSIST_WINDOW = 3.0;
   static createInitialState(): GameState {
     return {
       players: [
@@ -85,7 +90,9 @@ export class PhysicsEngine {
       ball: {
         pos: { x: 600, y: 300 },
         vel: { x: 0, y: 0 },
-        radius: this.BALL_RADIUS
+        radius: this.BALL_RADIUS,
+        lastTouch: null,
+        previousTouch: null
       },
       score: { red: 0, blue: 0 },
       field: {
@@ -110,7 +117,6 @@ export class PhysicsEngine {
         events.push({ type: 'whistle' });
     }
     // Calculate time-adjusted damping
-    // If dt is 1/60 (0.016s), exponent is 1.
     const playerDamping = Math.pow(this.PLAYER_DAMPING_BASE, dt * 60);
     const ballDamping = Math.pow(this.BALL_DAMPING_BASE, dt * 60);
     // --- 1. Update Players ---
@@ -169,35 +175,49 @@ export class PhysicsEngine {
         events.push({ type: 'wall' });
     }
     // Goal Detection & X-Axis Walls
-    // Left Side
-    if (b.pos.x < 0) {
+    const checkGoal = (isLeft: boolean) => {
         const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 &&
                        b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
         if (isGoal) {
-            newState.score.blue++;
-            events.push({ type: 'goal', team: 'blue' });
+            const scoringTeam = isLeft ? 'blue' : 'red';
+            newState.score[scoringTeam]++;
+            // Determine Scorer & Assister
+            let scorerId: string | undefined;
+            let assisterId: string | undefined;
+            if (b.lastTouch) {
+                if (b.lastTouch.team === scoringTeam) {
+                    scorerId = b.lastTouch.id;
+                    // Check Assist
+                    if (b.previousTouch &&
+                        b.previousTouch.team === scoringTeam &&
+                        b.previousTouch.id !== scorerId &&
+                        Math.abs(b.lastTouch.time - b.previousTouch.time) < this.ASSIST_WINDOW) {
+                        assisterId = b.previousTouch.id;
+                    }
+                } else {
+                    // Own Goal
+                    scorerId = b.lastTouch.id; // Still attribute to last toucher, but logic handles it as OG
+                }
+            }
+            events.push({ type: 'goal', team: scoringTeam, scorerId, assisterId });
             this.resetPositions(newState);
-            return { state: newState, events };
-        } else {
-            b.pos.x = b.radius;
-            b.vel.x *= -this.WALL_BOUNCE;
-            events.push({ type: 'wall' });
+            return true;
         }
+        return false;
+    };
+    // Left Side
+    if (b.pos.x < 0) {
+        if (checkGoal(true)) return { state: newState, events };
+        b.pos.x = b.radius;
+        b.vel.x *= -this.WALL_BOUNCE;
+        events.push({ type: 'wall' });
     }
     // Right Side
     if (b.pos.x > newState.field.width) {
-        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 &&
-                       b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
-        if (isGoal) {
-            newState.score.red++;
-            events.push({ type: 'goal', team: 'red' });
-            this.resetPositions(newState);
-            return { state: newState, events };
-        } else {
-            b.pos.x = newState.field.width - b.radius;
-            b.vel.x *= -this.WALL_BOUNCE;
-            events.push({ type: 'wall' });
-        }
+        if (checkGoal(false)) return { state: newState, events };
+        b.pos.x = newState.field.width - b.radius;
+        b.vel.x *= -this.WALL_BOUNCE;
+        events.push({ type: 'wall' });
     }
     // --- 3. Player-Ball Collision (Impulse Based) ---
     newState.players.forEach(p => {
@@ -221,7 +241,6 @@ export class PhysicsEngine {
         // Only resolve if moving towards each other
         if (velAlongNormal < 0) {
             // Calculate impulse scalar
-            // j = -(1 + e) * v_rel_norm
             const j = -(1 + this.PLAYER_BOUNCE) * velAlongNormal;
             // Apply impulse to ball
             b.vel.x += j * nx;
@@ -229,6 +248,15 @@ export class PhysicsEngine {
             // Add some of player's velocity directly for "grip" feel
             b.vel.x += p.vel.x * 0.2;
             b.vel.y += p.vel.y * 0.2;
+            // Update Touch History
+            if (b.lastTouch?.id !== p.id) {
+                b.previousTouch = b.lastTouch;
+            }
+            b.lastTouch = {
+                id: p.id,
+                team: p.team,
+                time: newState.timeRemaining // Use game time
+            };
             // Event
             if (p.isKicking) {
                 events.push({ type: 'kick' });
@@ -249,6 +277,8 @@ export class PhysicsEngine {
   static resetPositions(state: GameState) {
     state.ball.pos = { x: state.field.width / 2, y: state.field.height / 2 };
     state.ball.vel = { x: 0, y: 0 };
+    state.ball.lastTouch = null;
+    state.ball.previousTouch = null;
     const redPlayers = state.players.filter(p => p.team === 'red');
     const bluePlayers = state.players.filter(p => p.team === 'blue');
     const setFormation = (players: Player[], isRed: boolean) => {
@@ -263,8 +293,6 @@ export class PhysicsEngine {
                 p.pos = { x: baseX, y: state.field.height / 2 };
             } else {
                 // Distribute vertically
-                // e.g. 2 players: 1/3 and 2/3 of height
-                // e.g. 3 players: 1/4, 2/4, 3/4
                 const segment = state.field.height / (count + 1);
                 p.pos = { x: baseX, y: segment * (index + 1) };
             }

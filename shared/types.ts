@@ -19,6 +19,12 @@ export interface ModeStats {
   losses: number;
   tier: Tier;
   division: 1 | 2 | 3;
+  // Advanced Stats
+  goals: number;
+  assists: number;
+  mvps: number;
+  cleanSheets: number;
+  ownGoals: number;
 }
 export interface TeamProfile {
   id: string;
@@ -43,6 +49,13 @@ export interface Team {
   members: string[]; // User IDs
   stats: Record<GameMode, ModeStats>;
 }
+export interface PlayerMatchStats {
+  goals: number;
+  assists: number;
+  ownGoals: number;
+  isMvp: boolean;
+  cleanSheet: boolean;
+}
 export interface MatchResult {
   userId: string;
   teamId?: string; // Optional: If playing as a team
@@ -50,6 +63,7 @@ export interface MatchResult {
   result: 'win' | 'loss' | 'draw';
   timestamp: number;
   mode: GameMode;
+  playerStats?: Record<string, PlayerMatchStats>; // Map of userId -> stats
 }
 export interface MatchResponse {
   newRating: number;
@@ -90,6 +104,8 @@ export type GameEventType = 'kick' | 'wall' | 'player' | 'goal' | 'whistle';
 export interface GameEvent {
   type: GameEventType;
   team?: 'red' | 'blue'; // For goals
+  scorerId?: string;
+  assisterId?: string;
 }
 // --- Lobby Types ---
 export interface LobbyState {

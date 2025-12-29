@@ -1,11 +1,12 @@
 import { PhysicsEngine, GameState } from '@shared/physics';
-import { WSMessage } from '@shared/types';
+import { WSMessage, PlayerMatchStats } from '@shared/types';
 export class Match {
   id: string;
   players: Map<string, { ws: WebSocket; team: 'red' | 'blue'; username: string }>;
   gameState: GameState;
   interval: any;
   onEnd: (matchId: string, winner: 'red' | 'blue') => void;
+  matchStats: Map<string, PlayerMatchStats> = new Map();
   private lastTime: number = Date.now();
   constructor(id: string, players: { id: string; ws: WebSocket; team: 'red' | 'blue'; username: string }[], onEnd: (id: string, winner: 'red' | 'blue') => void) {
     this.id = id;
@@ -26,9 +27,16 @@ export class Match {
     }));
     // Apply correct formation based on team size
     PhysicsEngine.resetPositions(this.gameState);
-    // Store WS connections
+    // Store WS connections and Init Stats
     players.forEach(p => {
       this.players.set(p.id, { ws: p.ws, team: p.team, username: p.username });
+      this.matchStats.set(p.id, {
+        goals: 0,
+        assists: 0,
+        ownGoals: 0,
+        isMvp: false,
+        cleanSheet: false
+      });
     });
   }
   start() {
@@ -69,6 +77,28 @@ export class Match {
     // Run physics with delta time
     const { state, events } = PhysicsEngine.update(this.gameState, dt);
     this.gameState = state;
+    // Process Events for Stats
+    events.forEach(event => {
+        if (event.type === 'goal' && event.team) {
+            // Handle Scorer
+            if (event.scorerId) {
+                const scorer = this.gameState.players.find(p => p.id === event.scorerId);
+                const stats = this.matchStats.get(event.scorerId);
+                if (scorer && stats) {
+                    if (scorer.team === event.team) {
+                        stats.goals++;
+                    } else {
+                        stats.ownGoals++;
+                    }
+                }
+            }
+            // Handle Assister
+            if (event.assisterId) {
+                const stats = this.matchStats.get(event.assisterId);
+                if (stats) stats.assists++;
+            }
+        }
+    });
     // Broadcast State
     this.broadcast({ type: 'game_state', state: this.gameState });
     // Broadcast Events
@@ -94,6 +124,34 @@ export class Match {
   }
   private endGame(winner: 'red' | 'blue') {
     this.stop();
+    // Calculate MVP and Clean Sheets
+    let maxScore = -1;
+    let mvpId = '';
+    this.matchStats.forEach((stats, userId) => {
+        // MVP Score: Goals * 10 + Assists * 5 - OwnGoals * 5
+        const score = (stats.goals * 10) + (stats.assists * 5) - (stats.ownGoals * 5);
+        if (score > maxScore) {
+            maxScore = score;
+            mvpId = userId;
+        }
+        // Clean Sheet
+        const player = this.gameState.players.find(p => p.id === userId);
+        if (player) {
+            const opponentScore = player.team === 'red' ? this.gameState.score.blue : this.gameState.score.red;
+            if (opponentScore === 0) {
+                stats.cleanSheet = true;
+            }
+        }
+    });
+    // Set MVP
+    if (mvpId) {
+        const stats = this.matchStats.get(mvpId);
+        if (stats) stats.isMvp = true;
+    }
+    // Attach stats to match result logic via callback
+    // We need to expose matchStats to the DurableObject
+    // Since onEnd signature is fixed, we'll attach it to the match object or handle it in DO via a getter?
+    // Better: Update onEnd signature in DO, but here we can just expose it as a public property
     this.broadcast({ type: 'game_over', winner });
     this.onEnd(this.id, winner);
   }

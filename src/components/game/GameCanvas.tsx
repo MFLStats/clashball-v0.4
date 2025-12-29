@@ -9,7 +9,7 @@ import { SoundEngine } from '@/lib/audio';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { PostMatchSummary } from './PostMatchSummary';
 interface GameCanvasProps {
-  onGameEnd?: (winner: 'red' | 'blue') => void;
+  onGameEnd?: (winner: 'red' | 'blue', score: { red: number; blue: number }) => void;
   winningScore?: number;
   externalState?: GameState | null;
   externalWinner?: 'red' | 'blue' | null;
@@ -129,7 +129,11 @@ export function GameCanvas({
             localStatsRef.current[mvpId].isMvp = true;
         }
     }
-    if (onGameEnd) onGameEnd(winner);
+    if (onGameEnd) {
+        // Pass the authoritative score (local ref or external state if available)
+        const finalScore = externalState ? externalState.score : gameStateRef.current.score;
+        onGameEnd(winner, finalScore);
+    }
   }, [onGameEnd, particles, externalState]);
   // Watch for external winner (Online/Lobby)
   useEffect(() => {
@@ -653,6 +657,8 @@ export function GameCanvas({
   const userTeam = externalState
     ? summaryPlayers.find(p => p.id === currentUserId)?.team
     : 'red';
+  // Determine final score to display in summary (use external if available, else local state)
+  const finalScore = externalState ? externalState.score : score;
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-4xl mx-auto">
       {/* Scoreboard - Clean Style */}
@@ -689,7 +695,7 @@ export function GameCanvas({
             <PostMatchSummary
                 winner={gameOver}
                 userTeam={userTeam}
-                score={score}
+                score={finalScore}
                 stats={summaryStats}
                 players={summaryPlayers}
                 onPlayAgain={onPlayAgain || (!externalState ? handleReset : undefined)}

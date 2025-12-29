@@ -452,13 +452,13 @@ export class GlobalDurableObject extends DurableObject {
             ws: s.ws,
             username: s.username
         }));
-        const match = new Match(matchId, matchPlayers, matchSpectators, settings, (id, winner) => {
+        const match = new Match(matchId, matchPlayers, matchSpectators, settings, (id, winner, score) => {
             // Retrieve stats before deleting match
             const matchInstance = this.matches.get(id);
             const playerStats = matchInstance ? Object.fromEntries(matchInstance.matchStats) : undefined;
             this.matches.delete(id);
             // Fire and forget rating updates
-            this.ctx.waitUntil(this.handleMatchEnd(id, winner, matchPlayers, mode, playerStats));
+            this.ctx.waitUntil(this.handleMatchEnd(id, winner, matchPlayers, mode, score, playerStats));
         });
         this.matches.set(matchId, match);
         // Notify players
@@ -498,7 +498,7 @@ export class GlobalDurableObject extends DurableObject {
         });
         match.start();
     }
-    async handleMatchEnd(matchId: string, winner: 'red' | 'blue', players: { id: string, team: 'red' | 'blue', username: string }[], mode: GameMode, playerStats?: Record<string, PlayerMatchStats>) {
+    async handleMatchEnd(matchId: string, winner: 'red' | 'blue', players: { id: string, team: 'red' | 'blue', username: string }[], mode: GameMode, score: { red: number; blue: number }, playerStats?: Record<string, PlayerMatchStats>) {
         // 1. Get all user profiles to calculate team averages and detect teams
         const playerProfiles = await Promise.all(players.map(p => this.getUserProfile(p.id)));
         const redPlayers = players.filter(p => p.team === 'red');
@@ -545,6 +545,8 @@ export class GlobalDurableObject extends DurableObject {
             const isRed = p.team === 'red';
             const opponentRating = isRed ? blueAvg : redAvg;
             const result = (winner === 'red' && isRed) || (winner === 'blue' && !isRed) ? 'win' : 'loss';
+            const myScore = isRed ? score.red : score.blue;
+            const opScore = isRed ? score.blue : score.red;
             // Determine Opponent Name
             let opponentName = 'Opponent';
             if (mode === '1v1') {
@@ -562,7 +564,8 @@ export class GlobalDurableObject extends DurableObject {
                 result,
                 timestamp: Date.now(),
                 mode,
-                playerStats // Pass the stats map
+                playerStats, // Pass the stats map
+                score: { my: myScore, op: opScore }
             });
         });
         // Helper to aggregate stats for a team
@@ -598,6 +601,8 @@ export class GlobalDurableObject extends DurableObject {
         if (redTeamId) {
             const result = winner === 'red' ? 'win' : 'loss';
             const aggStats = getAggregatedStats(redPlayers, bluePlayers);
+            const myScore = score.red;
+            const opScore = score.blue;
             const representativeId = redPlayers[0].id;
             teamUpdates.push(this.processMatch({
                 matchId,
@@ -608,12 +613,15 @@ export class GlobalDurableObject extends DurableObject {
                 result,
                 timestamp: Date.now(),
                 mode,
-                playerStats: aggStats ? { [redTeamId]: aggStats } : undefined
+                playerStats: aggStats ? { [redTeamId]: aggStats } : undefined,
+                score: { my: myScore, op: opScore }
             }));
         }
         if (blueTeamId) {
             const result = winner === 'blue' ? 'win' : 'loss';
             const aggStats = getAggregatedStats(bluePlayers, redPlayers);
+            const myScore = score.blue;
+            const opScore = score.red;
             const representativeId = bluePlayers[0].id;
             teamUpdates.push(this.processMatch({
                 matchId,
@@ -624,7 +632,8 @@ export class GlobalDurableObject extends DurableObject {
                 result,
                 timestamp: Date.now(),
                 mode,
-                playerStats: aggStats ? { [blueTeamId]: aggStats } : undefined
+                playerStats: aggStats ? { [blueTeamId]: aggStats } : undefined,
+                score: { my: myScore, op: opScore }
             }));
         }
         await Promise.all([...updates, ...teamUpdates]);
@@ -925,7 +934,8 @@ export class GlobalDurableObject extends DurableObject {
           result: match.result,
           ratingChange: Math.round(ratingChange),
           timestamp: match.timestamp,
-          mode
+          mode,
+          score: match.score
       };
       if (!entity.recentMatches) entity.recentMatches = [];
       entity.recentMatches.unshift(historyEntry);

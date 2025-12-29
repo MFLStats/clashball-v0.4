@@ -43,6 +43,11 @@ export function MatchHistory({ matches }: MatchHistoryProps) {
                     <span className="font-bold text-white text-lg">
                       {match.result === 'win' ? 'VICTORY' : match.result === 'loss' ? 'DEFEAT' : 'DRAW'}
                     </span>
+                    {match.score && (
+                        <span className="text-slate-400 font-mono font-bold mx-1">
+                            {match.score.my} - {match.score.op}
+                        </span>
+                    )}
                     <span className="text-xs font-mono text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
                       {match.mode}
                     </span>

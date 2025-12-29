@@ -6,7 +6,7 @@ export class Match {
   spectators: Map<string, { ws: WebSocket; username: string }>;
   gameState: GameState;
   interval: any;
-  onEnd: (matchId: string, winner: 'red' | 'blue') => void;
+  onEnd: (matchId: string, winner: 'red' | 'blue', score: { red: number; blue: number }) => void;
   matchStats: Map<string, PlayerMatchStats> = new Map();
   settings: LobbySettings;
   private lastTime: number = Date.now();
@@ -15,7 +15,7 @@ export class Match {
     players: { id: string; ws: WebSocket; team: 'red' | 'blue'; username: string }[],
     spectators: { id: string; ws: WebSocket; username: string }[],
     settings: LobbySettings,
-    onEnd: (id: string, winner: 'red' | 'blue') => void
+    onEnd: (id: string, winner: 'red' | 'blue', score: { red: number; blue: number }) => void
   ) {
     this.id = id;
     this.players = new Map();
@@ -183,7 +183,7 @@ export class Match {
     const statsObj = Object.fromEntries(this.matchStats);
     // Broadcast Game Over with Stats
     this.broadcast({ type: 'game_over', winner, stats: statsObj });
-    this.onEnd(this.id, winner);
+    this.onEnd(this.id, winner, this.gameState.score);
   }
   private broadcast(msg: WSMessage) {
     const str = JSON.stringify(msg);

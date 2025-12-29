@@ -56,20 +56,23 @@ export function HomePage() {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
-  const handleLocalGameEnd = async (winner: 'red' | 'blue') => {
+  const handleLocalGameEnd = async (winner: 'red' | 'blue', score: { red: number; blue: number }) => {
     if (!profile || isProcessing) return;
     setIsProcessing(true);
     try {
       // Red is Local Player, Blue is Bot
       const result = winner === 'red' ? 'win' : 'loss';
       const opponentRating = 1200;
+      const myScore = score.red;
+      const opScore = score.blue;
       const response = await api.reportMatch({
         userId: profile.id,
         opponentRating,
         opponentName: 'Bot (1200)',
         result,
         timestamp: Date.now(),
-        mode: '1v1' // Default to 1v1 for local practice
+        mode: '1v1', // Default to 1v1 for local practice
+        score: { my: myScore, op: opScore }
       });
       toast.success(
         `Match Complete! Rating: ${response.newRating} (${response.ratingChange > 0 ? '+' : ''}${response.ratingChange})`,
@@ -314,7 +317,6 @@ export function HomePage() {
                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     <span>Servers Online</span>
                 </div>
-                <div>Built with ❤️ by Aurelia</div>
             </footer>
           </div>
         );

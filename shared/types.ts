@@ -47,6 +47,7 @@ export interface MatchHistoryEntry {
   ratingChange: number;
   timestamp: number;
   mode: GameMode;
+  score?: { my: number; op: number };
 }
 export interface UserProfile {
   id: string;
@@ -81,6 +82,7 @@ export interface MatchResult {
   timestamp: number;
   mode: GameMode;
   playerStats?: Record<string, PlayerMatchStats>; // Map of userId -> stats
+  score?: { my: number; op: number };
 }
 export interface MatchResponse {
   newRating: number;

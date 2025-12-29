@@ -123,7 +123,7 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
     setMatches(newMatches);
     setCurrentRound(nextRound);
   };
-  const handleUserMatchEnd = (winner: 'red' | 'blue') => {
+  const handleUserMatchEnd = (winner: 'red' | 'blue', score: { red: number; blue: number }) => {
     const userMatch = matches.find(m => m.round === currentRound && m.isUserMatch);
     if (!userMatch) return;
     // In local GameCanvas, User is ALWAYS Red.
@@ -135,8 +135,8 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
           ...m,
           winner: winnerName,
           score: {
-            p1: winnerName === m.player1 ? 3 : Math.floor(Math.random() * 3),
-            p2: winnerName === m.player2 ? 3 : Math.floor(Math.random() * 3)
+            p1: winnerName === m.player1 ? (userWon ? score.red : score.blue) : (userWon ? score.blue : score.red),
+            p2: winnerName === m.player2 ? (userWon ? score.red : score.blue) : (userWon ? score.blue : score.red)
           }
         };
       }
@@ -218,8 +218,8 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={onExit}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Exit Tournament
+        <Button variant="destructive" onClick={onExit} className="bg-red-600 hover:bg-red-700 text-white font-bold">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Leave Tournament
         </Button>
         <h2 className="text-2xl font-display font-bold text-slate-800">KickStar Cup</h2>
         <div className="w-24" />

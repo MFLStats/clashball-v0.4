@@ -6,14 +6,16 @@ import { ArrowLeft, Trophy, Play } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import confetti from 'canvas-confetti';
 import { useUserStore } from '@/store/useUserStore';
+import { TournamentParticipant } from '@shared/types';
 interface TournamentManagerProps {
   onExit: () => void;
+  participants?: TournamentParticipant[];
 }
 const BOT_NAMES = [
   "RoboKicker", "CircuitBreaker", "BinaryBoot", "PixelStriker",
   "CyberGoalie", "NanoNet", "MechaMessi", "DroidBeckham"
 ];
-export function TournamentManager({ onExit }: TournamentManagerProps) {
+export function TournamentManager({ onExit, participants }: TournamentManagerProps) {
   const profile = useUserStore(s => s.profile);
   const [matches, setMatches] = useState<TournamentMatch[]>([]);
   const [currentRound, setCurrentRound] = useState(0); // 0, 1, 2
@@ -22,19 +24,38 @@ export function TournamentManager({ onExit }: TournamentManagerProps) {
   // Initialize Tournament
   useEffect(() => {
     if (matches.length > 0) return;
-    // Shuffle bots
-    const bots = [...BOT_NAMES].sort(() => Math.random() - 0.5);
-    // Replace one bot with User
-    bots[0] = userTeamName;
+    // 1. Get names from participants
+    let playerNames: string[] = [];
+    if (participants && participants.length > 0) {
+        playerNames = participants.map(p => p.username);
+    }
+    // 2. Ensure current user is in the list (if not already)
+    if (!playerNames.includes(userTeamName)) {
+        playerNames.unshift(userTeamName);
+    }
+    // 3. Fill with bots if needed
+    const needed = 8 - playerNames.length;
+    if (needed > 0) {
+        const availableBots = BOT_NAMES.filter(b => !playerNames.includes(b));
+        // Shuffle bots
+        const shuffledBots = [...availableBots].sort(() => Math.random() - 0.5);
+        playerNames = [...playerNames, ...shuffledBots.slice(0, needed)];
+    }
+    // 4. Take first 8 players for the bracket
+    const bracketPlayers = playerNames.slice(0, 8);
+    // Ensure user is in bracketPlayers (in case they were sliced out, though unlikely with unshift)
+    if (!bracketPlayers.includes(userTeamName)) {
+        bracketPlayers[0] = userTeamName;
+    }
     const initialMatches: TournamentMatch[] = [];
     // Round 1 (Quarter Finals) - 4 matches
     for (let i = 0; i < 4; i++) {
       initialMatches.push({
         id: uuidv4(),
         round: 0,
-        player1: bots[i * 2],
-        player2: bots[i * 2 + 1],
-        isUserMatch: bots[i * 2] === userTeamName || bots[i * 2 + 1] === userTeamName
+        player1: bracketPlayers[i * 2],
+        player2: bracketPlayers[i * 2 + 1],
+        isUserMatch: bracketPlayers[i * 2] === userTeamName || bracketPlayers[i * 2 + 1] === userTeamName
       });
     }
     // Round 2 (Semi Finals) - 2 matches (placeholders)
@@ -54,7 +75,7 @@ export function TournamentManager({ onExit }: TournamentManagerProps) {
         player2: 'TBD',
     });
     setMatches(initialMatches);
-  }, [userTeamName, matches.length]);
+  }, [userTeamName, matches.length, participants]);
   const simulateRoundMatches = useCallback(() => {
     const roundMatches = matches.filter(m => m.round === currentRound && !m.winner);
     const updatedMatches = [...matches];

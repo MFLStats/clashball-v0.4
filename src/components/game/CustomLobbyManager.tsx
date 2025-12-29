@@ -6,7 +6,7 @@ import { useUserStore } from '@/store/useUserStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ArrowLeft, Users, Copy, Play, Send, KeyRound } from 'lucide-react';
+import { Loader2, ArrowLeft, Users, Copy, Play, Send, KeyRound, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import { SoundEngine } from '@/lib/audio';
 import { cn } from '@/lib/utils';
@@ -210,7 +210,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
                 {/* Create */}
-                <button 
+                <button
                     onClick={createLobby}
                     disabled={isConnecting}
                     className="group relative overflow-hidden rounded-3xl bg-slate-900 border border-slate-800 p-8 text-left transition-all hover:border-primary/50 hover:shadow-lg hover:scale-[1.02]"

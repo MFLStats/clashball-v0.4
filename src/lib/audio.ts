@@ -1,6 +1,14 @@
 export class SoundEngine {
   private static ctx: AudioContext | null = null;
   private static masterGain: GainNode | null = null;
+  private static volume: number = 0.5; // Default volume
+  static setVolume(v: number) {
+    this.volume = Math.max(0, Math.min(1, v));
+    if (this.masterGain && this.ctx) {
+      // Smooth transition to avoid clicks
+      this.masterGain.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.02);
+    }
+  }
   static init() {
     if (typeof window === 'undefined') return;
     if (!this.ctx) {
@@ -8,7 +16,7 @@ export class SoundEngine {
       if (AudioContextClass) {
         this.ctx = new AudioContextClass();
         this.masterGain = this.ctx.createGain();
-        this.masterGain.gain.value = 0.3; // Master volume
+        this.masterGain.gain.value = this.volume; // Initialize with current volume
         this.masterGain.connect(this.ctx.destination);
       }
     }

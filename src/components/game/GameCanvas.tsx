@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Play, RotateCcw, Trophy } from 'lucide-react';
 import { TouchControls } from './TouchControls';
 import { SoundEngine } from '@/lib/audio';
+import { useSettingsStore } from '@/store/useSettingsStore';
 interface GameCanvasProps {
   onGameEnd?: (winner: 'red' | 'blue') => void;
   winningScore?: number;
@@ -38,6 +39,9 @@ export function GameCanvas({
   const [score, setScore] = useState({ red: 0, blue: 0 });
   const [isPaused, setIsPaused] = useState(false);
   const [gameOver, setGameOver] = useState<'red' | 'blue' | null>(null);
+  // STRICT ZUSTAND RULE: Select primitives individually
+  const showNames = useSettingsStore(s => s.showNames);
+  const particles = useSettingsStore(s => s.particles);
   // Initialize Audio on Mount
   useEffect(() => {
     const initAudio = () => SoundEngine.init();
@@ -56,14 +60,16 @@ export function GameCanvas({
   const handleGameOver = useCallback((winner: 'red' | 'blue') => {
     setGameOver(winner);
     SoundEngine.playWhistle();
-    confetti({
-      particleCount: 200,
-      spread: 100,
-      origin: { y: 0.6 },
-      colors: winner === 'red' ? ['#e56e56'] : ['#5689e5']
-    });
+    if (particles) {
+      confetti({
+        particleCount: 200,
+        spread: 100,
+        origin: { y: 0.6 },
+        colors: winner === 'red' ? ['#e56e56'] : ['#5689e5']
+      });
+    }
     if (onGameEnd) onGameEnd(winner);
-  }, [onGameEnd]);
+  }, [onGameEnd, particles]);
   // Input Handling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -98,7 +104,7 @@ export function GameCanvas({
   const handleTouchUpdate = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
     touchInputRef.current = input;
   }, []);
-  // Render Function (Wrapped in useCallback to fix lint error)
+  // Render Function
   const render = useCallback((ctx: CanvasRenderingContext2D, state: GameState) => {
     const { width, height } = ctx.canvas;
     const scaleX = width / state.field.width;
@@ -171,14 +177,16 @@ export function GameCanvas({
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 3;
       ctx.stroke();
-      // Username
-      ctx.font = 'bold 14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = 'rgba(0,0,0,0.8)';
-      ctx.shadowBlur = 4;
-      ctx.fillText(p.username, x, y - r - 10);
-      ctx.shadowBlur = 0; // Reset shadow
+      // Username (Conditional)
+      if (showNames) {
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+        ctx.fillText(p.username, x, y - r - 10);
+        ctx.shadowBlur = 0; // Reset shadow
+      }
       // "YOU" Indicator
       if (currentUserId && p.id === currentUserId) {
           ctx.beginPath();
@@ -205,7 +213,7 @@ export function GameCanvas({
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 2.5;
     ctx.stroke();
-  }, [currentUserId]);
+  }, [currentUserId, showNames]);
   // Game Loop
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -334,12 +342,14 @@ export function GameCanvas({
             } else if (currentState.score.blue >= winningScore) {
                 handleGameOver('blue');
             } else {
-                confetti({
-                    particleCount: 100,
-                    spread: 70,
-                    origin: { y: 0.6 },
-                    colors: currentState.score.red > score.red ? ['#e56e56'] : ['#5689e5']
-                });
+                if (particles) {
+                    confetti({
+                        particleCount: 100,
+                        spread: 70,
+                        origin: { y: 0.6 },
+                        colors: currentState.score.red > score.red ? ['#e56e56'] : ['#5689e5']
+                    });
+                }
             }
         }
       }
@@ -359,7 +369,7 @@ export function GameCanvas({
     };
     requestRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(requestRef.current);
-  }, [score, isPaused, gameOver, winningScore, onInput, handleGameOver, botDifficulty, render]);
+  }, [score, isPaused, gameOver, winningScore, onInput, handleGameOver, botDifficulty, render, particles]);
   const handleReset = () => {
     gameStateRef.current = PhysicsEngine.createInitialState();
     displayStateRef.current = PhysicsEngine.createInitialState();

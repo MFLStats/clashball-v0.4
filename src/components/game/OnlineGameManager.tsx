@@ -24,17 +24,19 @@ export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
   }, [matchInfo]);
   const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
-      case 'match_found':
+      case 'match_found': {
         const info = { matchId: msg.matchId, team: msg.team };
         setMatchInfo(info);
         matchInfoRef.current = info; // Update ref immediately for subsequent messages in same tick
         setStatus('playing');
         toast.success(`Match Found! You are Team ${msg.team.toUpperCase()}`);
         break;
-      case 'game_state':
+      }
+      case 'game_state': {
         setGameState(msg.state);
         break;
-      case 'game_over':
+      }
+      case 'game_over': {
         const currentTeam = matchInfoRef.current?.team;
         toast(msg.winner === currentTeam ? 'VICTORY!' : 'DEFEAT', {
           description: `Winner: ${msg.winner.toUpperCase()}`
@@ -43,12 +45,15 @@ export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
             onExit();
         }, 3000);
         break;
-      case 'error':
+      }
+      case 'error': {
         toast.error(msg.message);
         break;
-      case 'ping':
+      }
+      case 'ping': {
         wsRef.current?.send(JSON.stringify({ type: 'pong' }));
         break;
+      }
     }
   }, [onExit]);
   useEffect(() => {

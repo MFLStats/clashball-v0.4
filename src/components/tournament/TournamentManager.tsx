@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Bracket, TournamentMatch } from './Bracket';
 import { GameCanvas } from '@/components/game/GameCanvas';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Trophy, Play, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Trophy, Play } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import confetti from 'canvas-confetti';
 import { useUserStore } from '@/store/useUserStore';
@@ -17,7 +17,6 @@ export function TournamentManager({ onExit }: TournamentManagerProps) {
   const profile = useUserStore(s => s.profile);
   const [matches, setMatches] = useState<TournamentMatch[]>([]);
   const [currentRound, setCurrentRound] = useState(0); // 0, 1, 2
-  const [isPlaying, setIsPlaying] = useState(false);
   const [tournamentState, setTournamentState] = useState<'bracket' | 'playing' | 'won' | 'lost'>('bracket');
   const [userTeamName] = useState(profile?.username || "Player");
   // Initialize Tournament
@@ -56,9 +55,10 @@ export function TournamentManager({ onExit }: TournamentManagerProps) {
     });
     setMatches(initialMatches);
   }, [userTeamName, matches.length]);
-  const simulateRoundMatches = () => {
+  const simulateRoundMatches = useCallback(() => {
     const roundMatches = matches.filter(m => m.round === currentRound && !m.winner);
     const updatedMatches = [...matches];
+    let changed = false;
     roundMatches.forEach(match => {
       if (match.isUserMatch) return; // Skip user match
       // Simulate random winner
@@ -69,11 +69,38 @@ export function TournamentManager({ onExit }: TournamentManagerProps) {
       };
       const matchIndex = updatedMatches.findIndex(m => m.id === match.id);
       updatedMatches[matchIndex] = { ...match, winner, score };
+      changed = true;
     });
-    setMatches(updatedMatches);
-  };
+    if (changed) {
+        setMatches(updatedMatches);
+    }
+  }, [matches, currentRound]);
   const startUserMatch = () => {
     setTournamentState('playing');
+  };
+  const advanceRound = (currentMatches: TournamentMatch[]) => {
+    // Logic to propagate winners to next round
+    // This is simplified; assumes matches are ordered 0,1 -> next 0; 2,3 -> next 1
+    const nextRound = currentRound + 1;
+    const currentRoundMatches = currentMatches.filter(m => m.round === currentRound);
+    const nextRoundMatches = currentMatches.filter(m => m.round === nextRound);
+    const newMatches = [...currentMatches];
+    // Map winners to next round slots
+    for (let i = 0; i < nextRoundMatches.length; i++) {
+        const m1 = currentRoundMatches[i * 2];
+        const m2 = currentRoundMatches[i * 2 + 1];
+        if (m1?.winner && m2?.winner) {
+            const nextMatchIndex = newMatches.findIndex(m => m.id === nextRoundMatches[i].id);
+            newMatches[nextMatchIndex] = {
+                ...newMatches[nextMatchIndex],
+                player1: m1.winner,
+                player2: m2.winner,
+                isUserMatch: m1.winner === userTeamName || m2.winner === userTeamName
+            };
+        }
+    }
+    setMatches(newMatches);
+    setCurrentRound(nextRound);
   };
   const handleUserMatchEnd = (winner: 'red' | 'blue') => {
     const userMatch = matches.find(m => m.round === currentRound && m.isUserMatch);
@@ -109,30 +136,6 @@ export function TournamentManager({ onExit }: TournamentManagerProps) {
       setTournamentState('lost');
     }
   };
-  const advanceRound = (currentMatches: TournamentMatch[]) => {
-    // Logic to propagate winners to next round
-    // This is simplified; assumes matches are ordered 0,1 -> next 0; 2,3 -> next 1
-    const nextRound = currentRound + 1;
-    const currentRoundMatches = currentMatches.filter(m => m.round === currentRound);
-    const nextRoundMatches = currentMatches.filter(m => m.round === nextRound);
-    const newMatches = [...currentMatches];
-    // Map winners to next round slots
-    for (let i = 0; i < nextRoundMatches.length; i++) {
-        const m1 = currentRoundMatches[i * 2];
-        const m2 = currentRoundMatches[i * 2 + 1];
-        if (m1?.winner && m2?.winner) {
-            const nextMatchIndex = newMatches.findIndex(m => m.id === nextRoundMatches[i].id);
-            newMatches[nextMatchIndex] = {
-                ...newMatches[nextMatchIndex],
-                player1: m1.winner,
-                player2: m2.winner,
-                isUserMatch: m1.winner === userTeamName || m2.winner === userTeamName
-            };
-        }
-    }
-    setMatches(newMatches);
-    setCurrentRound(nextRound);
-  };
   // Auto-simulate other matches when round starts
   useEffect(() => {
     if (tournamentState === 'bracket' && matches.length > 0) {
@@ -141,7 +144,7 @@ export function TournamentManager({ onExit }: TournamentManagerProps) {
             simulateRoundMatches();
         }
     }
-  }, [currentRound, matches, tournamentState]);
+  }, [currentRound, matches, tournamentState, simulateRoundMatches]);
   if (tournamentState === 'playing') {
     const difficulty = currentRound === 0 ? 'easy' : currentRound === 1 ? 'medium' : 'hard';
     return (

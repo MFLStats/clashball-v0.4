@@ -30,11 +30,10 @@ export class Match {
   start() {
     // Broadcast initial state
     this.broadcast({ type: 'game_state', state: this.gameState });
-    // Start Game Loop (approx 30 TPS for server to save DO CPU)
-    // We rely on client interpolation for smoothness
+    // Start Game Loop (60 TPS for smoother physics)
     this.interval = setInterval(() => {
       this.update();
-    }, 1000 / 30);
+    }, 1000 / 60);
   }
   stop() {
     if (this.interval) clearInterval(this.interval);
@@ -46,8 +45,7 @@ export class Match {
     }
   }
   private update() {
-    // Run physics (maybe multiple steps if we want 60fps physics on 30fps loop)
-    // For now, 1 step per tick
+    // Run physics
     this.gameState = PhysicsEngine.update(this.gameState);
     // Broadcast
     this.broadcast({ type: 'game_state', state: this.gameState });

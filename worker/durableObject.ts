@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import type { DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage, GameMode } from '@shared/types';
+import type { DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage, GameMode, ModeStats } from '@shared/types';
 import { MOCK_ITEMS } from '@shared/mock-data';
 import { Match } from './match';
 // Glicko-2 Constants
@@ -36,7 +36,6 @@ export class GlobalDurableObject extends DurableObject {
             });
         }
         // Fallback to standard fetch for other routes (if any routed here directly)
-        // But usually routes are handled via RPC calls from worker/index.ts
         return new Response('Not found', { status: 404 });
     }
     handleSession(ws: WebSocket) {
@@ -55,12 +54,14 @@ export class GlobalDurableObject extends DurableObject {
     }
     handleMessage(ws: WebSocket, msg: WSMessage) {
         switch (msg.type) {
-            case 'join_queue':
+            case 'join_queue': {
                 this.addToQueue(ws, msg.userId, msg.username, msg.mode);
                 break;
-            case 'leave_queue':
+            }
+            case 'leave_queue': {
                 this.removeFromQueue(ws);
                 break;
+            }
             case 'input': {
                 const session = this.sessions.get(ws);
                 if (session && session.matchId) {
@@ -71,9 +72,10 @@ export class GlobalDurableObject extends DurableObject {
                 }
                 break;
             }
-            case 'ping':
+            case 'ping': {
                 ws.send(JSON.stringify({ type: 'pong' }));
                 break;
+            }
         }
     }
     handleDisconnect(ws: WebSocket) {
@@ -177,50 +179,94 @@ export class GlobalDurableObject extends DurableObject {
       await this.ctx.storage.put("demo_items", updatedItems);
       return updatedItems;
     }
+    // --- Ranked Methods ---
     async getUserProfile(userId: string, username: string = 'Player'): Promise<UserProfile> {
       const key = `user_${userId}`;
-      const profile = await this.ctx.storage.get<UserProfile>(key);
-      if (profile) return profile;
-      const newProfile: UserProfile = {
-        id: userId,
-        username,
+      let profile = await this.ctx.storage.get<any>(key); // Use any for migration check
+      // Default Stats Object
+      const defaultStats: ModeStats = {
         rating: RATING_DEFAULT,
         rd: RD_DEFAULT,
         volatility: VOLATILITY_DEFAULT,
         wins: 0,
         losses: 0,
         tier: 'Silver',
-        division: 3,
-        lastMatchTime: Date.now()
+        division: 3
       };
-      await this.ctx.storage.put(key, newProfile);
-      return newProfile;
+      if (!profile) {
+        // Create new profile
+        const newProfile: UserProfile = {
+            id: userId,
+            username,
+            stats: {
+                '1v1': { ...defaultStats },
+                '2v2': { ...defaultStats },
+                '3v3': { ...defaultStats },
+                '4v4': { ...defaultStats }
+            },
+            lastMatchTime: Date.now()
+        };
+        await this.ctx.storage.put(key, newProfile);
+        return newProfile;
+      }
+      // Migration: If profile exists but has old flat structure (no stats object)
+      if (!profile.stats) {
+        // Convert old flat stats to 1v1 stats
+        const oldStats: ModeStats = {
+            rating: profile.rating || RATING_DEFAULT,
+            rd: profile.rd || RD_DEFAULT,
+            volatility: profile.volatility || VOLATILITY_DEFAULT,
+            wins: profile.wins || 0,
+            losses: profile.losses || 0,
+            tier: profile.tier || 'Silver',
+            division: profile.division || 3
+        };
+        profile = {
+            id: profile.id,
+            username: profile.username,
+            stats: {
+                '1v1': oldStats,
+                '2v2': { ...defaultStats },
+                '3v3': { ...defaultStats },
+                '4v4': { ...defaultStats }
+            },
+            lastMatchTime: profile.lastMatchTime || Date.now()
+        };
+        await this.ctx.storage.put(key, profile);
+      }
+      return profile as UserProfile;
     }
     async processMatch(match: MatchResult): Promise<MatchResponse> {
       const profile = await this.getUserProfile(match.userId);
+      const mode = match.mode || '1v1'; // Default to 1v1 if missing
+      const stats = profile.stats[mode];
       const s = match.result === 'win' ? 1 : match.result === 'loss' ? 0 : 0.5;
+      // Glicko-2 Simplified Calculation
       const qa = Math.log(10) / 400;
-      const rdOpponent = 350;
+      const rdOpponent = 350; // Assume opponent has high uncertainty for now (or pass it in)
       const g_rd = 1 / Math.sqrt(1 + 3 * Math.pow(qa * rdOpponent / Math.PI, 2));
-      const E = 1 / (1 + Math.pow(10, -g_rd * (profile.rating - match.opponentRating) / 400));
-      const K = profile.rd / 10;
+      const E = 1 / (1 + Math.pow(10, -g_rd * (stats.rating - match.opponentRating) / 400));
+      const K = stats.rd / 10; // Simplified K-factor based on RD
       const ratingChange = K * (s - E);
-      const newRating = profile.rating + ratingChange;
-      const newRD = Math.max(30, profile.rd * 0.95);
-      profile.rating = Math.round(newRating);
-      profile.rd = newRD;
-      if (match.result === 'win') profile.wins++;
-      if (match.result === 'loss') profile.losses++;
+      const newRating = stats.rating + ratingChange;
+      const newRD = Math.max(30, stats.rd * 0.95); // Reduce uncertainty
+      // Update Stats
+      stats.rating = Math.round(newRating);
+      stats.rd = newRD;
+      if (match.result === 'win') stats.wins++;
+      if (match.result === 'loss') stats.losses++;
       profile.lastMatchTime = Date.now();
-      const { tier, division } = this.calculateTier(profile.rating);
-      profile.tier = tier;
-      profile.division = division;
+      // Recalculate Tier
+      const { tier, division } = this.calculateTier(stats.rating);
+      stats.tier = tier;
+      stats.division = division;
       await this.ctx.storage.put(`user_${match.userId}`, profile);
       return {
-        newRating: profile.rating,
+        newRating: stats.rating,
         ratingChange: Math.round(ratingChange),
         newTier: tier,
-        newDivision: division
+        newDivision: division,
+        mode
       };
     }
     private calculateTier(rating: number): { tier: Tier, division: 1 | 2 | 3 } {

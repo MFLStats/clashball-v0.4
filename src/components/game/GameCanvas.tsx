@@ -259,7 +259,7 @@ export function GameCanvas({
         )}
       </div>
       <div className="text-sm text-slate-500 font-medium">
-        Controls: WASD to Move • SPACE to Kick
+        Controls: WASD to Move ��� SPACE to Kick
       </div>
     </div>
   );

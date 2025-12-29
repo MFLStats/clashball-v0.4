@@ -19,8 +19,8 @@ export class Match {
     this.players = new Map();
     this.settings = settings;
     this.onEnd = onEnd;
-    // Initialize Game State with custom time limit
-    this.gameState = PhysicsEngine.createInitialState(settings.timeLimit);
+    // Initialize Game State with custom time limit and field size
+    this.gameState = PhysicsEngine.createInitialState(settings.timeLimit, settings.fieldSize);
     // Override players in state with actual connected players
     this.gameState.players = players.map(p => ({
       id: p.id,

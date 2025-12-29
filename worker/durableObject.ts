@@ -15,7 +15,8 @@ const RD_DEFAULT = 350;
 // Default Ranked Settings
 const RANKED_SETTINGS: LobbySettings = {
     scoreLimit: 3,
-    timeLimit: 180
+    timeLimit: 180,
+    fieldSize: 'medium'
 };
 interface Lobby {
     code: string;
@@ -108,6 +109,10 @@ export class GlobalDurableObject extends DurableObject {
                     this.handleUpdateLobbySettings(ws, msg.settings);
                     break;
                 }
+                case 'kick_player': {
+                    this.handleKickPlayer(ws, msg.targetId);
+                    break;
+                }
                 case 'start_lobby_match': {
                     this.handleStartLobbyMatch(ws);
                     break;
@@ -128,10 +133,31 @@ export class GlobalDurableObject extends DurableObject {
                 }
                 case 'chat': {
                     const session = this.sessions.get(ws);
-                    if (session && session.matchId) {
-                        const match = this.matches.get(session.matchId);
-                        if (match) {
-                            match.handleChat(session.userId, msg.message);
+                    if (session) {
+                        // Match Chat
+                        if (session.matchId) {
+                            const match = this.matches.get(session.matchId);
+                            if (match) {
+                                match.handleChat(session.userId, msg.message);
+                            }
+                        }
+                        // Lobby Chat
+                        else if (session.lobbyCode) {
+                            const lobby = this.lobbies.get(session.lobbyCode);
+                            if (lobby) {
+                                const sender = lobby.players.find(p => p.id === session.userId);
+                                if (sender) {
+                                    const chatMsg = JSON.stringify({
+                                        type: 'chat',
+                                        message: msg.message.slice(0, 100),
+                                        sender: sender.username,
+                                        team: 'red' // Default color for lobby chat
+                                    });
+                                    lobby.players.forEach(p => {
+                                        try { p.ws.send(chatMsg); } catch(e) {}
+                                    });
+                                }
+                            }
                         }
                     }
                     break;
@@ -236,7 +262,7 @@ export class GlobalDurableObject extends DurableObject {
             hostId: userId,
             players: [{ id: userId, ws, username }],
             status: 'waiting',
-            settings: { scoreLimit: 3, timeLimit: 180 } // Default settings
+            settings: { scoreLimit: 3, timeLimit: 180, fieldSize: 'medium' } // Default settings
         };
         this.lobbies.set(code, lobby);
         this.sessions.set(ws, { userId, lobbyCode: code });
@@ -272,6 +298,35 @@ export class GlobalDurableObject extends DurableObject {
         }
         // Update settings
         lobby.settings = { ...lobby.settings, ...settings };
+        this.broadcastLobbyUpdate(lobby);
+    }
+    handleKickPlayer(ws: WebSocket, targetId: string) {
+        const session = this.sessions.get(ws);
+        if (!session || !session.lobbyCode) return;
+        const lobby = this.lobbies.get(session.lobbyCode);
+        if (!lobby) return;
+        if (lobby.hostId !== session.userId) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Only host can kick players' }));
+            return;
+        }
+        if (targetId === session.userId) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Cannot kick yourself' }));
+            return;
+        }
+        const targetIndex = lobby.players.findIndex(p => p.id === targetId);
+        if (targetIndex === -1) return;
+        const targetPlayer = lobby.players[targetIndex];
+        // Notify target
+        try {
+            targetPlayer.ws.send(JSON.stringify({ type: 'kicked' }));
+        } catch(e) {}
+        // Remove from lobby
+        lobby.players.splice(targetIndex, 1);
+        // Clear session for target
+        const targetSession = this.sessions.get(targetPlayer.ws);
+        if (targetSession) {
+            targetSession.lobbyCode = undefined;
+        }
         this.broadcastLobbyUpdate(lobby);
     }
     handleStartLobbyMatch(ws: WebSocket) {

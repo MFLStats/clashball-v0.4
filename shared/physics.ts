@@ -51,8 +51,11 @@ export class PhysicsEngine {
   static readonly KICK_TOLERANCE = 5; // Extra range for kicking
   static readonly KICK_STRENGTH = 550; // Increased for faster gameplay
   // Field Dimensions
-  static readonly FIELD_WIDTH = 1200;
-  static readonly FIELD_HEIGHT = 600;
+  static readonly FIELD_SIZES = {
+    small: { width: 900, height: 450 },
+    medium: { width: 1200, height: 600 },
+    large: { width: 1500, height: 750 }
+  };
   static readonly GOAL_HEIGHT = 180;
   // Movement & Physics (Per Second)
   static readonly PLAYER_MAX_SPEED = 240;
@@ -66,14 +69,20 @@ export class PhysicsEngine {
   static readonly STOP_THRESHOLD = 0.6;
   // Assist Window (seconds)
   static readonly ASSIST_WINDOW = 3.0;
-  static createInitialState(timeLimit: number = 180): GameState {
+  static createInitialState(timeLimit: number = 180, fieldSize: 'small' | 'medium' | 'large' = 'medium'): GameState {
+    const dims = this.FIELD_SIZES[fieldSize];
+    const field: Field = {
+        width: dims.width,
+        height: dims.height,
+        goalHeight: this.GOAL_HEIGHT
+    };
     return {
       players: [
         {
           id: 'p1',
           team: 'red',
           username: 'Player 1',
-          pos: { x: 150, y: 300 },
+          pos: { x: 150, y: field.height / 2 },
           vel: { x: 0, y: 0 },
           radius: this.PLAYER_RADIUS,
           isKicking: false,
@@ -83,7 +92,7 @@ export class PhysicsEngine {
           id: 'p2',
           team: 'blue',
           username: 'Player 2',
-          pos: { x: 1050, y: 300 },
+          pos: { x: field.width - 150, y: field.height / 2 },
           vel: { x: 0, y: 0 },
           radius: this.PLAYER_RADIUS,
           isKicking: false,
@@ -91,18 +100,14 @@ export class PhysicsEngine {
         }
       ],
       ball: {
-        pos: { x: 600, y: 300 },
+        pos: { x: field.width / 2, y: field.height / 2 },
         vel: { x: 0, y: 0 },
         radius: this.BALL_RADIUS,
         lastTouch: null,
         previousTouch: null
       },
       score: { red: 0, blue: 0 },
-      field: {
-        width: this.FIELD_WIDTH,
-        height: this.FIELD_HEIGHT,
-        goalHeight: this.GOAL_HEIGHT
-      },
+      field: field,
       status: 'playing',
       timeRemaining: timeLimit,
       isOvertime: false,
@@ -127,18 +132,7 @@ export class PhysicsEngine {
         return { state: newState, events };
     }
     if (newState.status !== 'playing') return { state: newState, events };
-    // Update Time (Only if timeRemaining > 0 or if it was initialized > 0)
-    // If timeLimit was 0 (unlimited), timeRemaining might be 0 initially.
-    // But createInitialState sets it to timeLimit.
-    // If timeLimit is 0, we treat it as unlimited, so we don't decrement or check for 0.
-    // However, the current logic decrements. Let's assume if initial time was 0, we don't decrement.
-    // But we don't know initial time here easily without passing it.
-    // A simple hack: if timeRemaining is exactly 0 and we are playing, maybe it's unlimited?
-    // No, timeRemaining hits 0 when game ends.
-    // Let's assume for now that if the game was started with 0 time, the PhysicsEngine caller handles the "Unlimited" logic
-    // by passing a very large number or we handle it here.
-    // Actually, the requirement says "0 = unlimited".
-    // If timeRemaining is > 0, we decrement.
+    // Update Time
     if (newState.timeRemaining > 0) {
         newState.timeRemaining -= dt;
         if (newState.timeRemaining <= 0) {

@@ -141,6 +141,7 @@ export interface GameEvent {
 export interface LobbySettings {
   scoreLimit: number; // 0 = unlimited
   timeLimit: number; // seconds, 0 = unlimited
+  fieldSize: 'small' | 'medium' | 'large';
 }
 export interface LobbyState {
     code: string;
@@ -164,6 +165,8 @@ export type WSMessage =
   | { type: 'create_lobby'; userId: string; username: string }
   | { type: 'join_lobby'; code: string; userId: string; username: string }
   | { type: 'update_lobby_settings'; settings: Partial<LobbySettings> }
+  | { type: 'kick_player'; targetId: string }
+  | { type: 'kicked' }
   | { type: 'lobby_update'; state: LobbyState }
   | { type: 'start_lobby_match' }
   | { type: 'input'; move: { x: number; y: number }; kick: boolean }

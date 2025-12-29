@@ -45,34 +45,30 @@ export class GlobalDurableObject extends DurableObject {
     }
     // --- WebSocket Handling ---
     async fetch(request: Request): Promise<Response> {
-        const url = new URL(request.url);
+        // CRITICAL FIX: Prioritize Upgrade header check over URL path
+        // This handles cases where the worker runtime might rewrite the URL path
         const upgradeHeader = request.headers.get('Upgrade');
-        // Robust check for WebSocket upgrade:
-        // 1. Check path (standard) - using endsWith to be robust against routing prefixes
-        // 2. OR check if Upgrade header is 'websocket' (case-insensitive)
-        if (url.pathname.endsWith('/api/ws') || (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket')) {
-            if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
-                return new Response('Expected Upgrade: websocket', { status: 426 });
-            }
+        if (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket') {
             try {
-                // Explicitly access indices to ensure correct assignment
-                // pair[0] is the client socket (returned in response)
-                // pair[1] is the server socket (accepted by DO)
-                const pair = new WebSocketPair();
-                const client = pair[0];
-                const server = pair[1];
+                // Create a WebSocket pair
+                // client: returned to the user
+                // server: accepted by the Durable Object
+                const webSocketPair = new WebSocketPair();
+                const [client, server] = Object.values(webSocketPair);
+                // Accept the server side of the socket
                 this.handleSession(server);
                 return new Response(null, {
                     status: 101,
                     webSocket: client,
                 });
             } catch (err) {
-                console.error('[DurableObject] WebSocket handshake failed:', err);
-                return new Response('Internal Server Error during handshake', { status: 500 });
+                // Return a 500 error with the message if handshake fails
+                const errorMessage = err instanceof Error ? err.message : String(err);
+                return new Response(`WebSocket handshake error: ${errorMessage}`, { status: 500 });
             }
         }
-        // Fallback to standard fetch for other routes (if any routed here directly)
-        return new Response('Not found', { status: 404 });
+        // Fallback for non-WebSocket requests (if any reach here)
+        return new Response('Durable Object expected Upgrade: websocket', { status: 426 });
     }
     handleSession(ws: WebSocket) {
         // Wrap accept in try-catch just in case

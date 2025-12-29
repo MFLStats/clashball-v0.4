@@ -168,7 +168,13 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         // Connect to WebSocket
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.host;
-        const ws = new WebSocket(`${protocol}//${host}/api/ws`);
+        const wsUrl = `${protocol}//${host}/api/ws`;
+        console.log(`Connecting to WebSocket: ${wsUrl}`);
+        // Safety check: if we already have a connecting/open socket, don't create another
+        if (wsRef.current && (wsRef.current.readyState === WebSocket.CONNECTING || wsRef.current.readyState === WebSocket.OPEN)) {
+            return;
+        }
+        const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
         // Connection Timeout Logic
         const connectionTimeout = setTimeout(() => {
@@ -248,6 +254,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             } catch (e) { /* ignore */ }
           }
           wsRef.current.close();
+          wsRef.current = null;
       }
     };
     // Re-run effect when retryCount changes to trigger new connection attempt

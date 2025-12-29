@@ -6,10 +6,12 @@ import { OnlineGameManager } from '@/components/game/OnlineGameManager';
 import { CustomLobbyManager } from '@/components/game/CustomLobbyManager';
 import { TournamentManager } from '@/components/tournament/TournamentManager';
 import { TournamentBanner } from '@/components/tournament/TournamentBanner';
+import { PlayOnlineBanner } from '@/components/home/PlayOnlineBanner';
+import { CustomLobbyBanner } from '@/components/home/CustomLobbyBanner';
 import { AuthDialog } from '@/components/auth/AuthDialog';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
 import { Button } from '@/components/ui/button';
-import { Trophy, ArrowLeft, Globe, Crown, LogOut, Users, BarChart2, Zap, Target, Shield, Swords } from 'lucide-react';
+import { Trophy, ArrowLeft, Crown, LogOut, BarChart2, Target, Shield, Swords, Users } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { api } from '@/lib/api';
@@ -246,40 +248,8 @@ export function HomePage() {
                     <TournamentBanner />
                     {/* Primary Actions Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-64">
-                        <button
-                            onClick={() => setView('online_select')}
-                            className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-blue-600 p-8 text-left shadow-lg transition-all hover:shadow-primary/25 hover:scale-[1.02]"
-                        >
-                            <div className="absolute right-0 top-0 p-6 opacity-10 transition-transform group-hover:scale-110 group-hover:opacity-20">
-                                <Globe className="h-32 w-32 text-white" />
-                            </div>
-                            <div className="relative z-10 flex h-full flex-col justify-between">
-                                <div className="p-3 bg-white/10 w-fit rounded-xl backdrop-blur-sm">
-                                    <Zap className="h-6 w-6 text-white" />
-                                </div>
-                                <div>
-                                    <h3 className="text-3xl font-display font-bold text-white mb-1">Play Online</h3>
-                                    <p className="text-blue-100 font-medium">Ranked Competitive Matches</p>
-                                </div>
-                            </div>
-                        </button>
-                        <button
-                            onClick={() => setView('custom_lobby')}
-                            className="group relative overflow-hidden rounded-3xl bg-slate-800 p-8 text-left shadow-lg border border-slate-700 transition-all hover:border-slate-600 hover:bg-slate-750 hover:scale-[1.02]"
-                        >
-                            <div className="absolute right-0 top-0 p-6 opacity-5 transition-transform group-hover:scale-110 group-hover:opacity-10">
-                                <Users className="h-32 w-32 text-white" />
-                            </div>
-                            <div className="relative z-10 flex h-full flex-col justify-between">
-                                <div className="p-3 bg-slate-700 w-fit rounded-xl">
-                                    <Users className="h-6 w-6 text-slate-300" />
-                                </div>
-                                <div>
-                                    <h3 className="text-2xl font-display font-bold text-white mb-1">Custom Lobby</h3>
-                                    <p className="text-slate-400 font-medium">Host Private Matches</p>
-                                </div>
-                            </div>
-                        </button>
+                        <PlayOnlineBanner onClick={() => setView('online_select')} />
+                        <CustomLobbyBanner onClick={() => setView('custom_lobby')} />
                     </div>
                 </div>
                 {/* Right Column: Secondary Actions */}
@@ -334,7 +304,7 @@ export function HomePage() {
                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     <span>Servers Online</span>
                 </div>
-                <span>v1.3.0 ClashBall • Built with ❤️ by Aurelia</span>
+                {/* Footer text removed as per request */}
             </footer>
           </div>
         );

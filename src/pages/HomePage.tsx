@@ -12,7 +12,7 @@ import { AuthDialog } from '@/components/auth/AuthDialog';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
 import { HowToPlayDialog } from '@/components/help/HowToPlayDialog';
 import { Button } from '@/components/ui/button';
-import { Trophy, ArrowLeft, Crown, LogOut, BarChart2, Target } from 'lucide-react';
+import { Trophy, ArrowLeft, Crown, LogOut, BarChart2, Target, Zap } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { api } from '@/lib/api';
@@ -22,8 +22,10 @@ import { TournamentPage } from '@/pages/TournamentPage';
 import { Leaderboard } from '@/components/ranked/Leaderboard';
 import { SoundEngine } from '@/lib/audio';
 import { GameModeSelector } from '@/components/game/GameModeSelector';
+import { useNavigate } from 'react-router-dom';
 type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'custom_lobby' | 'ranked' | 'tournament_mode' | 'tournament_lobby' | 'leaderboard';
 export function HomePage() {
+  const navigate = useNavigate();
   const [view, setView] = useState<ViewState>('lobby');
   const [selectedMode, setSelectedMode] = useState<GameMode>('1v1');
   const [showAuth, setShowAuth] = useState(false);
@@ -306,6 +308,21 @@ export function HomePage() {
                             <div>
                                 <h3 className="text-xl font-display font-bold text-white">My Profile</h3>
                                 <p className="text-sm text-slate-500">Stats & Progression</p>
+                            </div>
+                        </div>
+                    </button>
+                    {/* New Demo Button */}
+                    <button
+                        onClick={() => navigate('/demo')}
+                        className="group relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-left shadow-lg border border-slate-800 transition-all hover:border-slate-700 hover:bg-slate-800/50"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-blue-500/10 rounded-xl text-blue-500 group-hover:bg-blue-500/20 transition-colors">
+                                <Zap className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-display font-bold text-white">Team Demo</h3>
+                                <p className="text-sm text-slate-500">Test 2v2, 3v3, 4v4</p>
                             </div>
                         </div>
                     </button>

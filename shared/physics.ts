@@ -1,4 +1,4 @@
-import { GameEvent } from './types';
+import { GameEvent, GameMode } from './types';
 export interface Vector {
   x: number;
   y: number;
@@ -77,7 +77,11 @@ export class PhysicsEngine {
   static readonly STOP_THRESHOLD = 0.6;
   // Assist Window (seconds)
   static readonly ASSIST_WINDOW = 3.0;
-  static createInitialState(timeLimit: number = 180, fieldSize: 'small' | 'medium' | 'large' = 'medium'): GameState {
+  static createInitialState(
+      timeLimit: number = 180,
+      fieldSize: 'small' | 'medium' | 'large' = 'medium',
+      mode: GameMode = '1v1'
+  ): GameState {
     const dims = this.FIELD_SIZES[fieldSize];
     const goalTopY = (dims.height - this.GOAL_HEIGHT) / 2;
     const goalBottomY = (dims.height + this.GOAL_HEIGHT) / 2;
@@ -92,31 +96,38 @@ export class PhysicsEngine {
             { pos: { x: dims.width, y: goalBottomY }, radius: this.POST_RADIUS } // Bottom-Right
         ]
     };
-    return {
-      players: [
-        {
-          id: 'p1',
-          team: 'red',
-          username: 'Player 1',
-          jersey: 'P1',
-          pos: { x: 150, y: field.height / 2 },
-          vel: { x: 0, y: 0 },
-          radius: this.PLAYER_RADIUS,
-          isKicking: false,
-          input: { move: { x: 0, y: 0 }, kick: false }
-        },
-        {
-          id: 'p2',
-          team: 'blue',
-          username: 'Player 2',
-          jersey: 'P2',
-          pos: { x: field.width - 150, y: field.height / 2 },
-          vel: { x: 0, y: 0 },
-          radius: this.PLAYER_RADIUS,
-          isKicking: false,
-          input: { move: { x: 0, y: 0 }, kick: false }
-        }
-      ],
+    const players: Player[] = [];
+    const teamSize = mode === '1v1' ? 1 : mode === '2v2' ? 2 : mode === '3v3' ? 3 : 4;
+    // Create Red Team
+    for (let i = 0; i < teamSize; i++) {
+        players.push({
+            id: `red_${i}`,
+            team: 'red',
+            username: i === 0 ? 'Player' : `Bot R${i}`, // First red is Player
+            jersey: i === 0 ? 'P1' : `R${i}`,
+            pos: { x: 0, y: 0 }, // Will be set by resetPositions
+            vel: { x: 0, y: 0 },
+            radius: this.PLAYER_RADIUS,
+            isKicking: false,
+            input: { move: { x: 0, y: 0 }, kick: false }
+        });
+    }
+    // Create Blue Team
+    for (let i = 0; i < teamSize; i++) {
+        players.push({
+            id: `blue_${i}`,
+            team: 'blue',
+            username: `Bot B${i+1}`,
+            jersey: `B${i+1}`,
+            pos: { x: 0, y: 0 },
+            vel: { x: 0, y: 0 },
+            radius: this.PLAYER_RADIUS,
+            isKicking: false,
+            input: { move: { x: 0, y: 0 }, kick: false }
+        });
+    }
+    const state: GameState = {
+      players,
       ball: {
         pos: { x: field.width / 2, y: field.height / 2 },
         vel: { x: 0, y: 0 },
@@ -131,6 +142,8 @@ export class PhysicsEngine {
       isOvertime: false,
       goalTimer: 0
     };
+    this.resetPositions(state);
+    return state;
   }
   static update(state: GameState, dt: number): { state: GameState; events: GameEvent[] } {
     const events: GameEvent[] = [];
@@ -286,8 +299,8 @@ export class PhysicsEngine {
             if (b.lastTouch.team === scoringTeam) {
                 scorerId = b.lastTouch.id;
                 // Check Assist
-                if (b.previousTouch && 
-                    b.previousTouch.team === scoringTeam && 
+                if (b.previousTouch &&
+                    b.previousTouch.team === scoringTeam &&
                     b.previousTouch.id !== scorerId &&
                     Math.abs(b.lastTouch.time - b.previousTouch.time) < this.ASSIST_WINDOW) {
                     assisterId = b.previousTouch.id;

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Bracket, TournamentMatch } from './Bracket';
 import { GameCanvas } from '@/components/game/GameCanvas';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Trophy, Play, Clock, Crown } from 'lucide-react';
+import { ArrowLeft, Trophy, Play, Clock, Crown, Loader2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import confetti from 'canvas-confetti';
 import { useUserStore } from '@/store/useUserStore';
@@ -257,8 +257,8 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
             size="lg"
             className={cn(
                 "h-20 px-16 text-2xl font-bold rounded-2xl shadow-2xl transition-all duration-300",
-                timeRemaining > 0 
-                    ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700" 
+                timeRemaining > 0
+                    ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700"
                     : "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white hover:scale-105 hover:shadow-emerald-500/25 border-b-4 border-teal-800 active:border-b-0 active:translate-y-1"
             )}
             onClick={startUserMatch}
@@ -266,12 +266,12 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
         >
             {timeRemaining > 0 ? (
                 <span className="flex items-center gap-3">
-                    <Loader2 className="w-6 h-6 animate-spin" /> 
+                    <Loader2 className="w-6 h-6 animate-spin" />
                     Starting in {formatTime(timeRemaining)}
                 </span>
             ) : (
                 <span className="flex items-center gap-3">
-                    <Play className="w-8 h-8 fill-current" /> 
+                    <Play className="w-8 h-8 fill-current" />
                     PLAY MATCH
                 </span>
             )}

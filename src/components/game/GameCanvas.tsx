@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { PhysicsEngine, GameState, Field } from '@shared/physics';
-import { PlayerMatchStats } from '@shared/types';
+import { PlayerMatchStats, GameMode } from '@shared/types';
 import confetti from 'canvas-confetti';
 import { Button } from '@/components/ui/button';
 import { Play, RotateCcw } from 'lucide-react';
@@ -20,6 +20,7 @@ interface GameCanvasProps {
   finalStats?: Record<string, PlayerMatchStats>;
   onLeave?: () => void;
   onPlayAgain?: () => void;
+  mode?: GameMode;
 }
 export function GameCanvas({
   onGameEnd,
@@ -32,13 +33,15 @@ export function GameCanvas({
   currentUserId,
   finalStats,
   onLeave,
-  onPlayAgain
+  onPlayAgain,
+  mode = '1v1'
 }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
-  const gameStateRef = useRef<GameState>(PhysicsEngine.createInitialState());
-  const displayStateRef = useRef<GameState>(PhysicsEngine.createInitialState());
+  // Initialize with correct mode
+  const gameStateRef = useRef<GameState>(PhysicsEngine.createInitialState(180, 'medium', mode));
+  const displayStateRef = useRef<GameState>(PhysicsEngine.createInitialState(180, 'medium', mode));
   const keysRef = useRef<Record<string, boolean>>({});
   const touchInputRef = useRef<{ move: { x: number; y: number }; kick: boolean }>({
     move: { x: 0, y: 0 },
@@ -72,9 +75,10 @@ export function GameCanvas({
   // Initialize Local Stats
   useEffect(() => {
     if (!externalState) {
-        // Initialize stats for p1 and p2
-        ['p1', 'p2'].forEach(id => {
-            localStatsRef.current[id] = {
+        // Initialize stats for all local players
+        const players = gameStateRef.current.players;
+        players.forEach(p => {
+            localStatsRef.current[p.id] = {
                 goals: 0,
                 assists: 0,
                 ownGoals: 0,
@@ -83,7 +87,7 @@ export function GameCanvas({
             };
         });
     }
-  }, [externalState]);
+  }, [externalState, mode]);
   // Handle Game Over Logic
   const handleGameOver = useCallback((winner: 'red' | 'blue') => {
     setGameOver(winner);
@@ -149,7 +153,7 @@ export function GameCanvas({
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, [gameOver]);
-  // Update local names if provided
+  // Update local names if provided (Only updates first players for now)
   useEffect(() => {
     if (!externalState && playerNames) {
         const state = gameStateRef.current;
@@ -284,7 +288,7 @@ export function GameCanvas({
         });
     }
     // --- 4. Draw Players ---
-    state.players.forEach(p => {
+    state.players.forEach((p, index) => {
       const x = p.pos.x * scaleX;
       const y = p.pos.y * scaleY;
       const r = p.radius * scaleX;
@@ -338,7 +342,10 @@ export function GameCanvas({
         ctx.shadowBlur = 0; // Reset shadow
       }
       // "YOU" Indicator
-      if (currentUserId && p.id === currentUserId) {
+      // If online: match ID.
+      // If local: match index 0 (Red 0).
+      const isLocalPlayer = !latestExternalStateRef.current && index === 0;
+      if ((currentUserId && p.id === currentUserId) || isLocalPlayer) {
           ctx.beginPath();
           ctx.moveTo(x, y - r - 30);
           ctx.lineTo(x - 6, y - r - 40);
@@ -467,52 +474,62 @@ export function GameCanvas({
         onInput(p1Input);
       } else if (!targetState) { // FIX: Only run local/bot logic if NOT online (targetState is null)
         // Local Mode: Update local ref
+        // Player 0 is always the human in local mode
         gameStateRef.current.players[0].input = p1Input;
         // --- Bot Logic (Predictive AI) ---
+        // Iterate through all other players (Bots)
         const ball = gameStateRef.current.ball;
-        const p2 = gameStateRef.current.players[1];
-        // Difficulty Settings
-        let predictionFactor = 0.0; // Seconds ahead
-        let kickChance = 0.05;
-        let reactionDist = 400;
-        if (botDifficulty === 'easy') {
-            predictionFactor = 0.1;
-            kickChance = 0.02;
-            reactionDist = 300;
-        } else if (botDifficulty === 'medium') {
-             predictionFactor = 0.3;
-             kickChance = 0.05;
-             reactionDist = 600;
-        } else if (botDifficulty === 'hard') {
-            predictionFactor = 0.5;
-            kickChance = 0.15;
-            reactionDist = 2000; // Infinite
+        for (let i = 1; i < gameStateRef.current.players.length; i++) {
+            const bot = gameStateRef.current.players[i];
+            // Difficulty Settings
+            let predictionFactor = 0.0; // Seconds ahead
+            let kickChance = 0.05;
+            let reactionDist = 400;
+            if (botDifficulty === 'easy') {
+                predictionFactor = 0.1;
+                kickChance = 0.02;
+                reactionDist = 300;
+            } else if (botDifficulty === 'medium') {
+                 predictionFactor = 0.3;
+                 kickChance = 0.05;
+                 reactionDist = 600;
+            } else if (botDifficulty === 'hard') {
+                predictionFactor = 0.5;
+                kickChance = 0.15;
+                reactionDist = 2000; // Infinite
+            }
+            // Calculate predicted ball position
+            let targetX = ball.pos.x + ball.vel.x * predictionFactor;
+            let targetY = ball.pos.y + ball.vel.y * predictionFactor;
+            // Simple clamp to field
+            targetX = Math.max(0, Math.min(1200, targetX));
+            targetY = Math.max(0, Math.min(600, targetY));
+            const dx = targetX - bot.pos.x;
+            const dy = targetY - bot.pos.y;
+            const distToTarget = Math.sqrt(dx*dx + dy*dy);
+            const distToBall = Math.sqrt((ball.pos.x - bot.pos.x)**2 + (ball.pos.y - bot.pos.y)**2);
+            const botMove = { x: 0, y: 0 };
+            // Only move if ball is within reaction distance
+            if (distToBall < reactionDist) {
+                 // Normalize movement
+                 if (distToTarget > 10) {
+                     botMove.x = dx / distToTarget;
+                     botMove.y = dy / distToTarget;
+                 }
+            }
+            // Kick logic: Close to ball AND aligned with goal
+            // If Bot is Blue, attacks Left (x=0). Ball should be to the left of bot.
+            // If Bot is Red, attacks Right (x=1200). Ball should be to the right of bot.
+            const isClose = distToBall < (bot.radius + ball.radius + 15);
+            let aligned = false;
+            if (bot.team === 'blue') {
+                aligned = ball.pos.x < bot.pos.x;
+            } else {
+                aligned = ball.pos.x > bot.pos.x;
+            }
+            const botKick = isClose && aligned && Math.random() < kickChance;
+            bot.input = { move: botMove, kick: botKick };
         }
-        // Calculate predicted ball position
-        let targetX = ball.pos.x + ball.vel.x * predictionFactor;
-        let targetY = ball.pos.y + ball.vel.y * predictionFactor;
-        // Simple clamp to field
-        targetX = Math.max(0, Math.min(1200, targetX));
-        targetY = Math.max(0, Math.min(600, targetY));
-        const dx = targetX - p2.pos.x;
-        const dy = targetY - p2.pos.y;
-        const distToTarget = Math.sqrt(dx*dx + dy*dy);
-        const distToBall = Math.sqrt((ball.pos.x - p2.pos.x)**2 + (ball.pos.y - p2.pos.y)**2);
-        const botMove = { x: 0, y: 0 };
-        // Only move if ball is within reaction distance
-        if (distToBall < reactionDist) {
-             // Normalize movement
-             if (distToTarget > 10) {
-                 botMove.x = dx / distToTarget;
-                 botMove.y = dy / distToTarget;
-             }
-        }
-        // Kick logic: Close to ball AND aligned with goal
-        // Blue (P2) attacks Left Goal (x=0). Ball should be to the left of bot.
-        const isClose = distToBall < (p2.radius + ball.radius + 15);
-        const aligned = (p2.team === 'blue' && ball.pos.x < p2.pos.x) || (p2.team === 'red' && ball.pos.x > p2.pos.x);
-        const botKick = isClose && aligned && Math.random() < kickChance;
-        gameStateRef.current.players[1].input = { move: botMove, kick: botKick };
       }
       // 2. State Update & Interpolation
       if (targetState) {
@@ -646,11 +663,12 @@ export function GameCanvas({
     return () => cancelAnimationFrame(requestRef.current);
   }, [score, isPaused, gameOver, winningScore, onInput, handleGameOver, botDifficulty, render, particles]);
   const handleReset = () => {
-    gameStateRef.current = PhysicsEngine.createInitialState();
-    displayStateRef.current = PhysicsEngine.createInitialState();
+    gameStateRef.current = PhysicsEngine.createInitialState(180, 'medium', mode);
+    displayStateRef.current = PhysicsEngine.createInitialState(180, 'medium', mode);
     // Reset Stats
-    ['p1', 'p2'].forEach(id => {
-        localStatsRef.current[id] = {
+    const players = gameStateRef.current.players;
+    players.forEach(p => {
+        localStatsRef.current[p.id] = {
             goals: 0,
             assists: 0,
             ownGoals: 0,

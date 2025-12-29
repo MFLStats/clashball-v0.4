@@ -203,8 +203,8 @@ export function Dashboard() {
                     </Card>
                 </div>
                 {/* Rating Chart Section */}
-                <RatingChart 
-                    currentRating={profile.stats['1v1'].rating} 
+                <RatingChart
+                    currentRating={profile.stats['1v1'].rating}
                     recentMatches={profile.recentMatches.filter(m => m.mode === '1v1')}
                     className="bg-slate-900 border-slate-800"
                 />
@@ -247,25 +247,43 @@ export function Dashboard() {
                             </div>
                         </CardContent>
                     </Card>
-                    <Card className="bg-slate-900 border-slate-800 h-full">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-white">
-                                <Medal className="w-5 h-5 text-primary" />
-                                Highest Ranking
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="flex flex-col items-center justify-center py-8">
-                            <div className="relative">
-                                <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
-                                <RankBadge tier={profile.stats['1v1'].tier} division={profile.stats['1v1'].division} size="lg" className="relative z-10" />
-                            </div>
-                            <div className="mt-6 text-3xl font-display font-bold text-white">{profile.stats['1v1'].tier} {profile.stats['1v1'].division}</div>
-                            <div className="text-slate-400 font-medium mb-4">1v1 Competitive</div>
-                            <div className="px-4 py-1.5 bg-slate-800 rounded-full text-sm font-mono text-slate-300 border border-slate-700 shadow-inner">
-                                Peak MMR: <span className="text-white font-bold">{profile.stats['1v1'].rating}</span>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <div className="flex flex-col gap-6">
+                        <Card className="bg-slate-900 border-slate-800 flex-1">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-white">
+                                    <Medal className="w-5 h-5 text-primary" />
+                                    Highest Ranking
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="flex flex-col items-center justify-center py-4">
+                                <div className="relative">
+                                    <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
+                                    <RankBadge tier={profile.stats['1v1'].tier} division={profile.stats['1v1'].division} size="lg" className="relative z-10" />
+                                </div>
+                                <div className="mt-4 text-2xl font-display font-bold text-white">{profile.stats['1v1'].tier} {profile.stats['1v1'].division}</div>
+                                <div className="text-slate-400 font-medium text-sm">1v1 Competitive</div>
+                            </CardContent>
+                        </Card>
+                        {/* Trophy Room */}
+                        <Card className="bg-slate-900 border-slate-800 flex-1">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-white">
+                                    <Trophy className="w-5 h-5 text-yellow-500" />
+                                    Trophy Room
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="flex flex-col items-center justify-center py-4">
+                                <div className="relative">
+                                    <div className="absolute inset-0 bg-yellow-500/20 blur-3xl rounded-full" />
+                                    <div className="p-4 bg-gradient-to-br from-yellow-400/20 to-orange-500/20 rounded-full border border-yellow-500/30 relative z-10">
+                                        <Trophy className="w-10 h-10 text-yellow-400 drop-shadow-lg" />
+                                    </div>
+                                </div>
+                                <div className="mt-4 text-3xl font-display font-bold text-white">{profile.tournamentsWon || 0}</div>
+                                <div className="text-slate-400 font-medium text-sm">Tournament Victories</div>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
             </TabsContent>
             {/* RANKED TAB */}
@@ -344,8 +362,8 @@ export function Dashboard() {
                         <CardContent>
                             <form onSubmit={handleCreateTeam} className="flex gap-4 items-center">
                                 <div className="flex-1">
-                                    <Input 
-                                        placeholder="Enter team name..." 
+                                    <Input
+                                        placeholder="Enter team name..."
                                         value={newTeamName}
                                         onChange={(e) => setNewTeamName(e.target.value)}
                                         className="bg-slate-950 border-slate-700 text-white placeholder:text-slate-600"
@@ -366,8 +384,8 @@ export function Dashboard() {
                         <CardContent>
                             <form onSubmit={handleJoinTeam} className="flex gap-4 items-center">
                                 <div className="flex-1">
-                                    <Input 
-                                        placeholder="ENTER CODE" 
+                                    <Input
+                                        placeholder="ENTER CODE"
                                         value={joinCode}
                                         onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                                         maxLength={6}
@@ -392,8 +410,8 @@ export function Dashboard() {
                         </Card>
                     ) : (
                         teams.map((team) => (
-                            <Card 
-                                key={team.id} 
+                            <Card
+                                key={team.id}
                                 className="bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors cursor-pointer group"
                                 onClick={() => {
                                     setSelectedTeam(team);
@@ -426,10 +444,10 @@ export function Dashboard() {
                 </div>
             </TabsContent>
         </Tabs>
-        <TeamDetailsDialog 
-            team={selectedTeam} 
-            open={isJoinDialogOpen} 
-            onOpenChange={setIsJoinDialogOpen} 
+        <TeamDetailsDialog
+            team={selectedTeam}
+            open={isJoinDialogOpen}
+            onOpenChange={setIsJoinDialogOpen}
         />
     </div>
   );

@@ -20,14 +20,14 @@ const RANKED_SETTINGS: LobbySettings = {
 interface Lobby {
     code: string;
     hostId: string;
-    players: { id: string; ws: WebSocket; username: string; team: LobbyTeam }[];
+    players: { id: string; ws: WebSocket; username: string; team: LobbyTeam; jersey?: string }[];
     status: 'waiting' | 'playing';
     settings: LobbySettings;
 }
 export class GlobalDurableObject extends DurableObject {
     // State
     // Updated queue to store rating for matchmaking
-    queues: Map<GameMode, { userId: string; ws: WebSocket; username: string; rating: number }[]> = new Map();
+    queues: Map<GameMode, { userId: string; ws: WebSocket; username: string; rating: number; jersey?: string }[]> = new Map();
     matches: Map<string, Match> = new Map();
     sessions: Map<WebSocket, { userId: string; matchId?: string; lobbyCode?: string }> = new Map();
     lobbies: Map<string, Lobby> = new Map();
@@ -90,10 +90,11 @@ export class GlobalDurableObject extends DurableObject {
                         return;
                     }
                     try {
-                        // Fetch user profile to get rating
+                        // Fetch user profile to get rating and jersey
                         const profile = await this.getUserProfile(msg.userId);
                         const rating = profile.stats[msg.mode].rating;
-                        this.addToQueue(ws, msg.userId, msg.username, msg.mode, rating);
+                        const jersey = profile.jersey;
+                        this.addToQueue(ws, msg.userId, msg.username, msg.mode, rating, jersey);
                     } catch (err) {
                         console.error(`[DurableObject] Failed to get profile for queue join: ${msg.userId}`, err);
                         ws.send(JSON.stringify({ type: 'error', message: 'Failed to retrieve user profile' }));
@@ -211,13 +212,13 @@ export class GlobalDurableObject extends DurableObject {
         }
     }
     // --- Queue Logic ---
-    addToQueue(ws: WebSocket, userId: string, username: string, mode: GameMode, rating: number) {
+    addToQueue(ws: WebSocket, userId: string, username: string, mode: GameMode, rating: number, jersey?: string) {
         // Remove from other queues first
         this.removeFromQueue(ws);
         const queue = this.queues.get(mode) || [];
         // Prevent duplicates
         if (!queue.find(p => p.userId === userId)) {
-            queue.push({ userId, ws, username, rating });
+            queue.push({ userId, ws, username, rating, jersey });
             // Sort queue by rating to group similar skill levels
             queue.sort((a, b) => a.rating - b.rating);
             this.queues.set(mode, queue);
@@ -258,13 +259,13 @@ export class GlobalDurableObject extends DurableObject {
             const players = queue.splice(0, requiredPlayers);
             // Update queue status for remaining players
             this.broadcastQueueStatus(mode);
-            const matchPlayers = players.map(p => ({ userId: p.userId, ws: p.ws, username: p.username }));
+            const matchPlayers = players.map(p => ({ userId: p.userId, ws: p.ws, username: p.username, jersey: p.jersey }));
             // Ranked matches use standard settings
             this.startMatch(matchPlayers, [], mode, RANKED_SETTINGS);
         }
     }
     // --- Lobby Logic ---
-    handleCreateLobby(ws: WebSocket, userId: string, username: string) {
+    async handleCreateLobby(ws: WebSocket, userId: string, username: string) {
         // Generate 6-char code
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let code = '';
@@ -274,10 +275,12 @@ export class GlobalDurableObject extends DurableObject {
             code = '';
             for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
         }
+        // Fetch profile for jersey
+        const profile = await this.getUserProfile(userId);
         const lobby: Lobby = {
             code,
             hostId: userId,
-            players: [{ id: userId, ws, username, team: 'spectator' }], // Creator starts as spectator
+            players: [{ id: userId, ws, username, team: 'spectator', jersey: profile.jersey }], // Creator starts as spectator
             status: 'waiting',
             settings: { scoreLimit: 3, timeLimit: 180, fieldSize: 'medium' } // Default settings
         };
@@ -285,7 +288,7 @@ export class GlobalDurableObject extends DurableObject {
         this.sessions.set(ws, { userId, lobbyCode: code });
         this.broadcastLobbyUpdate(lobby);
     }
-    handleJoinLobby(ws: WebSocket, code: string, userId: string, username: string) {
+    async handleJoinLobby(ws: WebSocket, code: string, userId: string, username: string) {
         const lobby = this.lobbies.get(code.toUpperCase());
         if (!lobby) {
             ws.send(JSON.stringify({ type: 'error', message: 'Lobby not found' }));
@@ -299,8 +302,10 @@ export class GlobalDurableObject extends DurableObject {
             ws.send(JSON.stringify({ type: 'error', message: 'Lobby is full' }));
             return;
         }
+        // Fetch profile for jersey
+        const profile = await this.getUserProfile(userId);
         // Add player as spectator by default
-        lobby.players.push({ id: userId, ws, username, team: 'spectator' });
+        lobby.players.push({ id: userId, ws, username, team: 'spectator', jersey: profile.jersey });
         this.sessions.set(ws, { userId, lobbyCode: code });
         this.broadcastLobbyUpdate(lobby);
     }
@@ -392,7 +397,8 @@ export class GlobalDurableObject extends DurableObject {
             userId: p.id,
             ws: p.ws,
             username: p.username,
-            team: p.team as 'red' | 'blue' // Explicit cast as we filtered
+            team: p.team as 'red' | 'blue', // Explicit cast as we filtered
+            jersey: p.jersey
         }));
         // Map spectators
         const matchSpectators = spectators.map(p => ({
@@ -433,7 +439,7 @@ export class GlobalDurableObject extends DurableObject {
     }
     // --- Match Logic ---
     startMatch(
-        players: { userId: string; ws: WebSocket; username: string; team?: 'red' | 'blue' }[],
+        players: { userId: string; ws: WebSocket; username: string; team?: 'red' | 'blue'; jersey?: string }[],
         spectators: { userId: string; ws: WebSocket; username: string }[],
         mode: GameMode,
         settings: LobbySettings
@@ -444,7 +450,8 @@ export class GlobalDurableObject extends DurableObject {
             id: p.userId,
             ws: p.ws,
             username: p.username,
-            team: p.team || (i < players.length / 2 ? 'red' : 'blue') as 'red' | 'blue'
+            team: p.team || (i < players.length / 2 ? 'red' : 'blue') as 'red' | 'blue',
+            jersey: p.jersey
         }));
         // FIX: Map spectators to use 'id' instead of 'userId' to match Match constructor
         const matchSpectators = spectators.map(s => ({
@@ -695,6 +702,8 @@ export class GlobalDurableObject extends DurableObject {
         const newProfile: UserProfile = {
             id: userId,
             username,
+            jersey: username.substring(0, 2).toUpperCase(),
+            tournamentsWon: 0,
             stats: {
                 '1v1': { ...defaultStats },
                 '2v2': { ...defaultStats },
@@ -760,7 +769,30 @@ export class GlobalDurableObject extends DurableObject {
               if (profile.stats[mode].ownGoals === undefined) profile.stats[mode].ownGoals = 0;
           }
       });
+      // Migration: Ensure jersey and tournamentsWon exist
+      if (!profile.jersey) {
+          profile.jersey = profile.username.substring(0, 2).toUpperCase();
+          await this.ctx.storage.put(key, profile);
+      }
+      if (profile.tournamentsWon === undefined) {
+          profile.tournamentsWon = 0;
+          await this.ctx.storage.put(key, profile);
+      }
       return profile as UserProfile;
+    }
+    async updateProfile(userId: string, updates: { jersey?: string }) {
+        const profile = await this.getUserProfile(userId);
+        if (updates.jersey) {
+            profile.jersey = updates.jersey.substring(0, 2).toUpperCase();
+        }
+        await this.ctx.storage.put(`user_${userId}`, profile);
+        return profile;
+    }
+    async recordTournamentWin(userId: string) {
+        const profile = await this.getUserProfile(userId);
+        profile.tournamentsWon = (profile.tournamentsWon || 0) + 1;
+        await this.ctx.storage.put(`user_${userId}`, profile);
+        return profile;
     }
     // --- Team Methods ---
     async createTeam(name: string, creatorId: string): Promise<TeamProfile> {

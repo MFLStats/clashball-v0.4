@@ -1,13 +1,16 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
-import { Settings, Volume2, Monitor, Keyboard, Activity } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Settings, Volume2, Monitor, Keyboard, Activity, User } from 'lucide-react';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { useUserStore } from '@/store/useUserStore';
 import { SoundEngine } from '@/lib/audio';
+import { toast } from 'sonner';
 interface SettingsDialogProps {
   trigger?: React.ReactNode;
   open?: boolean;
@@ -23,10 +26,37 @@ export function SettingsDialog({ trigger, open, onOpenChange }: SettingsDialogPr
   const setShowNames = useSettingsStore(s => s.setShowNames);
   const setParticles = useSettingsStore(s => s.setParticles);
   const setScreenShake = useSettingsStore(s => s.setScreenShake);
+  const profile = useUserStore(s => s.profile);
+  const updateProfile = useUserStore(s => s.updateProfile);
+  const [jerseyCode, setJerseyCode] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  useEffect(() => {
+    if (profile?.jersey) {
+      setJerseyCode(profile.jersey);
+    } else if (profile?.username) {
+      setJerseyCode(profile.username.substring(0, 2).toUpperCase());
+    }
+  }, [profile]);
   const handleVolumeChange = (vals: number[]) => {
     const newVol = vals[0];
     setVolume(newVol);
     SoundEngine.setVolume(newVol);
+  };
+  const handleJerseyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.toUpperCase().slice(0, 2);
+    setJerseyCode(val);
+  };
+  const saveJersey = async () => {
+    if (!jerseyCode) return;
+    setIsSaving(true);
+    try {
+      await updateProfile({ jersey: jerseyCode });
+      toast.success('Jersey code updated!');
+    } catch (error) {
+      toast.error('Failed to update jersey code');
+    } finally {
+      setIsSaving(false);
+    }
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -58,6 +88,38 @@ export function SettingsDialog({ trigger, open, onOpenChange }: SettingsDialogPr
           </TabsList>
           {/* GENERAL SETTINGS */}
           <TabsContent value="general" className="space-y-4 py-4 animate-fade-in">
+            {/* Profile Section */}
+            {profile && (
+              <div className="p-4 bg-slate-800/30 rounded-xl border border-white/5 space-y-4">
+                <div className="flex items-center gap-2 text-white font-bold">
+                  <User className="w-4 h-4 text-primary" /> Player Appearance
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center font-bold text-white border-2 border-black shadow-lg">
+                    {jerseyCode || '??'}
+                  </div>
+                  <div className="flex-1 flex gap-2">
+                    <div className="flex-1">
+                      <Label htmlFor="jersey" className="text-xs text-slate-400 mb-1 block">Jersey Code (2 chars)</Label>
+                      <Input
+                        id="jersey"
+                        value={jerseyCode}
+                        onChange={handleJerseyChange}
+                        className="bg-slate-950 border-slate-700 text-white font-mono uppercase tracking-widest text-center"
+                        maxLength={2}
+                      />
+                    </div>
+                    <Button
+                      onClick={saveJersey}
+                      disabled={isSaving || jerseyCode === profile.jersey}
+                      className="self-end btn-kid-primary"
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-xl border border-white/5">
               <div className="space-y-1">
                 <Label htmlFor="show-names" className="text-base font-bold text-white">Show Player Names</Label>

@@ -35,6 +35,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ userId, username })
     }),
+  updateProfile: (userId: string, data: { jersey: string }) =>
+    fetchApi<UserProfile>('/profile/update', {
+      method: 'POST',
+      body: JSON.stringify({ userId, ...data })
+    }),
   // Teams
   createTeam: (name: string, creatorId: string) =>
     fetchApi<TeamProfile>('/teams', {
@@ -64,6 +69,11 @@ export const api = {
     getState: () => fetchApi<TournamentState>('/tournament'),
     join: (userId: string) =>
       fetchApi<TournamentState>('/tournament/join', {
+        method: 'POST',
+        body: JSON.stringify({ userId })
+      }),
+    recordWin: (userId: string) =>
+      fetchApi<UserProfile>('/tournament/win', {
         method: 'POST',
         body: JSON.stringify({ userId })
       })

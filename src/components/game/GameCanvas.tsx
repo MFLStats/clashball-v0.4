@@ -189,6 +189,12 @@ export function GameCanvas({
         ctx.fillStyle = i % 2 === 0 ? '#718c5a' : '#6c8655';
         ctx.fillRect(i * stripeWidth, 0, stripeWidth, height);
     }
+    // --- 1.5 Vignette Effect ---
+    const gradient = ctx.createRadialGradient(width / 2, height / 2, height / 3, width / 2, height / 2, width * 0.8);
+    gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(1, 'rgba(0,0,0,0.3)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
     // --- 2. Draw Lines (White) ---
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 3;
@@ -257,14 +263,15 @@ export function GameCanvas({
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 3;
       ctx.stroke();
-      // Jersey Number (First 2 chars of username)
+      // Jersey Number (Custom or First 2 chars of username)
+      const jerseyText = p.jersey || p.username.substring(0, 2).toUpperCase();
       ctx.font = 'bold 16px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = 'rgba(0,0,0,0.5)';
       ctx.shadowBlur = 2;
-      ctx.fillText(p.username.substring(0, 2).toUpperCase(), x, y);
+      ctx.fillText(jerseyText, x, y);
       ctx.shadowBlur = 0;
       // Username (Conditional)
       if (showNames) {

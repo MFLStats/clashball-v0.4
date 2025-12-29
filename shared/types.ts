@@ -54,6 +54,8 @@ export interface UserProfile {
   username: string;
   email?: string;     // Optional for guest, required for auth
   country?: string;   // ISO 2-letter code (e.g., 'US', 'BR')
+  jersey?: string;    // Custom 2-char code for avatar
+  tournamentsWon?: number; // Count of tournament victories
   stats: Record<GameMode, ModeStats>;
   teams: string[]; // List of Team IDs
   lastMatchTime: number;

@@ -46,6 +46,14 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const data = await stub.getUserProfile(userId, username);
         return c.json({ success: true, data } satisfies ApiResponse<UserProfile>);
     });
+    // Update User Profile
+    app.post('/api/profile/update', async (c) => {
+        const { userId, jersey } = await c.req.json() as { userId: string, jersey?: string };
+        if (!userId) return c.json({ success: false, error: 'Missing userId' }, 400);
+        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+        const data = await stub.updateProfile(userId, { jersey });
+        return c.json({ success: true, data } satisfies ApiResponse<UserProfile>);
+    });
     // Report Match Result
     app.post('/api/match/end', async (c) => {
         const body = await c.req.json() as MatchResult;
@@ -105,6 +113,13 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
         const data = await stub.joinTournament(userId);
         return c.json({ success: true, data } satisfies ApiResponse<TournamentState>);
+    });
+    app.post('/api/tournament/win', async (c) => {
+        const { userId } = await c.req.json() as { userId: string };
+        if (!userId) return c.json({ success: false, error: 'Missing userId' }, 400);
+        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+        const data = await stub.recordTournamentWin(userId);
+        return c.json({ success: true, data } satisfies ApiResponse<UserProfile>);
     });
     // --- Lobby Routes ---
     app.get('/api/lobbies', async (c) => {

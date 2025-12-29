@@ -12,7 +12,7 @@ export class Match {
   private lastTime: number = Date.now();
   constructor(
     id: string,
-    players: { id: string; ws: WebSocket; team: 'red' | 'blue'; username: string }[],
+    players: { id: string; ws: WebSocket; team: 'red' | 'blue'; username: string; jersey?: string }[],
     spectators: { id: string; ws: WebSocket; username: string }[],
     settings: LobbySettings,
     onEnd: (id: string, winner: 'red' | 'blue', score: { red: number; blue: number }) => void
@@ -29,6 +29,7 @@ export class Match {
       id: p.id,
       team: p.team,
       username: p.username,
+      jersey: p.jersey, // Set custom jersey
       pos: { x: 0, y: 0 }, // Will be set by resetPositions
       vel: { x: 0, y: 0 },
       radius: PhysicsEngine.PLAYER_RADIUS,

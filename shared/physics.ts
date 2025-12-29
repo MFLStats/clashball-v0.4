@@ -7,6 +7,7 @@ export interface Player {
   id: string;
   team: 'red' | 'blue';
   username: string;
+  jersey?: string; // Custom 2-char code
   pos: Vector;
   vel: Vector;
   radius: number;
@@ -82,6 +83,7 @@ export class PhysicsEngine {
           id: 'p1',
           team: 'red',
           username: 'Player 1',
+          jersey: 'P1',
           pos: { x: 150, y: field.height / 2 },
           vel: { x: 0, y: 0 },
           radius: this.PLAYER_RADIUS,
@@ -92,6 +94,7 @@ export class PhysicsEngine {
           id: 'p2',
           team: 'blue',
           username: 'Player 2',
+          jersey: 'P2',
           pos: { x: field.width - 150, y: field.height / 2 },
           vel: { x: 0, y: 0 },
           radius: this.PLAYER_RADIUS,

@@ -34,21 +34,21 @@ export interface GameState {
   timeRemaining: number;
 }
 export class PhysicsEngine {
-  // Arcade Physics Constants
+  // Arcade Physics Constants - Tuned for "Haxball" feel
   static readonly PLAYER_RADIUS = 15;
   static readonly BALL_RADIUS = 10;
   static readonly FIELD_WIDTH = 800;
   static readonly FIELD_HEIGHT = 400;
   static readonly GOAL_HEIGHT = 120;
   // Movement & Feel
-  static readonly PLAYER_ACCELERATION = 2.0; // Snappy acceleration
-  static readonly PLAYER_MAX_SPEED = 5.0;    // Capped top speed
-  static readonly PLAYER_DAMPING = 0.93;     // High friction for quick stops (slide)
+  static readonly PLAYER_ACCELERATION = 3.0; // Snappier acceleration
+  static readonly PLAYER_MAX_SPEED = 6.0;    // Higher top speed
+  static readonly PLAYER_DAMPING = 0.88;     // High friction for quick stops (responsive)
   // Ball Physics
-  static readonly BALL_DAMPING = 0.99;       // Low friction for long rolls
-  static readonly KICK_STRENGTH = 8.0;       // Strong impulse
-  static readonly WALL_BOUNCE = 0.8;         // Wall restitution
-  static readonly PLAYER_BOUNCE = 0.5;       // Player-Player restitution
+  static readonly BALL_DAMPING = 0.992;      // Low friction for long rolls
+  static readonly KICK_STRENGTH = 9.0;       // Stronger kick
+  static readonly WALL_BOUNCE = 0.75;        // Dampened wall bounces
+  static readonly PLAYER_BOUNCE = 0.5;       // Player-Ball restitution
   static createInitialState(): GameState {
     return {
       players: [
@@ -90,7 +90,7 @@ export class PhysicsEngine {
   }
   static update(state: GameState): GameState {
     if (state.status !== 'playing') return state;
-    // Deep copy for immutability (essential for React state / prediction rollback)
+    // Deep copy for immutability
     const newState = JSON.parse(JSON.stringify(state)) as GameState;
     // --- 1. Update Players ---
     newState.players.forEach(p => {
@@ -116,7 +116,7 @@ export class PhysicsEngine {
       // Apply Damping (Friction)
       p.vel.x *= this.PLAYER_DAMPING;
       p.vel.y *= this.PLAYER_DAMPING;
-      // Stop completely if very slow (prevents micro-sliding)
+      // Stop completely if very slow
       if (Math.abs(p.vel.x) < 0.01) p.vel.x = 0;
       if (Math.abs(p.vel.y) < 0.01) p.vel.y = 0;
       // Wall Collisions (Players)
@@ -147,7 +147,7 @@ export class PhysicsEngine {
     // Goal Detection & X-Axis Walls
     // Left Side
     if (b.pos.x < 0) {
-        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 &&
+        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 && 
                        b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
         if (isGoal) {
             newState.score.blue++;
@@ -160,7 +160,7 @@ export class PhysicsEngine {
     }
     // Right Side
     if (b.pos.x > newState.field.width) {
-        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 &&
+        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 && 
                        b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
         if (isGoal) {
             newState.score.red++;
@@ -171,7 +171,7 @@ export class PhysicsEngine {
             b.vel.x *= -this.WALL_BOUNCE;
         }
     }
-    // --- 3. Player-Ball Collision ---
+    // --- 3. Player-Ball Collision (Impulse Based) ---
     newState.players.forEach(p => {
       const dx = b.pos.x - p.pos.x;
       const dy = b.pos.y - p.pos.y;
@@ -179,32 +179,34 @@ export class PhysicsEngine {
       const minDist = p.radius + b.radius;
       if (distSq < minDist * minDist) {
         const dist = Math.sqrt(distSq);
-        // Collision Normal
+        // Collision Normal (from player to ball)
         const nx = dx / (dist || 1);
         const ny = dy / (dist || 1);
-        // Resolve Overlap (Push ball out)
+        // 1. Resolve Overlap (Push ball out)
         const overlap = minDist - dist;
         b.pos.x += nx * overlap;
         b.pos.y += ny * overlap;
-        // Resolve Velocity
+        // 2. Resolve Velocity (Impulse)
+        const relVelX = b.vel.x - p.vel.x;
+        const relVelY = b.vel.y - p.vel.y;
+        const velAlongNormal = relVelX * nx + relVelY * ny;
+        // Only resolve if moving towards each other
+        if (velAlongNormal < 0) {
+            // Calculate impulse scalar
+            // j = -(1 + e) * v_rel_norm
+            const j = -(1 + this.PLAYER_BOUNCE) * velAlongNormal;
+            // Apply impulse to ball (assuming infinite mass player for arcade feel)
+            b.vel.x += j * nx;
+            b.vel.y += j * ny;
+            // Add some of player's velocity directly for "grip" feel
+            b.vel.x += p.vel.x * 0.2;
+            b.vel.y += p.vel.y * 0.2;
+        }
+        // 3. Kick Mechanic
         if (p.isKicking) {
-            // Kick adds strong impulse
-            b.vel.x += nx * this.KICK_STRENGTH + p.vel.x * 0.5;
-            b.vel.y += ny * this.KICK_STRENGTH + p.vel.y * 0.5;
-        } else {
-            // Normal collision (elastic-ish)
-            // Simple reflection + transfer of player velocity
-            const relVelX = b.vel.x - p.vel.x;
-            const relVelY = b.vel.y - p.vel.y;
-            const velAlongNormal = relVelX * nx + relVelY * ny;
-            if (velAlongNormal < 0) { // Only resolve if moving towards each other
-                const j = -(1 + 0.5) * velAlongNormal; // 0.5 restitution
-                b.vel.x += j * nx;
-                b.vel.y += j * ny;
-                // Add some of player's velocity directly
-                b.vel.x += p.vel.x * 0.5;
-                b.vel.y += p.vel.y * 0.5;
-            }
+            // Add strong impulse in normal direction
+            b.vel.x += nx * this.KICK_STRENGTH;
+            b.vel.y += ny * this.KICK_STRENGTH;
         }
       }
     });

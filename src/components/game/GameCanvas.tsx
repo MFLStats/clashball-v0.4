@@ -11,10 +11,10 @@ interface GameCanvasProps {
   botDifficulty?: 'easy' | 'medium' | 'hard';
   playerNames?: { red: string; blue: string };
 }
-export function GameCanvas({
-  onGameEnd,
-  winningScore = 3,
-  externalState,
+export function GameCanvas({ 
+  onGameEnd, 
+  winningScore = 3, 
+  externalState, 
   onInput,
   botDifficulty = 'medium',
   playerNames
@@ -179,6 +179,19 @@ export function GameCanvas({
       const x = p.pos.x * scaleX;
       const y = p.pos.y * scaleY;
       const r = p.radius * scaleX;
+      // Kick Indicator (Visual Pulse)
+      if (p.isKicking) {
+        ctx.beginPath();
+        ctx.arc(x, y, r + 8, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, y, r + 12, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
       // Shadow
       ctx.beginPath();
       ctx.arc(x + 2, y + 2, r, 0, Math.PI * 2);
@@ -193,14 +206,6 @@ export function GameCanvas({
       ctx.strokeStyle = 'white';
       ctx.lineWidth = 3;
       ctx.stroke();
-      // Kick Indicator
-      if (p.isKicking) {
-        ctx.beginPath();
-        ctx.arc(x, y, r + 4, 0, Math.PI * 2);
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
       // Draw Username
       ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'center';
@@ -278,7 +283,7 @@ export function GameCanvas({
         )}
       </div>
       <div className="text-sm text-slate-500 font-medium">
-        Controls: WASD to Move ��� SPACE to Kick
+        Controls: WASD to Move • SPACE to Kick
       </div>
     </div>
   );

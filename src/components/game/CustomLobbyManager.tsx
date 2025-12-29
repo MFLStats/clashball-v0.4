@@ -14,6 +14,7 @@ import { SoundEngine } from '@/lib/audio';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { QuickChat } from './QuickChat';
+import { GameSocket } from '@/lib/game-socket';
 interface CustomLobbyManagerProps {
   onExit: () => void;
   initialCode?: string;
@@ -38,7 +39,7 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [winner, setWinner] = useState<'red' | 'blue' | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const socketRef = useRef<GameSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
   // Auto-scroll chat
@@ -67,17 +68,21 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
     const interval = setInterval(fetchLobbies, 5000);
     return () => clearInterval(interval);
   }, [fetchLobbies]);
-  // Message Handler
-  const handleMessage = useCallback((msg: WSMessage) => {
-    switch (msg.type) {
-        case 'lobby_update': {
+  // Initialize Socket
+  useEffect(() => {
+    if (!profile) return;
+    const socket = new GameSocket();
+    socketRef.current = socket;
+    // Define Handlers
+    const onLobbyUpdate = (msg: WSMessage) => {
+        if (msg.type === 'lobby_update') {
             setLobbyState(msg.state);
             setView('lobby');
             setIsConnecting(false);
-            break;
         }
-        case 'match_found':
-        case 'match_started': {
+    };
+    const onMatchStarted = (msg: WSMessage) => {
+        if (msg.type === 'match_found' || msg.type === 'match_started') {
             setMatchInfo({ matchId: msg.matchId, team: msg.team });
             setView('game');
             if (msg.team === 'spectator') {
@@ -85,123 +90,95 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
             } else {
                 toast.success('Match Starting!');
             }
-            break;
         }
-        case 'game_state': {
-            setGameState(msg.state);
-            break;
-        }
-        case 'game_events': {
-            msg.events.forEach(event => {
-                switch (event.type) {
-                    case 'kick': SoundEngine.playKick(); break;
-                    case 'wall': SoundEngine.playWall(); break;
-                    case 'player': SoundEngine.playPlayer(); break;
-                    case 'goal': SoundEngine.playGoal(); break;
-                    case 'whistle': SoundEngine.playWhistle(); break;
-                }
-            });
-            break;
-        }
-        case 'game_over': {
+    };
+    const onGameState = (msg: WSMessage) => {
+        if (msg.type === 'game_state') setGameState(msg.state);
+    };
+    const onGameEvents = (msg: WSMessage) => {
+        if (msg.type !== 'game_events') return;
+        msg.events.forEach(event => {
+            switch (event.type) {
+                case 'kick': SoundEngine.playKick(); break;
+                case 'wall': SoundEngine.playWall(); break;
+                case 'player': SoundEngine.playPlayer(); break;
+                case 'goal': SoundEngine.playGoal(); break;
+                case 'whistle': SoundEngine.playWhistle(); break;
+            }
+        });
+    };
+    const onGameOver = (msg: WSMessage) => {
+        if (msg.type === 'game_over') {
             SoundEngine.playWhistle();
             setWinner(msg.winner);
-            break;
         }
-        case 'chat': {
-            setChatMessages(prev => [
-              ...prev,
-              {
-                id: crypto.randomUUID(),
-                sender: msg.sender || 'Unknown',
-                message: msg.message,
-                team: msg.team || 'spectator'
-              }
-            ]);
-            break;
-        }
-        case 'kicked': {
+    };
+    const onChat = (msg: WSMessage) => {
+        if (msg.type !== 'chat') return;
+        setChatMessages(prev => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            sender: msg.sender || 'Unknown',
+            message: msg.message,
+            team: msg.team || 'spectator'
+          }
+        ]);
+    };
+    const onKicked = (msg: WSMessage) => {
+        if (msg.type === 'kicked') {
             toast.error('You have been kicked from the lobby.');
             setView('menu');
             setLobbyState(null);
             setIsConnecting(false);
-            break;
         }
-        case 'error': {
+    };
+    const onError = (msg: WSMessage) => {
+        if (msg.type === 'error') {
             toast.error(msg.message);
             setIsConnecting(false);
-            break;
         }
-        case 'ping': {
-            wsRef.current?.send(JSON.stringify({ type: 'pong' }));
-            break;
-        }
-    }
-  }, []);
-  // Robust Connection Logic
-  const connectWS = useCallback((): Promise<WebSocket> => {
-    return new Promise((resolve, reject) => {
-        // If already connected and open, reuse
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            resolve(wsRef.current);
-            return;
-        }
-        // Close existing if connecting or closing
-        if (wsRef.current) {
-            wsRef.current.close();
-        }
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.host;
-        const ws = new WebSocket(`${protocol}//${host}/api/ws`);
-        wsRef.current = ws;
-        const timeout = setTimeout(() => {
-            if (ws.readyState !== WebSocket.OPEN) {
-                ws.close();
-                reject(new Error("Connection timed out"));
-            }
-        }, 5000);
-        ws.onopen = () => {
-            clearTimeout(timeout);
-            resolve(ws);
-        };
-        ws.onerror = (err) => {
-            clearTimeout(timeout);
-            reject(err);
-        };
-        ws.onmessage = (event) => {
-            try {
-                const msg = JSON.parse(event.data) as WSMessage;
-                handleMessage(msg);
-            } catch (e) {
-                console.error('Failed to parse WS message', e);
-            }
-        };
-        ws.onclose = () => {
-            if (isMountedRef.current && view !== 'menu') {
-                // Handle unexpected disconnects if needed
-            }
-        };
-    });
-  }, [handleMessage, view]);
+    };
+    // Register Listeners
+    socket.on('lobby_update', onLobbyUpdate);
+    socket.on('match_started', onMatchStarted);
+    socket.on('match_found', onMatchStarted);
+    socket.on('game_state', onGameState);
+    socket.on('game_events', onGameEvents);
+    socket.on('game_over', onGameOver);
+    socket.on('chat', onChat);
+    socket.on('kicked', onKicked);
+    socket.on('error', onError);
+    return () => {
+        socket.disconnect();
+    };
+  }, [profile]);
+  // Connection Helper
+  const ensureConnection = useCallback(async () => {
+      if (!socketRef.current || !profile) return false;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      const wsUrl = `${protocol}//${host}/api/ws`;
+      // Connect if not already connected
+      socketRef.current.connect(wsUrl, profile.id, profile.username);
+      return true;
+  }, [profile]);
   const createLobby = useCallback(async () => {
     if (!profile) {
         toast.error("You must be logged in to create a lobby");
         return;
     }
     setIsConnecting(true);
-    try {
-        const ws = await connectWS();
-        ws.send(JSON.stringify({
+    await ensureConnection();
+    // Small delay to ensure connection is open if it wasn't
+    setTimeout(() => {
+        socketRef.current?.send({
             type: 'create_lobby',
             userId: profile.id,
             username: profile.username
-        }));
-    } catch (e) {
-        console.error(e);
-        toast.error("Failed to connect to server");
-        setIsConnecting(false);
-    }
-  }, [profile, connectWS]);
+        });
+    }, 500);
+  }, [profile, ensureConnection]);
   const joinLobby = useCallback(async (code?: string) => {
     const targetCode = code || joinCode;
     if (!profile) {
@@ -213,74 +190,58 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
         return;
     }
     setIsConnecting(true);
-    try {
-        const ws = await connectWS();
-        ws.send(JSON.stringify({
+    await ensureConnection();
+    setTimeout(() => {
+        socketRef.current?.send({
             type: 'join_lobby',
             code: targetCode,
             userId: profile.id,
             username: profile.username
-        }));
-    } catch (e) {
-        console.error(e);
-        toast.error("Failed to connect to server");
-        setIsConnecting(false);
-    }
-  }, [profile, joinCode, connectWS]);
+        });
+    }, 500);
+  }, [profile, joinCode, ensureConnection]);
   const startMatch = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'start_lobby_match' }));
-    }
+    socketRef.current?.send({ type: 'start_lobby_match' });
   }, []);
   const updateSettings = useCallback((settings: Partial<LobbySettings>) => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({
-              type: 'update_lobby_settings',
-              settings
-          }));
-      }
+      socketRef.current?.send({
+          type: 'update_lobby_settings',
+          settings
+      });
   }, []);
   const switchTeam = useCallback((team: LobbyTeam) => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({
-              type: 'switch_team',
-              team
-          }));
-      }
+      socketRef.current?.send({
+          type: 'switch_team',
+          team
+      });
   }, []);
   const kickPlayer = useCallback((targetId: string) => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({
-              type: 'kick_player',
-              targetId
-          }));
-      }
+      socketRef.current?.send({
+          type: 'kick_player',
+          targetId
+      });
   }, []);
   const handleInput = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
+    socketRef.current?.send({
         type: 'input',
         move: input.move,
         kick: input.kick
-      }));
-    }
+    });
   }, []);
   const sendChat = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || !wsRef.current) return;
-    wsRef.current.send(JSON.stringify({
+    if (!chatInput.trim()) return;
+    socketRef.current?.send({
       type: 'chat',
       message: chatInput
-    }));
+    });
     setChatInput('');
   }, [chatInput]);
-  // Quick Chat Handler
   const handleQuickChat = useCallback((message: string) => {
-    if (!wsRef.current) return;
-    wsRef.current.send(JSON.stringify({
+    socketRef.current?.send({
       type: 'chat',
       message
-    } satisfies WSMessage));
+    });
   }, []);
   const copyCode = useCallback(() => {
       if (lobbyState?.code) {
@@ -300,14 +261,6 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
       setGameState(null);
       setMatchInfo(null);
       setWinner(null);
-  }, []);
-  // Cleanup
-  useEffect(() => {
-      return () => {
-          if (wsRef.current) {
-              wsRef.current.close();
-          }
-      };
   }, []);
   if (view === 'menu') {
       return (
@@ -411,7 +364,7 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                         </div>
                                         <div className="text-xs text-slate-500 uppercase font-bold">Players</div>
                                     </div>
-                                    <Button
+                                    <Button 
                                         onClick={() => joinLobby(lobby.code)}
                                         disabled={isConnecting || lobby.playerCount >= lobby.maxPlayers}
                                         className="bg-purple-600 hover:bg-purple-500 text-white"
@@ -468,8 +421,8 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                   {redPlayers.length} / {maxPerTeam}
                               </span>
                           </div>
-                          <Button
-                              size="sm"
+                          <Button 
+                              size="sm" 
                               className="w-full mt-2 bg-red-600 hover:bg-red-500 text-white border border-red-400/20"
                               disabled={myTeam === 'red' || redPlayers.length >= maxPerTeam}
                               onClick={() => switchTeam('red')}
@@ -513,8 +466,8 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                       {spectators.length}
                                   </span>
                               </div>
-                              <Button
-                                  size="sm"
+                              <Button 
+                                  size="sm" 
                                   variant="secondary"
                                   className="w-full mt-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
                                   disabled={myTeam === 'spectator'}
@@ -585,8 +538,8 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                   {bluePlayers.length} / {maxPerTeam}
                               </span>
                           </div>
-                          <Button
-                              size="sm"
+                          <Button 
+                              size="sm" 
                               className="w-full mt-2 bg-blue-600 hover:bg-blue-500 text-white border border-blue-400/20"
                               disabled={myTeam === 'blue' || bluePlayers.length >= maxPerTeam}
                               onClick={() => switchTeam('blue')}
@@ -650,9 +603,9 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                   />
                               ) : (
                                   <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                      <div
-                                          className="h-full bg-slate-600"
-                                          style={{ width: `${(lobbyState.settings.scoreLimit / 10) * 100}%` }}
+                                      <div 
+                                          className="h-full bg-slate-600" 
+                                          style={{ width: `${(lobbyState.settings.scoreLimit / 10) * 100}%` }} 
                                       />
                                   </div>
                               )}
@@ -679,9 +632,9 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                   />
                               ) : (
                                   <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                      <div
-                                          className="h-full bg-slate-600"
-                                          style={{ width: `${(lobbyState.settings.timeLimit / 600) * 100}%` }}
+                                      <div 
+                                          className="h-full bg-slate-600" 
+                                          style={{ width: `${(lobbyState.settings.timeLimit / 600) * 100}%` }} 
                                       />
                                   </div>
                               )}
@@ -698,8 +651,8 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                                   </span>
                               </div>
                               {isHost ? (
-                                  <Tabs
-                                      value={lobbyState.settings.fieldSize || 'medium'}
+                                  <Tabs 
+                                      value={lobbyState.settings.fieldSize || 'medium'} 
                                       onValueChange={(val) => updateSettings({ fieldSize: val as any })}
                                       className="w-full"
                                   >

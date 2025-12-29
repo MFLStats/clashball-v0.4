@@ -18,12 +18,8 @@ export class GameSocket {
     this.on = this.on.bind(this);
     this.off = this.off.bind(this);
     this.handleMessage = this.handleMessage.bind(this);
-    this.startHeartbeat = this.startHeartbeat.bind(this);
-    this.stopHeartbeat = this.stopHeartbeat.bind(this);
+    this.heartbeat = this.heartbeat.bind(this);
     this.reconnect = this.reconnect.bind(this);
-  }
-  public get isConnected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
   }
   connect(url: string, userId: string, username: string, onOpen?: () => void) {
     if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) {
@@ -62,7 +58,6 @@ export class GameSocket {
       };
       this.ws.onerror = (error) => {
         console.error('WebSocket connection error:', error);
-        this.stopHeartbeat();
         // onclose will be called after onerror, handling reconnection there
       };
     } catch (err) {
@@ -82,8 +77,7 @@ export class GameSocket {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg));
     } else {
-      // Changed to debug to reduce console noise during reconnection attempts
-      console.debug('Cannot send message, WebSocket not open', msg.type);
+      console.warn('Cannot send message, WebSocket not open', msg.type);
     }
   }
   on(type: string, callback: EventHandler) {
@@ -106,6 +100,7 @@ export class GameSocket {
     if (handlers) {
       handlers.forEach(handler => handler(msg));
     }
+    // Also dispatch to wildcard listeners if we had them, but for now specific types only
   }
   private startHeartbeat() {
     this.stopHeartbeat();

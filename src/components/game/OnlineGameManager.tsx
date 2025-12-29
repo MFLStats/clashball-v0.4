@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { SoundEngine } from '@/lib/audio';
 import { NetworkIndicator } from '@/components/ui/network-indicator';
 import { QuickChat } from './QuickChat';
+import { GameSocket } from '@/lib/game-socket';
 interface OnlineGameManagerProps {
   mode: GameMode;
   onExit: () => void;
@@ -34,25 +35,26 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   const [finalStats, setFinalStats] = useState<Record<string, PlayerMatchStats> | undefined>(undefined);
   const [winner, setWinner] = useState<'red' | 'blue' | null>(null);
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' | 'spectator' } | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  // Use the robust GameSocket class
+  const socketRef = useRef<GameSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const lastPingTimeRef = useRef<number>(0);
-  const isMountedRef = useRef(true);
-  const reconnectAttemptsRef = useRef(0);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+  // Initialize Socket
   useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
-  // Memoized Message Handler
-  const handleMessage = useCallback((msg: WSMessage) => {
-    switch (msg.type) {
-      case 'match_started':
-      case 'match_found': {
+    if (!userId || !username) {
+        toast.error("User profile missing. Cannot join queue.");
+        onExit();
+        return;
+    }
+    const socket = new GameSocket();
+    socketRef.current = socket;
+    // Define Event Handlers
+    const onMatchFound = (msg: WSMessage) => {
+        if (msg.type !== 'match_found' && msg.type !== 'match_started') return;
         setMatchInfo({ matchId: msg.matchId, team: msg.team });
         setStatus('playing');
         if (msg.team === 'spectator') {
@@ -61,17 +63,15 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             const opponents = msg.opponents?.length ? msg.opponents.join(', ') : msg.opponent;
             toast.success(`Match Found! You are Team ${msg.team.toUpperCase()}${opponents ? ` vs ${opponents}` : ''}`);
         }
-        break;
-      }
-      case 'queue_update': {
-        setQueueCount(msg.count);
-        break;
-      }
-      case 'game_state': {
-        setGameState(msg.state);
-        break;
-      }
-      case 'game_events': {
+    };
+    const onQueueUpdate = (msg: WSMessage) => {
+        if (msg.type === 'queue_update') setQueueCount(msg.count);
+    };
+    const onGameState = (msg: WSMessage) => {
+        if (msg.type === 'game_state') setGameState(msg.state);
+    };
+    const onGameEvents = (msg: WSMessage) => {
+        if (msg.type !== 'game_events') return;
         msg.events.forEach(event => {
             switch (event.type) {
                 case 'kick': SoundEngine.playKick(); break;
@@ -81,17 +81,17 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
                 case 'whistle': SoundEngine.playWhistle(); break;
             }
         });
-        break;
-      }
-      case 'game_over': {
+    };
+    const onGameOver = (msg: WSMessage) => {
+        if (msg.type !== 'game_over') return;
         SoundEngine.playWhistle();
         if (msg.stats) {
             setFinalStats(msg.stats);
         }
         setWinner(msg.winner);
-        break;
-      }
-      case 'chat': {
+    };
+    const onChat = (msg: WSMessage) => {
+        if (msg.type !== 'chat') return;
         setChatMessages(prev => [
           ...prev,
           {
@@ -101,172 +101,84 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             team: msg.team || 'spectator'
           }
         ]);
-        break;
-      }
-      case 'error': {
-        toast.error(msg.message);
-        break;
-      }
-      case 'ping': {
-        wsRef.current?.send(JSON.stringify({ type: 'pong' }));
-        break;
-      }
-      case 'pong': {
-        const rtt = Date.now() - lastPingTimeRef.current;
-        setPing(rtt);
-        break;
-      }
-    }
-  }, []);
-  // Memoized Connect Function
-  const connect = useCallback(() => {
-    if (!userId || !username) {
-        toast.error("User profile missing. Cannot join queue.");
-        onExit();
-        return;
-    }
-    // Prevent duplicate connections if already connected or connecting
-    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
-        return;
-    }
-    setStatus('connecting');
-    // Strict protocol handling
+    };
+    const onError = (msg: WSMessage) => {
+        if (msg.type === 'error') {
+            toast.error(msg.message);
+            if (msg.message.includes('Connection lost')) {
+                setStatus('error');
+            }
+        }
+    };
+    const onPong = (msg: WSMessage) => {
+        if (msg.type === 'pong') {
+            const rtt = Date.now() - lastPingTimeRef.current;
+            setPing(rtt);
+        }
+    };
+    // Register Listeners
+    socket.on('match_found', onMatchFound);
+    socket.on('match_started', onMatchFound);
+    socket.on('queue_update', onQueueUpdate);
+    socket.on('game_state', onGameState);
+    socket.on('game_events', onGameEvents);
+    socket.on('game_over', onGameOver);
+    socket.on('chat', onChat);
+    socket.on('error', onError);
+    socket.on('pong', onPong);
+    // Connect
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/api/ws`;
-    console.log(`Connecting to WebSocket: ${wsUrl} (Attempt ${reconnectAttemptsRef.current + 1})`);
-    try {
-        const ws = new WebSocket(wsUrl);
-        wsRef.current = ws;
-        ws.onopen = () => {
-          if (!isMountedRef.current) {
-              ws.close(1000, "Component unmounted");
-              return;
-          }
-          if (ws !== wsRef.current) return;
-          console.log('WebSocket Connected');
-          reconnectAttemptsRef.current = 0;
-          setStatus('searching');
-          // Join Queue
-          ws.send(JSON.stringify({
+    socket.connect(wsUrl, userId, username, () => {
+        setStatus('searching');
+        // Join Queue immediately on connect
+        socket.send({
             type: 'join_queue',
             mode,
             userId,
             username
-          } satisfies WSMessage));
-        };
-        ws.onmessage = (event) => {
-          if (!isMountedRef.current) return;
-          try {
-            const msg = JSON.parse(event.data) as WSMessage;
-            handleMessage(msg);
-          } catch (e) {
-            console.error('Failed to parse WS message', e);
-          }
-        };
-        ws.onclose = (event) => {
-          if (!isMountedRef.current) return;
-          if (ws !== wsRef.current) return;
-          console.log(`WebSocket closed: Code ${event.code}, Reason: ${event.reason || 'No reason provided'}`);
-          wsRef.current = null;
-          // Don't reconnect if it was a normal closure or if we've exceeded attempts
-          if (event.code === 1000 || event.code === 1001) {
-              return;
-          }
-          // Reconnection Logic
-          if (reconnectAttemptsRef.current < 5) {
-              const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000);
-              reconnectAttemptsRef.current++;
-              console.log(`Reconnecting in ${delay}ms...`);
-              if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-              reconnectTimeoutRef.current = setTimeout(() => {
-                  if (isMountedRef.current) connect();
-              }, delay);
-          } else {
-              setStatus('error');
-          }
-        };
-        ws.onerror = (error) => {
-          // Just log it, onclose will handle the state update
-          console.error('WebSocket connection error', error);
-        };
-    } catch (err) {
-        console.error("Failed to create WebSocket:", err);
-        setStatus('error');
-    }
-  }, [userId, username, mode, onExit, handleMessage]);
-  // Initial Connection & Cleanup
-  useEffect(() => {
-    connect();
-    return () => {
-      if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (wsRef.current) {
-        // Try to leave queue gracefully if open
-        if (wsRef.current.readyState === WebSocket.OPEN) {
-            try {
-                wsRef.current.send(JSON.stringify({ type: 'leave_queue' } satisfies WSMessage));
-            } catch (e) { /* ignore */ }
-            wsRef.current.close(1000, "Component unmounted");
-        } else {
-            wsRef.current.close();
-        }
-        wsRef.current = null;
-      }
-    };
-  }, [connect]);
-  // Ping Loop
-  useEffect(() => {
-    const interval = setInterval(() => {
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            lastPingTimeRef.current = Date.now();
-            wsRef.current.send(JSON.stringify({ type: 'ping' }));
-        }
+        });
+    });
+    // Ping Loop (Managed by GameSocket internally for keepalive, but we can do manual ping for RTT display)
+    const pingInterval = setInterval(() => {
+        lastPingTimeRef.current = Date.now();
+        socket.send({ type: 'ping' });
     }, 2000);
-    return () => clearInterval(interval);
-  }, []);
-  // Memoized Input Handler
+    return () => {
+        clearInterval(pingInterval);
+        socket.disconnect();
+    };
+  }, [userId, username, mode, onExit]);
+  // Input Handler
   const handleInput = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
+    socketRef.current?.send({
         type: 'input',
         move: input.move,
         kick: input.kick
-      } satisfies WSMessage));
-    }
+    });
   }, []);
-  // Memoized Chat Sender
+  // Chat Sender
   const sendChat = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || !wsRef.current) return;
-    wsRef.current.send(JSON.stringify({
+    if (!chatInput.trim()) return;
+    socketRef.current?.send({
       type: 'chat',
       message: chatInput
-    } satisfies WSMessage));
+    });
     setChatInput('');
   }, [chatInput]);
   // Quick Chat Handler
   const handleQuickChat = useCallback((message: string) => {
-    if (!wsRef.current) return;
-    wsRef.current.send(JSON.stringify({
+    socketRef.current?.send({
       type: 'chat',
       message
-    } satisfies WSMessage));
+    });
   }, []);
-  // Memoized Retry Handler
-  const handleRetry = useCallback(() => {
-      if (wsRef.current) {
-          wsRef.current.close();
-          wsRef.current = null;
-      }
-      reconnectAttemptsRef.current = 0;
-      if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = null;
-      }
-      connect();
-  }, [connect]);
+  const handleRetry = () => {
+      // Force re-mount to reconnect
+      window.location.reload(); 
+  };
   if (status === 'connecting' || status === 'searching') {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-6 animate-fade-in">

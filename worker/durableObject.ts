@@ -47,9 +47,8 @@ export class GlobalDurableObject extends DurableObject {
     async fetch(request: Request): Promise<Response> {
         const url = new URL(request.url);
         const upgradeHeader = request.headers.get('Upgrade');
-        // Detailed logging for debugging handshake issues
+        // Simplified logging to avoid TS errors with Headers iteration
         console.log(`[DurableObject] Fetch: ${url.pathname}`);
-        console.log(`[DurableObject] Headers: ${JSON.stringify(Object.fromEntries(request.headers))}`);
         if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
             console.log('[DurableObject] Invalid Upgrade header:', upgradeHeader);
             return new Response('Durable Object expected Upgrade: websocket', { status: 426 });

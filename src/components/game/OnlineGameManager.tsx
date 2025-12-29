@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, ArrowLeft, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import { SoundEngine } from '@/lib/audio';
 interface OnlineGameManagerProps {
   mode: GameMode;
   onExit: () => void;
@@ -50,8 +51,21 @@ export function OnlineGameManager({ mode, onExit }: OnlineGameManagerProps) {
         setGameState(msg.state);
         break;
       }
+      case 'game_events': {
+        msg.events.forEach(event => {
+            switch (event.type) {
+                case 'kick': SoundEngine.playKick(); break;
+                case 'wall': SoundEngine.playWall(); break;
+                case 'player': SoundEngine.playPlayer(); break;
+                case 'goal': SoundEngine.playGoal(); break;
+                case 'whistle': SoundEngine.playWhistle(); break;
+            }
+        });
+        break;
+      }
       case 'game_over': {
         const currentTeam = matchInfoRef.current?.team;
+        SoundEngine.playWhistle();
         toast(msg.winner === currentTeam ? 'VICTORY!' : 'DEFEAT', {
           description: `Winner: ${msg.winner.toUpperCase()}`
         });

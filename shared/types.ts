@@ -85,6 +85,12 @@ export interface TournamentState {
   participants: TournamentParticipant[];
   status: 'open' | 'in_progress' | 'completed';
 }
+// --- Game Event Types ---
+export type GameEventType = 'kick' | 'wall' | 'player' | 'goal' | 'whistle';
+export interface GameEvent {
+  type: GameEventType;
+  team?: 'red' | 'blue'; // For goals
+}
 // --- Multiplayer Types ---
 export type WSMessage =
   | { type: 'join_queue'; mode: GameMode; userId: string; username: string }
@@ -92,6 +98,7 @@ export type WSMessage =
   | { type: 'input'; move: { x: number; y: number }; kick: boolean }
   | { type: 'match_found'; matchId: string; team: 'red' | 'blue'; opponent?: string }
   | { type: 'game_state'; state: any } // Typed as 'any' here to avoid circular dependency, but effectively GameState
+  | { type: 'game_events'; events: GameEvent[] }
   | { type: 'game_over'; winner: 'red' | 'blue' }
   | { type: 'error'; message: string }
   | { type: 'ping' }

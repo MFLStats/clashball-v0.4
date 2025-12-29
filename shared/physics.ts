@@ -1,3 +1,4 @@
+import { GameEvent } from './types';
 export interface Vector {
   x: number;
   y: number;
@@ -96,8 +97,9 @@ export class PhysicsEngine {
       timeRemaining: 180 // 3 minutes in seconds
     };
   }
-  static update(state: GameState, dt: number): GameState {
-    if (state.status !== 'playing') return state;
+  static update(state: GameState, dt: number): { state: GameState; events: GameEvent[] } {
+    const events: GameEvent[] = [];
+    if (state.status !== 'playing') return { state, events };
     // Deep copy for immutability
     const newState = JSON.parse(JSON.stringify(state)) as GameState;
     // Update Time
@@ -105,6 +107,7 @@ export class PhysicsEngine {
     if (newState.timeRemaining <= 0) {
         newState.timeRemaining = 0;
         newState.status = 'ended';
+        events.push({ type: 'whistle' });
     }
     // Calculate time-adjusted damping
     // If dt is 1/60 (0.016s), exponent is 1.
@@ -158,10 +161,12 @@ export class PhysicsEngine {
     if (b.pos.y < b.radius) {
         b.pos.y = b.radius;
         b.vel.y *= -this.WALL_BOUNCE;
+        events.push({ type: 'wall' });
     }
     if (b.pos.y > newState.field.height - b.radius) {
         b.pos.y = newState.field.height - b.radius;
         b.vel.y *= -this.WALL_BOUNCE;
+        events.push({ type: 'wall' });
     }
     // Goal Detection & X-Axis Walls
     // Left Side
@@ -170,11 +175,13 @@ export class PhysicsEngine {
                        b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
         if (isGoal) {
             newState.score.blue++;
+            events.push({ type: 'goal', team: 'blue' });
             this.resetPositions(newState);
-            return newState;
+            return { state: newState, events };
         } else {
             b.pos.x = b.radius;
             b.vel.x *= -this.WALL_BOUNCE;
+            events.push({ type: 'wall' });
         }
     }
     // Right Side
@@ -183,11 +190,13 @@ export class PhysicsEngine {
                        b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
         if (isGoal) {
             newState.score.red++;
+            events.push({ type: 'goal', team: 'red' });
             this.resetPositions(newState);
-            return newState;
+            return { state: newState, events };
         } else {
             b.pos.x = newState.field.width - b.radius;
             b.vel.x *= -this.WALL_BOUNCE;
+            events.push({ type: 'wall' });
         }
     }
     // --- 3. Player-Ball Collision (Impulse Based) ---
@@ -220,6 +229,12 @@ export class PhysicsEngine {
             // Add some of player's velocity directly for "grip" feel
             b.vel.x += p.vel.x * 0.2;
             b.vel.y += p.vel.y * 0.2;
+            // Event
+            if (p.isKicking) {
+                events.push({ type: 'kick' });
+            } else {
+                events.push({ type: 'player' });
+            }
         }
         // 3. Kick Mechanic
         if (p.isKicking) {
@@ -229,7 +244,7 @@ export class PhysicsEngine {
         }
       }
     });
-    return newState;
+    return { state: newState, events };
   }
   static resetPositions(state: GameState) {
     state.ball.pos = { x: state.field.width / 2, y: state.field.height / 2 };

@@ -4,6 +4,7 @@ import confetti from 'canvas-confetti';
 import { Button } from '@/components/ui/button';
 import { Play, RotateCcw, Trophy } from 'lucide-react';
 import { TouchControls } from './TouchControls';
+import { SoundEngine } from '@/lib/audio';
 interface GameCanvasProps {
   onGameEnd?: (winner: 'red' | 'blue') => void;
   winningScore?: number;
@@ -37,6 +38,16 @@ export function GameCanvas({
   const [score, setScore] = useState({ red: 0, blue: 0 });
   const [isPaused, setIsPaused] = useState(false);
   const [gameOver, setGameOver] = useState<'red' | 'blue' | null>(null);
+  // Initialize Audio on Mount
+  useEffect(() => {
+    const initAudio = () => SoundEngine.init();
+    window.addEventListener('click', initAudio, { once: true });
+    window.addEventListener('keydown', initAudio, { once: true });
+    return () => {
+      window.removeEventListener('click', initAudio);
+      window.removeEventListener('keydown', initAudio);
+    };
+  }, []);
   // Sync external state ref
   useEffect(() => {
     latestExternalStateRef.current = externalState || null;
@@ -44,6 +55,7 @@ export function GameCanvas({
   // Handle Game Over Logic
   const handleGameOver = useCallback((winner: 'red' | 'blue') => {
     setGameOver(winner);
+    SoundEngine.playWhistle();
     confetti({
       particleCount: 200,
       spread: 100,
@@ -82,153 +94,8 @@ export function GameCanvas({
   const handleTouchUpdate = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
     touchInputRef.current = input;
   }, []);
-  // Game Loop
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
-    // Initialize time
-    lastTimeRef.current = performance.now();
-    const loop = () => {
-      if (isPaused || gameOver) {
-        if (!gameOver) {
-            lastTimeRef.current = performance.now(); // Reset time to avoid huge dt jump on resume
-            requestRef.current = requestAnimationFrame(loop);
-        }
-        return;
-      }
-      // Calculate Delta Time
-      const now = performance.now();
-      let dt = (now - lastTimeRef.current) / 1000; // Seconds
-      lastTimeRef.current = now;
-      // Cap dt to prevent physics explosions (e.g. tab backgrounded)
-      if (dt > 0.1) dt = 0.1;
-      // 1. Process Input
-      const p1Input = { move: { x: 0, y: 0 }, kick: false };
-      // Keyboard Input
-      if (keysRef.current['ArrowUp'] || keysRef.current['KeyW']) p1Input.move.y -= 1;
-      if (keysRef.current['ArrowDown'] || keysRef.current['KeyS']) p1Input.move.y += 1;
-      if (keysRef.current['ArrowLeft'] || keysRef.current['KeyA']) p1Input.move.x -= 1;
-      if (keysRef.current['ArrowRight'] || keysRef.current['KeyD']) p1Input.move.x += 1;
-      if (keysRef.current['Space'] || keysRef.current['KeyX']) p1Input.kick = true;
-      // Touch Input (Merge/Override)
-      if (Math.abs(touchInputRef.current.move.x) > 0 || Math.abs(touchInputRef.current.move.y) > 0) {
-        p1Input.move = touchInputRef.current.move;
-      }
-      if (touchInputRef.current.kick) {
-        p1Input.kick = true;
-      }
-      if (onInput) {
-        // Online Mode: Send input to server
-        onInput(p1Input);
-      } else {
-        // Local Mode: Update local ref
-        gameStateRef.current.players[0].input = p1Input;
-        // Bot Logic for P2 (Local only)
-        const ball = gameStateRef.current.ball;
-        const p2 = gameStateRef.current.players[1];
-        const dx = ball.pos.x - p2.pos.x;
-        const dy = ball.pos.y - p2.pos.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        // Difficulty Settings
-        let reactionDist = 400;
-        let kickChance = 0.05;
-        if (botDifficulty === 'easy') {
-            reactionDist = 200;
-            kickChance = 0.02;
-        } else if (botDifficulty === 'hard') {
-            reactionDist = 1000; // Always tracks
-            kickChance = 0.15;
-        }
-        const botMove = { x: 0, y: 0 };
-        // Only move if ball is within reaction distance
-        if (dist < reactionDist) {
-            if (Math.abs(dx) > 10) botMove.x = Math.sign(dx);
-            if (Math.abs(dy) > 10) botMove.y = Math.sign(dy);
-        }
-        const botKick = dist < 30 && Math.random() < kickChance;
-        gameStateRef.current.players[1].input = { move: botMove, kick: botKick };
-      }
-      // 2. State Update & Interpolation
-      const targetState = latestExternalStateRef.current;
-      if (targetState) {
-        // Online Mode: Lerp displayState towards targetState
-        const factor = 0.2; // Smoothing factor
-        const current = displayStateRef.current;
-        // Lerp Ball
-        current.ball.pos.x += (targetState.ball.pos.x - current.ball.pos.x) * factor;
-        current.ball.pos.y += (targetState.ball.pos.y - current.ball.pos.y) * factor;
-        // Sync other ball props
-        current.ball.radius = targetState.ball.radius;
-        // Lerp Players
-        // We need to handle players joining/leaving
-        // For simplicity, we rebuild the array but try to preserve positions for lerping
-        const newPlayers = targetState.players.map(tp => {
-            const cp = current.players.find(p => p.id === tp.id);
-            if (cp) {
-                // Lerp existing
-                const lx = cp.pos.x + (tp.pos.x - cp.pos.x) * factor;
-                const ly = cp.pos.y + (tp.pos.y - cp.pos.y) * factor;
-                // Snap if too far (teleport)
-                const distSq = (tp.pos.x - cp.pos.x)**2 + (tp.pos.y - cp.pos.y)**2;
-                if (distSq > 10000) { // > 100px diff
-                    return JSON.parse(JSON.stringify(tp));
-                }
-                return { ...tp, pos: { x: lx, y: ly } };
-            } else {
-                // New player
-                return JSON.parse(JSON.stringify(tp));
-            }
-        });
-        current.players = newPlayers;
-        current.score = targetState.score;
-        current.timeRemaining = targetState.timeRemaining;
-        current.field = targetState.field;
-        current.status = targetState.status;
-      } else {
-        // Local Mode: Run physics
-        const newState = PhysicsEngine.update(gameStateRef.current, dt);
-        gameStateRef.current = newState;
-        displayStateRef.current = newState;
-      }
-      const currentState = displayStateRef.current;
-      // Check for score change (Visual only for online, authoritative for local)
-      if (currentState.score.red !== score.red || currentState.score.blue !== score.blue) {
-        setScore(currentState.score);
-        // Only trigger local win condition if not online (server sends game_over)
-        if (!targetState) {
-            if (currentState.score.red >= winningScore) {
-                handleGameOver('red');
-            } else if (currentState.score.blue >= winningScore) {
-                handleGameOver('blue');
-            } else {
-                confetti({
-                    particleCount: 100,
-                    spread: 70,
-                    origin: { y: 0.6 },
-                    colors: currentState.score.red > score.red ? ['#e56e56'] : ['#5689e5']
-                });
-            }
-        }
-      }
-      // Check for Time Limit (Local Mode)
-      if (!targetState && currentState.status === 'ended' && !gameOver) {
-          if (currentState.score.red > currentState.score.blue) {
-              handleGameOver('red');
-          } else if (currentState.score.blue > currentState.score.red) {
-              handleGameOver('blue');
-          } else {
-              handleGameOver('red'); // Draw default
-          }
-      }
-      // 3. Render
-      render(ctx, currentState);
-      requestRef.current = requestAnimationFrame(loop);
-    };
-    requestRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(requestRef.current);
-  }, [score, isPaused, gameOver, winningScore, onInput, handleGameOver, botDifficulty]); // Removed externalState from deps
-  const render = (ctx: CanvasRenderingContext2D, state: GameState) => {
+  // Render Function (Wrapped in useCallback to fix lint error)
+  const render = useCallback((ctx: CanvasRenderingContext2D, state: GameState) => {
     const { width, height } = ctx.canvas;
     const scaleX = width / state.field.width;
     const scaleY = height / state.field.height;
@@ -334,7 +201,160 @@ export function GameCanvas({
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 2.5;
     ctx.stroke();
-  };
+  }, [currentUserId]);
+  // Game Loop
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    // Initialize time
+    lastTimeRef.current = performance.now();
+    const loop = () => {
+      if (isPaused || gameOver) {
+        if (!gameOver) {
+            lastTimeRef.current = performance.now(); // Reset time to avoid huge dt jump on resume
+            requestRef.current = requestAnimationFrame(loop);
+        }
+        return;
+      }
+      // Calculate Delta Time
+      const now = performance.now();
+      let dt = (now - lastTimeRef.current) / 1000; // Seconds
+      lastTimeRef.current = now;
+      // Cap dt to prevent physics explosions (e.g. tab backgrounded)
+      if (dt > 0.1) dt = 0.1;
+      // 1. Process Input
+      const p1Input = { move: { x: 0, y: 0 }, kick: false };
+      // Keyboard Input
+      if (keysRef.current['ArrowUp'] || keysRef.current['KeyW']) p1Input.move.y -= 1;
+      if (keysRef.current['ArrowDown'] || keysRef.current['KeyS']) p1Input.move.y += 1;
+      if (keysRef.current['ArrowLeft'] || keysRef.current['KeyA']) p1Input.move.x -= 1;
+      if (keysRef.current['ArrowRight'] || keysRef.current['KeyD']) p1Input.move.x += 1;
+      if (keysRef.current['Space'] || keysRef.current['KeyX']) p1Input.kick = true;
+      // Touch Input (Merge/Override)
+      if (Math.abs(touchInputRef.current.move.x) > 0 || Math.abs(touchInputRef.current.move.y) > 0) {
+        p1Input.move = touchInputRef.current.move;
+      }
+      if (touchInputRef.current.kick) {
+        p1Input.kick = true;
+      }
+      if (onInput) {
+        // Online Mode: Send input to server
+        onInput(p1Input);
+      } else {
+        // Local Mode: Update local ref
+        gameStateRef.current.players[0].input = p1Input;
+        // Bot Logic for P2 (Local only)
+        const ball = gameStateRef.current.ball;
+        const p2 = gameStateRef.current.players[1];
+        const dx = ball.pos.x - p2.pos.x;
+        const dy = ball.pos.y - p2.pos.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        // Difficulty Settings
+        let reactionDist = 400;
+        let kickChance = 0.05;
+        if (botDifficulty === 'easy') {
+            reactionDist = 200;
+            kickChance = 0.02;
+        } else if (botDifficulty === 'hard') {
+            reactionDist = 1000; // Always tracks
+            kickChance = 0.15;
+        }
+        const botMove = { x: 0, y: 0 };
+        // Only move if ball is within reaction distance
+        if (dist < reactionDist) {
+            if (Math.abs(dx) > 10) botMove.x = Math.sign(dx);
+            if (Math.abs(dy) > 10) botMove.y = Math.sign(dy);
+        }
+        const botKick = dist < 30 && Math.random() < kickChance;
+        gameStateRef.current.players[1].input = { move: botMove, kick: botKick };
+      }
+      // 2. State Update & Interpolation
+      const targetState = latestExternalStateRef.current;
+      if (targetState) {
+        // Online Mode: Lerp displayState towards targetState
+        const factor = 0.2; // Smoothing factor
+        const current = displayStateRef.current;
+        // Lerp Ball
+        current.ball.pos.x += (targetState.ball.pos.x - current.ball.pos.x) * factor;
+        current.ball.pos.y += (targetState.ball.pos.y - current.ball.pos.y) * factor;
+        // Sync other ball props
+        current.ball.radius = targetState.ball.radius;
+        // Lerp Players
+        const newPlayers = targetState.players.map(tp => {
+            const cp = current.players.find(p => p.id === tp.id);
+            if (cp) {
+                // Lerp existing
+                const lx = cp.pos.x + (tp.pos.x - cp.pos.x) * factor;
+                const ly = cp.pos.y + (tp.pos.y - cp.pos.y) * factor;
+                // Snap if too far (teleport)
+                const distSq = (tp.pos.x - cp.pos.x)**2 + (tp.pos.y - cp.pos.y)**2;
+                if (distSq > 10000) { // > 100px diff
+                    return JSON.parse(JSON.stringify(tp));
+                }
+                return { ...tp, pos: { x: lx, y: ly } };
+            } else {
+                // New player
+                return JSON.parse(JSON.stringify(tp));
+            }
+        });
+        current.players = newPlayers;
+        current.score = targetState.score;
+        current.timeRemaining = targetState.timeRemaining;
+        current.field = targetState.field;
+        current.status = targetState.status;
+      } else {
+        // Local Mode: Run physics
+        const { state: newState, events } = PhysicsEngine.update(gameStateRef.current, dt);
+        gameStateRef.current = newState;
+        displayStateRef.current = newState;
+        // Play Local Sounds
+        events.forEach(event => {
+            switch (event.type) {
+                case 'kick': SoundEngine.playKick(); break;
+                case 'wall': SoundEngine.playWall(); break;
+                case 'player': SoundEngine.playPlayer(); break;
+                case 'goal': SoundEngine.playGoal(); break;
+                case 'whistle': SoundEngine.playWhistle(); break;
+            }
+        });
+      }
+      const currentState = displayStateRef.current;
+      // Check for score change (Visual only for online, authoritative for local)
+      if (currentState.score.red !== score.red || currentState.score.blue !== score.blue) {
+        setScore(currentState.score);
+        // Only trigger local win condition if not online (server sends game_over)
+        if (!targetState) {
+            if (currentState.score.red >= winningScore) {
+                handleGameOver('red');
+            } else if (currentState.score.blue >= winningScore) {
+                handleGameOver('blue');
+            } else {
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 },
+                    colors: currentState.score.red > score.red ? ['#e56e56'] : ['#5689e5']\n                });
+            }
+        }
+      }
+      // Check for Time Limit (Local Mode)
+      if (!targetState && currentState.status === 'ended' && !gameOver) {
+          if (currentState.score.red > currentState.score.blue) {
+              handleGameOver('red');
+          } else if (currentState.score.blue > currentState.score.red) {
+              handleGameOver('blue');
+          } else {
+              handleGameOver('red'); // Draw default
+          }
+      }
+      // 3. Render
+      render(ctx, currentState);
+      requestRef.current = requestAnimationFrame(loop);
+    };
+    requestRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(requestRef.current);
+  }, [score, isPaused, gameOver, winningScore, onInput, handleGameOver, botDifficulty, render]);
   const handleReset = () => {
     gameStateRef.current = PhysicsEngine.createInitialState();
     displayStateRef.current = PhysicsEngine.createInitialState();

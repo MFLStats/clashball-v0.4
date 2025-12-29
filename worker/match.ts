@@ -67,9 +67,14 @@ export class Match {
   }
   private update(dt: number) {
     // Run physics with delta time
-    this.gameState = PhysicsEngine.update(this.gameState, dt);
-    // Broadcast
+    const { state, events } = PhysicsEngine.update(this.gameState, dt);
+    this.gameState = state;
+    // Broadcast State
     this.broadcast({ type: 'game_state', state: this.gameState });
+    // Broadcast Events
+    if (events.length > 0) {
+        this.broadcast({ type: 'game_events', events });
+    }
     // Check Win Condition (Score or Time)
     if (this.gameState.status === 'ended') {
         // Time up - determine winner by score

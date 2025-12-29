@@ -9,77 +9,81 @@ export function TouchControls({ onUpdate }: TouchControlsProps) {
     move: { x: 0, y: 0 },
     kick: false
   });
-  // Visual state for the joystick knob
-  const [joystickPos, setJoystickPos] = useState({ x: 0, y: 0 });
+  // Visual state for the joystick
+  const [joystickVisual, setJoystickVisual] = useState<{
+    x: number; // Origin X
+    y: number; // Origin Y
+    dx: number; // Delta X
+    dy: number; // Delta Y
+  } | null>(null);
   const [isKicking, setIsKicking] = useState(false);
   // Constants
-  const JOYSTICK_RADIUS = 50; // Max distance knob can move from center
-  const JOYSTICK_CENTER = { x: 75, y: 75 }; // Center of the joystick container
+  const MAX_RADIUS = 50;
   // Track pointer IDs
   const joystickPointerId = useRef<number | null>(null);
+  const joystickOrigin = useRef<{ x: number; y: number } | null>(null);
   // Helper to update parent
   const updateParent = useCallback(() => {
     onUpdate(inputState.current);
   }, [onUpdate]);
   // --- Joystick Handlers ---
-  const handleJoystickDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // If already controlling joystick, ignore new touches on background
+    if (joystickPointerId.current !== null) return;
     e.preventDefault();
-    e.stopPropagation();
-    if (joystickPointerId.current !== null) return; // Already controlling
-    const element = e.currentTarget;
-    element.setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture(e.pointerId);
     joystickPointerId.current = e.pointerId;
-    handleJoystickMove(e);
-  };
-  const handleJoystickMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerId !== joystickPointerId.current) return;
-    e.preventDefault();
-    e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    // Calculate delta from center
-    let dx = e.clientX - centerX;
-    let dy = e.clientY - centerY;
-    // Calculate distance
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    joystickOrigin.current = { x, y };
+    // Show visual at touch point
+    setJoystickVisual({ x, y, dx: 0, dy: 0 });
+    // Reset move
+    inputState.current.move = { x: 0, y: 0 };
+    updateParent();
+  };
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerId !== joystickPointerId.current || !joystickOrigin.current) return;
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const currentX = e.clientX - rect.left;
+    const currentY = e.clientY - rect.top;
+    const dx = currentX - joystickOrigin.current.x;
+    const dy = currentY - joystickOrigin.current.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    // Normalize input vector (0 to 1)
     let inputX = 0;
     let inputY = 0;
     if (distance > 0) {
-      // Clamp visual knob to radius
-      const clampedDistance = Math.min(distance, JOYSTICK_RADIUS);
+      // Clamp visual knob
+      const clampedDistance = Math.min(distance, MAX_RADIUS);
       const ratio = clampedDistance / distance;
-      const visualX = dx * ratio;
-      const visualY = dy * ratio;
-      setJoystickPos({ x: visualX, y: visualY });
-      // Normalize input
-      // We want full speed (1.0) when at edge
-      inputX = dx / distance; // Direction
-      inputY = dy / distance; // Direction
-      // Apply magnitude (linear)
-      const magnitude = Math.min(distance / JOYSTICK_RADIUS, 1.0);
-      inputX *= magnitude;
-      inputY *= magnitude;
+      const visualDx = dx * ratio;
+      const visualDy = dy * ratio;
+      setJoystickVisual(prev => prev ? { ...prev, dx: visualDx, dy: visualDy } : null);
+      // Normalize input (0 to 1)
+      const magnitude = Math.min(distance / MAX_RADIUS, 1.0);
+      inputX = (dx / distance) * magnitude;
+      inputY = (dy / distance) * magnitude;
     } else {
-      setJoystickPos({ x: 0, y: 0 });
+      setJoystickVisual(prev => prev ? { ...prev, dx: 0, dy: 0 } : null);
     }
     inputState.current.move = { x: inputX, y: inputY };
     updateParent();
   };
-  const handleJoystickUp = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerId !== joystickPointerId.current) return;
     e.preventDefault();
-    e.stopPropagation();
     joystickPointerId.current = null;
-    setJoystickPos({ x: 0, y: 0 });
+    joystickOrigin.current = null;
+    setJoystickVisual(null);
     inputState.current.move = { x: 0, y: 0 };
     updateParent();
   };
   // --- Kick Button Handlers ---
   const handleKickDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    e.stopPropagation();
+    e.stopPropagation(); // Prevent triggering joystick
     setIsKicking(true);
     inputState.current.kick = true;
     updateParent();
@@ -94,45 +98,55 @@ export function TouchControls({ onUpdate }: TouchControlsProps) {
   // Reset on unmount
   useEffect(() => {
     return () => {
-      // eslint-disable-next-line react-hooks/exhaustive-deps
       onUpdate({ move: { x: 0, y: 0 }, kick: false });
     };
   }, [onUpdate]);
   return (
-    <div className="absolute inset-0 pointer-events-none z-20 flex justify-between items-end p-6 md:hidden select-none touch-none">
-      {/* Joystick Area */}
-      <div 
-        className="relative w-36 h-36 bg-slate-900/20 rounded-full backdrop-blur-sm border-2 border-white/30 pointer-events-auto touch-none"
-        onPointerDown={handleJoystickDown}
-        onPointerMove={handleJoystickMove}
-        onPointerUp={handleJoystickUp}
-        onPointerCancel={handleJoystickUp}
-        onPointerLeave={handleJoystickUp}
-      >
-        {/* Knob */}
+    <div 
+      className="absolute inset-0 z-20 touch-none select-none md:hidden"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onPointerLeave={handlePointerUp}
+    >
+      {/* Dynamic Joystick Visual */}
+      {joystickVisual && (
         <div 
-          className="absolute w-16 h-16 bg-gradient-to-b from-white to-slate-200 rounded-full shadow-lg border-2 border-slate-300 transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-75 ease-out"
+          className="absolute pointer-events-none"
           style={{ 
-            left: '50%', 
-            top: '50%',
-            transform: `translate(calc(-50% + ${joystickPos.x}px), calc(-50% + ${joystickPos.y}px))`
+            left: joystickVisual.x, 
+            top: joystickVisual.y,
+            transform: 'translate(-50%, -50%)'
           }}
-        />
-      </div>
+        >
+          {/* Base */}
+          <div className="w-24 h-24 rounded-full bg-slate-900/30 border-2 border-white/10 backdrop-blur-sm" />
+          {/* Knob */}
+          <div 
+            className="absolute w-10 h-10 rounded-full bg-white/90 shadow-[0_0_15px_rgba(255,255,255,0.3)]"
+            style={{
+              left: '50%',
+              top: '50%',
+              transform: `translate(calc(-50% + ${joystickVisual.dx}px), calc(-50% + ${joystickVisual.dy}px))`
+            }}
+          />
+        </div>
+      )}
       {/* Kick Button */}
       <button
         className={cn(
-          "w-24 h-24 rounded-full border-4 shadow-xl flex items-center justify-center pointer-events-auto touch-none transition-all duration-100 active:scale-95",
-          isKicking 
-            ? "bg-red-600 border-red-800 scale-95" 
-            : "bg-red-500 border-red-700 hover:bg-red-400"
+          "absolute bottom-8 right-8 w-20 h-20 rounded-full border-4 shadow-xl flex items-center justify-center pointer-events-auto touch-none select-none transition-all duration-100 active:scale-95",
+          isKicking
+            ? "bg-red-600 border-red-800 scale-95 shadow-inner"
+            : "bg-red-500/80 border-red-600/80 hover:bg-red-500 backdrop-blur-sm"
         )}
         onPointerDown={handleKickDown}
         onPointerUp={handleKickUp}
         onPointerCancel={handleKickUp}
         onPointerLeave={handleKickUp}
       >
-        <span className="font-display font-bold text-white text-xl tracking-wider drop-shadow-md">
+        <span className="font-display font-bold text-white text-lg tracking-wider drop-shadow-md">
           KICK
         </span>
       </button>

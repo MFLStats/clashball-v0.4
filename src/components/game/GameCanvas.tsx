@@ -406,7 +406,7 @@ export function GameCanvas({
         </div>
       </div>
       {/* Game Area */}
-      <div ref={containerRef} className="game-container group relative">
+      <div ref={containerRef} className="game-container group relative touch-none">
         <canvas
           ref={canvasRef}
           width={1200}

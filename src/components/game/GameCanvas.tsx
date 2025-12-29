@@ -352,6 +352,11 @@ export function GameCanvas({
       }
     });
     // --- 5. Draw Ball (No Trail) ---
+    // Explicitly reset shadow properties to prevent blur bleed from text
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     const b = state.ball;
     const bx = b.pos.x * scaleX;
     const by = b.pos.y * scaleY;

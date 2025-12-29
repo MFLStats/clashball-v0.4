@@ -54,6 +54,12 @@ export function Bracket({ matches, currentRound }: BracketProps) {
 }
 function MatchCard({ match, isActive }: { match: TournamentMatch; isActive: boolean }) {
   const isCompleted = !!match.winner;
+  const renderPlayerName = (name: string) => {
+    if (!name) {
+      return <span className="text-slate-400 italic text-xs">TBD</span>;
+    }
+    return <span className="truncate text-sm">{name}</span>;
+  };
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
@@ -70,7 +76,7 @@ function MatchCard({ match, isActive }: { match: TournamentMatch; isActive: bool
         match.winner === match.player1 && "bg-green-50 font-bold text-green-700",
         match.winner && match.winner !== match.player1 && "text-slate-400"
       )}>
-        <span className="truncate text-sm">{match.player1 || '\u00A0'}</span>
+        {renderPlayerName(match.player1)}
         {match.score && <span className="font-mono font-bold">{match.score.p1}</span>}
       </div>
       {/* Player 2 */}
@@ -79,7 +85,7 @@ function MatchCard({ match, isActive }: { match: TournamentMatch; isActive: bool
         match.winner === match.player2 && "bg-green-50 font-bold text-green-700",
         match.winner && match.winner !== match.player2 && "text-slate-400"
       )}>
-        <span className="truncate text-sm">{match.player2 || '\u00A0'}</span>
+        {renderPlayerName(match.player2)}
         {match.score && <span className="font-mono font-bold">{match.score.p2}</span>}
       </div>
       {isActive && (

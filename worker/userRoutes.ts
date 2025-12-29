@@ -114,6 +114,13 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const data = await stub.joinTournament(userId);
         return c.json({ success: true, data } satisfies ApiResponse<TournamentState>);
     });
+    app.post('/api/tournament/leave', async (c) => {
+        const { userId } = await c.req.json() as { userId: string };
+        if (!userId) return c.json({ success: false, error: 'Missing userId' }, 400);
+        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+        const data = await stub.leaveTournament(userId);
+        return c.json({ success: true, data } satisfies ApiResponse<TournamentState>);
+    });
     app.post('/api/tournament/win', async (c) => {
         const { userId } = await c.req.json() as { userId: string };
         if (!userId) return c.json({ success: false, error: 'Missing userId' }, 400);

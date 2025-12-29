@@ -72,6 +72,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ userId })
       }),
+    leave: (userId: string) =>
+      fetchApi<TournamentState>('/tournament/leave', {
+        method: 'POST',
+        body: JSON.stringify({ userId })
+      }),
     recordWin: (userId: string) =>
       fetchApi<UserProfile>('/tournament/win', {
         method: 'POST',

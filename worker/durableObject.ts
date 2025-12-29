@@ -521,7 +521,7 @@ export class GlobalDurableObject extends DurableObject {
             if (profiles.length < 2) return null; // Need at least 2 players to form a "team" context for ranking usually
             const first = profiles[0].teams || [];
             // Find intersection of all players' team lists
-            const common = first.filter(teamId =>
+            const common = first.filter(teamId => 
                 profiles.every(p => (p.teams || []).includes(teamId))
             );
             return common.length > 0 ? common[0] : null; // Return first common team found
@@ -1061,6 +1061,10 @@ export class GlobalDurableObject extends DurableObject {
                 rating: profile.stats['1v1'].rating
             });
         }
+        return this.getTournamentState();
+    }
+    async leaveTournament(userId: string): Promise<TournamentState> {
+        this.tournamentParticipants = this.tournamentParticipants.filter(p => p.userId !== userId);
         return this.getTournamentState();
     }
 }

@@ -48,7 +48,6 @@ export function GameCanvas({
   const latestExternalStateRef = useRef<GameState | null>(null);
   // Visual FX Refs
   const ballTrailRef = useRef<{ x: number; y: number }[]>([]);
-  const traumaRef = useRef<number>(0); // 0 to 1, determines shake intensity
   // Local Stats Tracking
   const localStatsRef = useRef<Record<string, PlayerMatchStats>>({});
   const [score, setScore] = useState({ red: 0, blue: 0 });
@@ -58,15 +57,6 @@ export function GameCanvas({
   // STRICT ZUSTAND RULE: Select primitives individually
   const showNames = useSettingsStore(s => s.showNames);
   const particles = useSettingsStore(s => s.particles);
-  const screenShake = useSettingsStore(s => s.screenShake);
-  // Constants for Shake
-  const MAX_SHAKE_OFFSET = 15; // Pixels
-  const TRAUMA_DECAY = 0.8; // Per second
-  // Helper to add trauma
-  const addTrauma = useCallback((amount: number) => {
-    if (!screenShake) return;
-    traumaRef.current = Math.min(1.0, traumaRef.current + amount);
-  }, [screenShake]);
   // Initialize Audio on Mount
   useEffect(() => {
     const initAudio = () => SoundEngine.init();
@@ -230,7 +220,6 @@ export function GameCanvas({
     ctx.lineTo(width, goalTop + goalH);
     ctx.lineTo(width - 5, goalTop + goalH);
     ctx.stroke();
-
     // --- 3b. Draw Goal Posts & Line ---
     if (state.field.goalPosts && state.field.goalPosts.length === 4) {
         // Goal Line (White)
@@ -242,7 +231,6 @@ export function GameCanvas({
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
         ctx.stroke();
-
         // Posts (Circles)
         state.field.goalPosts.forEach(post => {
             ctx.beginPath();
@@ -254,7 +242,6 @@ export function GameCanvas({
             ctx.stroke();
         });
     }
-
     // --- 4. Draw Players ---
     state.players.forEach(p => {
       const x = p.pos.x * scaleX;
@@ -427,15 +414,6 @@ export function GameCanvas({
       lastTimeRef.current = now;
       // Cap dt to prevent physics explosions (e.g. tab backgrounded)
       if (dt > 0.1) dt = 0.1;
-      // --- SCREEN SHAKE LOGIC ---
-      if (screenShake && traumaRef.current > 0) {
-        traumaRef.current = Math.max(0, traumaRef.current - TRAUMA_DECAY * dt);
-        const shake = traumaRef.current * traumaRef.current;
-        const offsetX = (Math.random() * 2 - 1) * MAX_SHAKE_OFFSET * shake;
-        const offsetY = (Math.random() * 2 - 1) * MAX_SHAKE_OFFSET * shake;
-        ctx.save();
-        ctx.translate(offsetX, offsetY);
-      }
       // 1. Process Input
       const p1Input = { move: { x: 0, y: 0 }, kick: false };
       // Keyboard Input
@@ -541,7 +519,6 @@ export function GameCanvas({
         // Detect events from state changes for effects (simplified)
         // In a real implementation, we'd receive events from the server
         if (targetState.status === 'goal' && displayStateRef.current.status !== 'goal') {
-             addTrauma(1.0);
              SoundEngine.playCrowdCheer();
         }
       } else {
@@ -554,11 +531,9 @@ export function GameCanvas({
             switch (event.type) {
                 case 'kick':
                     SoundEngine.playKick();
-                    addTrauma(0.2);
                     break;
                 case 'wall':
                     SoundEngine.playWall();
-                    addTrauma(0.3);
                     SoundEngine.playHeavyImpact();
                     break;
                 case 'player':
@@ -567,7 +542,6 @@ export function GameCanvas({
                 case 'goal': {
                     SoundEngine.playGoal();
                     SoundEngine.playCrowdCheer();
-                    addTrauma(1.0);
                     // Track Stats
                     if (event.team && event.scorerId) {
                         const scorer = newState.players.find(p => p.id === event.scorerId);
@@ -644,20 +618,15 @@ export function GameCanvas({
       }
       // 3. Render
       render(ctx, currentState);
-      // Restore context if shake was applied
-      if (screenShake && traumaRef.current > 0) {
-        ctx.restore();
-      }
       requestRef.current = requestAnimationFrame(loop);
     };
     requestRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(requestRef.current);
-  }, [score, isPaused, gameOver, winningScore, onInput, handleGameOver, botDifficulty, render, particles, screenShake, addTrauma]);
+  }, [score, isPaused, gameOver, winningScore, onInput, handleGameOver, botDifficulty, render, particles]);
   const handleReset = () => {
     gameStateRef.current = PhysicsEngine.createInitialState();
     displayStateRef.current = PhysicsEngine.createInitialState();
     ballTrailRef.current = []; // Clear trail
-    traumaRef.current = 0; // Reset trauma
     // Reset Stats
     ['p1', 'p2'].forEach(id => {
         localStatsRef.current[id] = {

@@ -59,10 +59,10 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
     ];
     // Round 2 (Semi Finals) placeholders
     for (let i = 0; i < 2; i++) {
-        initialMatches.push({ id: uuidv4(), round: 1, player1: 'TBD', player2: 'TBD' });
+        initialMatches.push({ id: uuidv4(), round: 1, player1: '', player2: '' });
     }
     // Round 3 (Final) placeholder
-    initialMatches.push({ id: uuidv4(), round: 2, player1: 'TBD', player2: 'TBD' });
+    initialMatches.push({ id: uuidv4(), round: 2, player1: '', player2: '' });
     setMatches(initialMatches);
     // Start Timer for Round 1
     setRoundStartTime(Date.now() + 120000); // 2 minutes from now

@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { useUserStore } from '@/store/useUserStore';
-import { TournamentState } from '@shared/types';
-import { ArrowLeft, Users, Trophy, Loader2, Play } from 'lucide-react';
+import { TournamentState, TournamentParticipant } from '@shared/types';
+import { ArrowLeft, Clock, Users, Trophy, Loader2, Play, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AuthDialog } from '@/components/auth/AuthDialog';
@@ -64,13 +64,26 @@ export function TournamentPage() {
       setIsJoining(false);
     }
   };
+  const handleLeave = async () => {
+    if (!profile) return;
+    setIsJoining(true);
+    try {
+      const newState = await api.tournament.leave(profile.id);
+      setState(newState);
+      toast.success('You have left the tournament.');
+    } catch (err) {
+      toast.error('Failed to leave tournament');
+    } finally {
+      setIsJoining(false);
+    }
+  };
   const isJoined = state?.participants.some(p => p.userId === profile?.id);
   if (view === 'bracket') {
     return (
       <AppLayout container>
-        <TournamentManager 
-          onExit={() => setView('lobby')} 
-          participants={state?.participants} 
+        <TournamentManager
+          onExit={() => setView('lobby')}
+          participants={state?.participants}
         />
       </AppLayout>
     );
@@ -110,12 +123,22 @@ export function TournamentPage() {
                     }
                   />
                 ) : isJoined ? (
-                  <div className="flex gap-4">
+                  <div className="flex gap-4 flex-wrap">
                     <Button size="lg" disabled className="bg-green-500/80 text-white opacity-100 font-bold w-full md:w-auto border border-green-400/50 shadow-[0_0_15px_rgba(34,197,94,0.4)]">
                       You are Registered
                     </Button>
-                    <Button 
-                      size="lg" 
+                    <Button
+                      size="lg"
+                      variant="destructive"
+                      onClick={handleLeave}
+                      disabled={isJoining}
+                      className="bg-red-600/80 hover:bg-red-600 text-white font-bold w-full md:w-auto border border-red-500/50"
+                    >
+                      {isJoining ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <LogOut className="w-4 h-4 mr-2" />}
+                      Leave
+                    </Button>
+                    <Button
+                      size="lg"
                       onClick={() => setView('bracket')}
                       className="bg-yellow-400 text-yellow-900 hover:bg-yellow-300 font-bold w-full md:w-auto shadow-lg"
                     >

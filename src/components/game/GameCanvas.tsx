@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { PhysicsEngine, GameState } from '@shared/physics';
 import { PlayerMatchStats, GameMode, WSMessage } from '@shared/types';
 import confetti from 'canvas-confetti';
@@ -17,7 +17,8 @@ import {
     drawPlayers,
     drawBall,
     drawOverlays,
-    ActiveEmote
+    ActiveEmote,
+    createFieldCache
 } from '@/lib/canvas-utils';
 interface GameCanvasProps {
   onGameEnd?: (winner: 'red' | 'blue', score: { red: number; blue: number }) => void;
@@ -77,6 +78,13 @@ export function GameCanvas({
   // STRICT ZUSTAND RULE: Select primitives individually
   const showNames = useSettingsStore(s => s.showNames);
   const particles = useSettingsStore(s => s.particles);
+  const graphicsQuality = useSettingsStore(s => s.graphicsQuality);
+  // Create Field Cache
+  const fieldCache = useMemo(() => {
+    // Field dimensions are fixed for rendering context (1200x600) even if physics field varies
+    // Actually, the canvas is 1200x600, so we cache that size.
+    return createFieldCache(1200, 600, graphicsQuality);
+  }, [graphicsQuality]);
   // Initialize Audio on Mount
   useEffect(() => {
     const initAudio = () => SoundEngine.init();
@@ -214,8 +222,8 @@ export function GameCanvas({
     const scaleY = height / state.field.height;
     // Clear
     ctx.clearRect(0, 0, width, height);
-    // 1. Draw Field
-    drawField(ctx, width, height);
+    // 1. Draw Field (Cached)
+    drawField(ctx, fieldCache);
     // 2. Draw Lines
     drawLines(ctx, width, height, scaleX);
     // 3. Draw Goals & Nets
@@ -223,9 +231,9 @@ export function GameCanvas({
     drawGoalPosts(ctx, state.field, scaleX, scaleY);
     // 4. Draw Players
     const isLocalGame = !latestExternalStateRef.current;
-    drawPlayers(ctx, state.players, currentUserId, showNames, scaleX, scaleY, isLocalGame);
+    drawPlayers(ctx, state.players, currentUserId, showNames, scaleX, scaleY, isLocalGame, graphicsQuality);
     // 5. Draw Ball
-    drawBall(ctx, state.ball, scaleX, scaleY);
+    drawBall(ctx, state.ball, scaleX, scaleY, graphicsQuality);
     // 6-9. Draw Overlays (Overtime, Goal, Spectator, Emotes)
     // Filter expired emotes first
     const now = Date.now();
@@ -241,7 +249,7 @@ export function GameCanvas({
         currentUserId,
         !!latestExternalStateRef.current
     );
-  }, [currentUserId, showNames]);
+  }, [currentUserId, showNames, fieldCache, graphicsQuality]);
   // Game Loop
   useEffect(() => {
     const canvas = canvasRef.current;

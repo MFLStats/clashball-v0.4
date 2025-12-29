@@ -11,7 +11,12 @@ const TEAM_COLORS = {
     red: { base: '#e56e56', light: '#ff9e86', dark: '#c0392b' },
     blue: { base: '#5689e5', light: '#86b9ff', dark: '#2980b9' }
 };
-export function drawField(ctx: CanvasRenderingContext2D, width: number, height: number) {
+export function createFieldCache(width: number, height: number, quality: 'high' | 'low'): HTMLCanvasElement {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return canvas;
     // --- 1. Draw Field (Checkerboard Pattern) ---
     const tileSize = 100;
     const cols = Math.ceil(width / tileSize);
@@ -25,12 +30,18 @@ export function drawField(ctx: CanvasRenderingContext2D, width: number, height: 
         }
     }
     // --- 1.5 Vignette Effect (Stronger for depth) ---
-    const gradient = ctx.createRadialGradient(width / 2, height / 2, height / 3, width / 2, height / 2, width * 0.9);
-    gradient.addColorStop(0, 'transparent');
-    gradient.addColorStop(0.7, 'rgba(0,0,0,0.1)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0.4)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
+    if (quality === 'high') {
+        const gradient = ctx.createRadialGradient(width / 2, height / 2, height / 3, width / 2, height / 2, width * 0.9);
+        gradient.addColorStop(0, 'transparent');
+        gradient.addColorStop(0.7, 'rgba(0,0,0,0.1)');
+        gradient.addColorStop(1, 'rgba(0,0,0,0.4)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+    }
+    return canvas;
+}
+export function drawField(ctx: CanvasRenderingContext2D, fieldCache: HTMLCanvasElement) {
+    ctx.drawImage(fieldCache, 0, 0);
 }
 export function drawLines(ctx: CanvasRenderingContext2D, width: number, height: number, scaleX: number) {
     // --- 2. Draw Lines (White with Glow) ---
@@ -152,7 +163,8 @@ export function drawPlayers(
     showNames: boolean,
     scaleX: number,
     scaleY: number,
-    isLocalGame: boolean
+    isLocalGame: boolean,
+    quality: 'high' | 'low'
 ) {
     players.forEach((p, index) => {
         const x = p.pos.x * scaleX;
@@ -175,15 +187,19 @@ export function drawPlayers(
             ctx.lineWidth = 3;
             ctx.stroke();
         }
-        // Body (3D Gradient)
+        // Body
         const colors = p.team === 'red' ? TEAM_COLORS.red : TEAM_COLORS.blue;
-        const gradient = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
-        gradient.addColorStop(0, colors.light);
-        gradient.addColorStop(0.5, colors.base);
-        gradient.addColorStop(1, colors.dark);
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fillStyle = gradient;
+        if (quality === 'high') {
+            const gradient = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+            gradient.addColorStop(0, colors.light);
+            gradient.addColorStop(0.5, colors.base);
+            gradient.addColorStop(1, colors.dark);
+            ctx.fillStyle = gradient;
+        } else {
+            ctx.fillStyle = colors.base;
+        }
         ctx.fill();
         // Stroke (Black Border)
         ctx.strokeStyle = '#000000';
@@ -195,8 +211,10 @@ export function drawPlayers(
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.shadowBlur = 2;
+        if (quality === 'high') {
+            ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            ctx.shadowBlur = 2;
+        }
         ctx.fillText(jerseyText, x, y);
         ctx.shadowBlur = 0;
         // Username (Conditional)
@@ -205,8 +223,10 @@ export function drawPlayers(
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom'; // Changed to bottom to sit above player
             ctx.fillStyle = '#ffffff';
-            ctx.shadowColor = 'rgba(0,0,0,0.8)';
-            ctx.shadowBlur = 4;
+            if (quality === 'high') {
+                ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                ctx.shadowBlur = 4;
+            }
             ctx.fillText(p.username, x, y - r - 8);
             ctx.shadowBlur = 0; // Reset shadow
         }
@@ -226,22 +246,28 @@ export function drawPlayers(
         }
     });
 }
-export function drawBall(ctx: CanvasRenderingContext2D, ball: Ball, scaleX: number, scaleY: number) {
+export function drawBall(ctx: CanvasRenderingContext2D, ball: Ball, scaleX: number, scaleY: number, quality: 'high' | 'low') {
     const bx = ball.pos.x * scaleX;
     const by = ball.pos.y * scaleY;
     const br = ball.radius * scaleX;
-    // Shadow (Contact Shadow)
-    ctx.beginPath();
-    ctx.ellipse(bx, by + br * 0.2, br, br * 0.6, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    ctx.fill();
-    // Ball Body (White with Shading)
-    const gradient = ctx.createRadialGradient(bx - br * 0.3, by - br * 0.3, br * 0.1, bx, by, br);
-    gradient.addColorStop(0, '#ffffff');
-    gradient.addColorStop(1, '#cbd5e1'); // Slate-300
+    // Shadow (Contact Shadow) - Only in High Quality
+    if (quality === 'high') {
+        ctx.beginPath();
+        ctx.ellipse(bx, by + br * 0.2, br, br * 0.6, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fill();
+    }
+    // Ball Body
     ctx.beginPath();
     ctx.arc(bx, by, br, 0, Math.PI * 2);
-    ctx.fillStyle = gradient;
+    if (quality === 'high') {
+        const gradient = ctx.createRadialGradient(bx - br * 0.3, by - br * 0.3, br * 0.1, bx, by, br);
+        gradient.addColorStop(0, '#ffffff');
+        gradient.addColorStop(1, '#cbd5e1'); // Slate-300
+        ctx.fillStyle = gradient;
+    } else {
+        ctx.fillStyle = '#ffffff';
+    }
     ctx.fill();
     // Stroke
     ctx.strokeStyle = '#000000';

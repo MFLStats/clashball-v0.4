@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Settings, Volume2, Monitor, Keyboard, User } from 'lucide-react';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { useUserStore } from '@/store/useUserStore';
@@ -21,9 +22,11 @@ export function SettingsDialog({ trigger, open, onOpenChange }: SettingsDialogPr
   const volume = useSettingsStore(s => s.volume);
   const showNames = useSettingsStore(s => s.showNames);
   const particles = useSettingsStore(s => s.particles);
+  const graphicsQuality = useSettingsStore(s => s.graphicsQuality);
   const setVolume = useSettingsStore(s => s.setVolume);
   const setShowNames = useSettingsStore(s => s.setShowNames);
   const setParticles = useSettingsStore(s => s.setParticles);
+  const setGraphicsQuality = useSettingsStore(s => s.setGraphicsQuality);
   const profile = useUserStore(s => s.profile);
   const updateProfile = useUserStore(s => s.updateProfile);
   const [jerseyCode, setJerseyCode] = useState('');
@@ -141,6 +144,26 @@ export function SettingsDialog({ trigger, open, onOpenChange }: SettingsDialogPr
                 onCheckedChange={setParticles}
                 className="data-[state=checked]:bg-primary"
               />
+            </div>
+            <div className="p-4 bg-slate-800/30 rounded-xl border border-white/5 space-y-3">
+              <div className="space-y-1">
+                <Label htmlFor="graphics-quality" className="text-base font-bold text-white">Graphics Quality</Label>
+                <p className="text-sm text-slate-400">Adjust visual fidelity for better performance.</p>
+              </div>
+              <Select value={graphicsQuality} onValueChange={(val: 'high' | 'low') => setGraphicsQuality(val)}>
+                <SelectTrigger className="bg-slate-950 border-slate-700 text-white">
+                  <SelectValue placeholder="Select Quality" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-700 text-white">
+                  <SelectItem value="high">High (Best Visuals)</SelectItem>
+                  <SelectItem value="low">Low (Best Performance)</SelectItem>
+                </SelectContent>
+              </Select>
+              {graphicsQuality === 'low' && (
+                <p className="text-xs text-yellow-500/80">
+                  Disables gradients, shadows, and vignette effects.
+                </p>
+              )}
             </div>
           </TabsContent>
           {/* AUDIO SETTINGS */}

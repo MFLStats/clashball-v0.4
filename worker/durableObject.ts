@@ -463,40 +463,48 @@ export class GlobalDurableObject extends DurableObject {
         settings: LobbySettings,
         matchIdOverride?: string
     ) {
-        const matchId = matchIdOverride || crypto.randomUUID();
-        const matchPlayers = players.map((p, i) => ({
-            id: p.userId,
-            ws: p.ws,
-            username: p.username,
-            // Use assigned team if available, otherwise fallback to simple split
-            team: p.team || (i < players.length / 2 ? 'red' : 'blue') as 'red' | 'blue',
-            jersey: p.jersey
-        }));
-        const matchSpectators = spectators.map(s => ({ id: s.userId, ws: s.ws, username: s.username }));
-        const match = new Match(matchId, matchPlayers, matchSpectators, settings, (id, winner, score) => {
-            const matchInstance = this.matches.get(id);
-            const playerStats = matchInstance ? Object.fromEntries(matchInstance.matchStats) : undefined;
-            this.matches.delete(id);
-            // If this was a tournament match, update the bracket
-            const tMatch = this.bracket.find(m => m.id === id);
-            if (tMatch) {
-                this.handleTournamentMatchEnd(tMatch, winner, score);
-            } else {
-                this.ctx.waitUntil(this.handleMatchEnd(id, winner, matchPlayers, mode, score, playerStats));
-            }
-        });
-        this.matches.set(matchId, match);
-        // Notify players
-        matchPlayers.forEach(p => {
-            try {
-                const session = this.sessions.get(p.ws);
-                if (session) session.matchId = matchId;
-                const opponents = matchPlayers.filter(op => op.team !== p.team).map(op => op.username);
-                const type = session?.lobbyCode ? 'match_started' : 'match_found';
-                p.ws.send(JSON.stringify({ type, matchId, team: p.team, opponent: opponents.join(', '), opponents }));
-            } catch (err) { /* empty */ }
-        });
-        match.start();
+        try {
+            const matchId = matchIdOverride || crypto.randomUUID();
+            const matchPlayers = players.map((p, i) => ({
+                id: p.userId,
+                ws: p.ws,
+                username: p.username,
+                // Use assigned team if available, otherwise fallback to simple split
+                team: p.team || (i < players.length / 2 ? 'red' : 'blue') as 'red' | 'blue',
+                jersey: p.jersey
+            }));
+            const matchSpectators = spectators.map(s => ({ id: s.userId, ws: s.ws, username: s.username }));
+            const match = new Match(matchId, matchPlayers, matchSpectators, settings, (id, winner, score) => {
+                const matchInstance = this.matches.get(id);
+                const playerStats = matchInstance ? Object.fromEntries(matchInstance.matchStats) : undefined;
+                this.matches.delete(id);
+                // If this was a tournament match, update the bracket
+                const tMatch = this.bracket.find(m => m.id === id);
+                if (tMatch) {
+                    this.handleTournamentMatchEnd(tMatch, winner, score);
+                } else {
+                    this.ctx.waitUntil(this.handleMatchEnd(id, winner, matchPlayers, mode, score, playerStats));
+                }
+            });
+            this.matches.set(matchId, match);
+            // Notify players
+            matchPlayers.forEach(p => {
+                try {
+                    const session = this.sessions.get(p.ws);
+                    if (session) session.matchId = matchId;
+                    const opponents = matchPlayers.filter(op => op.team !== p.team).map(op => op.username);
+                    const type = session?.lobbyCode ? 'match_started' : 'match_found';
+                    p.ws.send(JSON.stringify({ type, matchId, team: p.team, opponent: opponents.join(', '), opponents }));
+                } catch (err) { /* empty */ }
+            });
+            match.start();
+        } catch (err) {
+            console.error('[DurableObject] Failed to start match:', err);
+            // Notify players of error
+            players.forEach(p => {
+                try { p.ws.send(JSON.stringify({ type: 'error', message: 'Failed to start match due to server error.' })); } catch (e) {}
+            });
+        }
     }
     // --- Tournament Logic (New) ---
     async getTournamentState(): Promise<TournamentState> {

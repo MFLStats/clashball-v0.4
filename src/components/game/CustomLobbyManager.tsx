@@ -1,14 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameCanvas } from './GameCanvas';
 import { GameState } from '@shared/physics';
-import { WSMessage, LobbyState, LobbyInfo, LobbySettings } from '@shared/types';
+import { WSMessage, LobbyState, LobbyInfo, LobbySettings, LobbyTeam } from '@shared/types';
 import { useUserStore } from '@/store/useUserStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, ArrowLeft, Users, Copy, Play, Send, KeyRound, Crown, RefreshCw, LogIn, Settings, Clock, Trophy, Map as MapIcon, X } from 'lucide-react';
+import { Loader2, ArrowLeft, Users, Copy, Play, Send, KeyRound, Crown, RefreshCw, LogIn, Settings, Clock, Trophy, Map as MapIcon, X, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { SoundEngine } from '@/lib/audio';
 import { cn } from '@/lib/utils';
@@ -20,7 +20,7 @@ interface ChatMessage {
   id: string;
   sender: string;
   message: string;
-  team: 'red' | 'blue';
+  team: 'red' | 'blue' | 'spectator';
 }
 export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
   const profile = useUserStore(s => s.profile);
@@ -32,7 +32,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
   const [isLoadingLobbies, setIsLoadingLobbies] = useState(false);
   // Game State
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' } | null>(null);
+  const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' | 'spectator' } | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const wsRef = useRef<WebSocket | null>(null);
@@ -72,10 +72,15 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                 setIsConnecting(false);
                 break;
             }
-            case 'match_found': {
+            case 'match_found':
+            case 'match_started': {
                 setMatchInfo({ matchId: msg.matchId, team: msg.team });
                 setView('game');
-                toast.success('Match Starting!');
+                if (msg.team === 'spectator') {
+                    toast.info('Spectating Match');
+                } else {
+                    toast.success('Match Starting!');
+                }
                 break;
             }
             case 'game_state': {
@@ -114,7 +119,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                     id: crypto.randomUUID(),
                     sender: msg.sender || 'Unknown',
                     message: msg.message,
-                    team: msg.team || 'red'
+                    team: msg.team || 'spectator'
                   }
                 ]);
                 break;
@@ -202,6 +207,14 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
           wsRef.current.send(JSON.stringify({
               type: 'update_lobby_settings',
               settings
+          }));
+      }
+  };
+  const switchTeam = (team: LobbyTeam) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+              type: 'switch_team',
+              team
           }));
       }
   };
@@ -365,8 +378,14 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
   }
   if (view === 'lobby' && lobbyState) {
       const isHost = lobbyState.hostId === profile?.id;
+      const redPlayers = lobbyState.players.filter(p => p.team === 'red');
+      const bluePlayers = lobbyState.players.filter(p => p.team === 'blue');
+      const spectators = lobbyState.players.filter(p => p.team === 'spectator');
+      const myTeam = lobbyState.players.find(p => p.id === profile?.id)?.team;
+      const maxPerTeam = lobbyState.settings.fieldSize === 'small' ? 2 : lobbyState.settings.fieldSize === 'medium' ? 3 : 4;
+      const canStart = redPlayers.length > 0 && bluePlayers.length > 0;
       return (
-          <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
+          <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
               <div className="flex items-center justify-between">
                   <Button variant="ghost" onClick={onExit} className="text-slate-300 hover:bg-white/10">
                       <ArrowLeft className="mr-2 h-4 w-4" /> Leave Lobby
@@ -379,210 +398,272 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                           <Copy className="w-4 h-4" />
                       </Button>
                   </div>
+                  {isHost && (
+                      <Button onClick={startMatch} disabled={!canStart} className="btn-kid-primary px-8">
+                          <Play className="w-4 h-4 mr-2" /> Start Match
+                      </Button>
+                  )}
               </div>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Left Column: Players & Chat */}
-                  <div className="lg:col-span-2 space-y-6">
-                      {/* Players List */}
-                      <Card className="bg-slate-900 border-slate-800 shadow-xl overflow-hidden">
-                          <CardHeader className="bg-slate-950/50 border-b border-slate-800">
-                              <CardTitle className="flex justify-between items-center text-white">
-                                  <div className="flex items-center gap-2">
-                                      <Users className="w-5 h-5 text-primary" />
-                                      <span>Players ({lobbyState.players.length}/8)</span>
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                  {/* Left Column: Red Team */}
+                  <Card className="bg-slate-900 border-red-900/50 shadow-xl overflow-hidden flex flex-col h-[500px]">
+                      <CardHeader className="bg-red-950/30 border-b border-red-900/30 py-4">
+                          <div className="flex justify-between items-center">
+                              <CardTitle className="text-red-400 font-bold uppercase tracking-wider text-sm">Team Red</CardTitle>
+                              <span className="text-xs font-mono text-red-500 bg-red-950/50 px-2 py-1 rounded border border-red-900/50">
+                                  {redPlayers.length} / {maxPerTeam}
+                              </span>
+                          </div>
+                          <Button
+                              size="sm"
+                              className="w-full mt-2 bg-red-600 hover:bg-red-500 text-white border border-red-400/20"
+                              disabled={myTeam === 'red' || redPlayers.length >= maxPerTeam}
+                              onClick={() => switchTeam('red')}
+                          >
+                              Join Red
+                          </Button>
+                      </CardHeader>
+                      <CardContent className="p-4 flex-1 overflow-y-auto space-y-2">
+                          {redPlayers.map(p => (
+                              <div key={p.id} className="flex items-center gap-3 p-3 bg-red-950/20 rounded-lg border border-red-900/20">
+                                  <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center font-bold text-red-400 text-xs border border-red-500/30">
+                                      {p.username.charAt(0).toUpperCase()}
                                   </div>
-                                  {isHost && (
-                                      <Button onClick={startMatch} disabled={lobbyState.players.length < 2} className="btn-kid-primary">
-                                          <Play className="w-4 h-4 mr-2" /> Start Match
+                                  <div className="flex-1 min-w-0">
+                                      <div className="font-bold text-red-100 truncate">{p.username}</div>
+                                      {p.id === lobbyState.hostId && (
+                                          <div className="text-[10px] font-bold text-yellow-500 flex items-center gap-1">
+                                              <Crown className="w-3 h-3" /> HOST
+                                          </div>
+                                      )}
+                                  </div>
+                                  {isHost && p.id !== profile?.id && (
+                                      <Button size="icon" variant="ghost" className="h-6 w-6 text-red-400 hover:bg-red-900/50" onClick={() => kickPlayer(p.id)}>
+                                          <X className="w-3 h-3" />
                                       </Button>
                                   )}
-                              </CardTitle>
+                              </div>
+                          ))}
+                      </CardContent>
+                  </Card>
+                  {/* Middle Column: Spectators & Chat */}
+                  <div className="lg:col-span-2 flex flex-col gap-6 h-[500px]">
+                      {/* Spectators */}
+                      <Card className="bg-slate-900 border-slate-800 shadow-xl overflow-hidden flex-1">
+                          <CardHeader className="bg-slate-950/50 border-b border-slate-800 py-4">
+                              <div className="flex justify-between items-center">
+                                  <CardTitle className="text-slate-400 font-bold uppercase tracking-wider text-sm flex items-center gap-2">
+                                      <Eye className="w-4 h-4" /> Spectators
+                                  </CardTitle>
+                                  <span className="text-xs font-mono text-slate-500 bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                                      {spectators.length}
+                                  </span>
+                              </div>
+                              <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  className="w-full mt-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+                                  disabled={myTeam === 'spectator'}
+                                  onClick={() => switchTeam('spectator')}
+                              >
+                                  Spectate
+                              </Button>
                           </CardHeader>
-                          <CardContent className="p-6">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                  {lobbyState.players.map(p => (
-                                      <div key={p.id} className="flex items-center gap-4 p-4 bg-slate-800/30 rounded-xl border border-slate-700/50 transition-all hover:bg-slate-800/50 group">
-                                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center font-bold text-white shadow-inner">
-                                              {p.username.charAt(0).toUpperCase()}
-                                          </div>
-                                          <div className="flex-1">
-                                              <div className="font-bold text-slate-200">{p.username}</div>
-                                              {p.id === lobbyState.hostId && (
-                                                  <div className="text-xs font-bold text-yellow-500 flex items-center gap-1 mt-0.5">
-                                                      <Crown className="w-3 h-3" /> HOST
-                                                  </div>
-                                              )}
-                                          </div>
+                          <CardContent className="p-4 overflow-y-auto h-[150px]">
+                              <div className="flex flex-wrap gap-2">
+                                  {spectators.map(p => (
+                                      <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-full border border-slate-700/50">
+                                          <span className="text-xs font-bold text-slate-300">{p.username}</span>
                                           {isHost && p.id !== profile?.id && (
-                                              <Button
-                                                  size="icon"
-                                                  variant="ghost"
-                                                  className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                                                  onClick={() => kickPlayer(p.id)}
-                                                  title="Kick Player"
-                                              >
-                                                  <X className="w-4 h-4" />
-                                              </Button>
+                                              <button onClick={() => kickPlayer(p.id)} className="text-slate-500 hover:text-red-400">
+                                                  <X className="w-3 h-3" />
+                                              </button>
                                           )}
                                       </div>
                                   ))}
-                                  {Array.from({ length: Math.max(0, 8 - lobbyState.players.length) }).map((_, i) => (
-                                      <div key={`empty-${i}`} className="flex items-center gap-4 p-4 border-2 border-dashed border-slate-800 rounded-xl opacity-40">
-                                          <div className="w-10 h-10 rounded-full bg-slate-800" />
-                                          <span className="text-slate-500 font-medium italic">Waiting for player...</span>
-                                      </div>
-                                  ))}
+                                  {spectators.length === 0 && (
+                                      <div className="w-full text-center text-slate-600 italic text-xs py-4">No spectators</div>
+                                  )}
                               </div>
                           </CardContent>
                       </Card>
-                      {/* Lobby Chat */}
-                      <Card className="bg-slate-900 border-slate-800 shadow-xl flex flex-col h-[300px]">
-                          <CardHeader className="bg-slate-950/50 border-b border-slate-800 py-3">
-                              <CardTitle className="text-sm font-bold text-slate-400 uppercase tracking-wider">Lobby Chat</CardTitle>
+                      {/* Chat */}
+                      <Card className="bg-slate-900 border-slate-800 shadow-xl flex flex-col flex-1 min-h-0">
+                          <CardHeader className="bg-slate-950/50 border-b border-slate-800 py-2">
+                              <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wider">Lobby Chat</CardTitle>
                           </CardHeader>
-                          <CardContent className="flex-1 p-4 flex flex-col gap-2 overflow-hidden">
-                              <div className="flex-1 overflow-y-auto space-y-2 pr-2 scrollbar-hide">
-                                  {chatMessages.length === 0 && (
-                                      <div className="text-center text-slate-600 italic text-sm mt-10">No messages yet. Say hello!</div>
-                                  )}
+                          <CardContent className="flex-1 p-3 flex flex-col gap-2 overflow-hidden">
+                              <div className="flex-1 overflow-y-auto space-y-1 pr-2 scrollbar-hide">
                                   {chatMessages.map(msg => (
-                                      <div key={msg.id} className="text-sm">
-                                          <span className="font-bold text-slate-300 mr-2">{msg.sender}:</span>
-                                          <span className="text-slate-400">{msg.message}</span>
+                                      <div key={msg.id} className="text-xs">
+                                          <span className={cn(
+                                              "font-bold mr-2",
+                                              msg.team === 'red' ? 'text-red-400' :
+                                              msg.team === 'blue' ? 'text-blue-400' : 'text-slate-400'
+                                          )}>
+                                              {msg.sender}:
+                                          </span>
+                                          <span className="text-slate-300">{msg.message}</span>
                                       </div>
                                   ))}
                                   <div ref={chatEndRef} />
                               </div>
-                              <form onSubmit={sendChat} className="flex gap-2 mt-2">
+                              <form onSubmit={sendChat} className="flex gap-2">
                                   <Input
                                       value={chatInput}
                                       onChange={e => setChatInput(e.target.value)}
-                                      placeholder="Type a message..."
-                                      className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600"
+                                      placeholder="Message..."
+                                      className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 h-8 text-xs"
                                   />
-                                  <Button type="submit" size="icon" className="bg-slate-800 hover:bg-slate-700">
-                                      <Send className="w-4 h-4" />
+                                  <Button type="submit" size="icon" className="h-8 w-8 bg-slate-800 hover:bg-slate-700">
+                                      <Send className="w-3 h-3" />
                                   </Button>
                               </form>
                           </CardContent>
                       </Card>
                   </div>
-                  {/* Right Column: Settings */}
-                  <div className="space-y-6">
-                      <Card className="bg-slate-900 border-slate-800 shadow-xl">
-                          <CardHeader className="bg-slate-950/50 border-b border-slate-800">
-                              <CardTitle className="flex items-center gap-2 text-white">
-                                  <Settings className="w-5 h-5 text-slate-400" />
-                                  Match Settings
-                              </CardTitle>
-                          </CardHeader>
-                          <CardContent className="p-6 space-y-8">
-                              {/* Score Limit */}
-                              <div className="space-y-4">
-                                  <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2 text-white font-bold">
-                                          <Trophy className="w-4 h-4 text-yellow-500" />
-                                          Score Limit
-                                      </div>
-                                      <span className="font-mono text-primary font-bold">
-                                          {lobbyState.settings.scoreLimit === 0 ? 'Unlimited' : lobbyState.settings.scoreLimit}
-                                      </span>
+                  {/* Right Column: Blue Team */}
+                  <Card className="bg-slate-900 border-blue-900/50 shadow-xl overflow-hidden flex flex-col h-[500px]">
+                      <CardHeader className="bg-blue-950/30 border-b border-blue-900/30 py-4">
+                          <div className="flex justify-between items-center">
+                              <CardTitle className="text-blue-400 font-bold uppercase tracking-wider text-sm">Team Blue</CardTitle>
+                              <span className="text-xs font-mono text-blue-500 bg-blue-950/50 px-2 py-1 rounded border border-blue-900/50">
+                                  {bluePlayers.length} / {maxPerTeam}
+                              </span>
+                          </div>
+                          <Button
+                              size="sm"
+                              className="w-full mt-2 bg-blue-600 hover:bg-blue-500 text-white border border-blue-400/20"
+                              disabled={myTeam === 'blue' || bluePlayers.length >= maxPerTeam}
+                              onClick={() => switchTeam('blue')}
+                          >
+                              Join Blue
+                          </Button>
+                      </CardHeader>
+                      <CardContent className="p-4 flex-1 overflow-y-auto space-y-2">
+                          {bluePlayers.map(p => (
+                              <div key={p.id} className="flex items-center gap-3 p-3 bg-blue-950/20 rounded-lg border border-blue-900/20">
+                                  <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center font-bold text-blue-400 text-xs border border-blue-500/30">
+                                      {p.username.charAt(0).toUpperCase()}
                                   </div>
-                                  {isHost ? (
-                                      <Slider
-                                          value={[lobbyState.settings.scoreLimit]}
-                                          min={0}
-                                          max={10}
-                                          step={1}
-                                          onValueChange={(vals) => updateSettings({ scoreLimit: vals[0] })}
-                                          className="py-2"
-                                      />
-                                  ) : (
-                                      <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                                          <div
-                                              className="h-full bg-slate-600"
-                                              style={{ width: `${(lobbyState.settings.scoreLimit / 10) * 100}%` }}
-                                          />
-                                      </div>
-                                  )}
-                                  <p className="text-xs text-slate-500">
-                                      Goals required to win. Set to 0 for unlimited.
-                                  </p>
-                              </div>
-                              {/* Time Limit */}
-                              <div className="space-y-4">
-                                  <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2 text-white font-bold">
-                                          <Clock className="w-4 h-4 text-blue-500" />
-                                          Time Limit
-                                      </div>
-                                      <span className="font-mono text-primary font-bold">
-                                          {lobbyState.settings.timeLimit === 0 ? 'Unlimited' : `${Math.floor(lobbyState.settings.timeLimit / 60)}m`}
-                                      </span>
+                                  <div className="flex-1 min-w-0">
+                                      <div className="font-bold text-blue-100 truncate">{p.username}</div>
+                                      {p.id === lobbyState.hostId && (
+                                          <div className="text-[10px] font-bold text-yellow-500 flex items-center gap-1">
+                                              <Crown className="w-3 h-3" /> HOST
+                                          </div>
+                                      )}
                                   </div>
-                                  {isHost ? (
-                                      <Slider
-                                          value={[lobbyState.settings.timeLimit]}
-                                          min={0}
-                                          max={600}
-                                          step={60}
-                                          onValueChange={(vals) => updateSettings({ timeLimit: vals[0] })}
-                                          className="py-2"
-                                      />
-                                  ) : (
-                                      <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                                          <div
-                                              className="h-full bg-slate-600"
-                                              style={{ width: `${(lobbyState.settings.timeLimit / 600) * 100}%` }}
-                                          />
-                                      </div>
+                                  {isHost && p.id !== profile?.id && (
+                                      <Button size="icon" variant="ghost" className="h-6 w-6 text-blue-400 hover:bg-blue-900/50" onClick={() => kickPlayer(p.id)}>
+                                          <X className="w-3 h-3" />
+                                      </Button>
                                   )}
-                                  <p className="text-xs text-slate-500">
-                                      Match duration in minutes. Set to 0 for unlimited.
-                                  </p>
                               </div>
-                              {/* Field Size */}
-                              <div className="space-y-4">
-                                  <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2 text-white font-bold">
-                                          <MapIcon className="w-4 h-4 text-emerald-500" />
-                                          Field Size
-                                      </div>
-                                      <span className="font-mono text-primary font-bold uppercase">
-                                          {lobbyState.settings.fieldSize || 'Medium'}
-                                      </span>
-                                  </div>
-                                  {isHost ? (
-                                      <Tabs
-                                          value={lobbyState.settings.fieldSize || 'medium'}
-                                          onValueChange={(val) => updateSettings({ fieldSize: val as any })}
-                                          className="w-full"
-                                      >
-                                          <TabsList className="grid w-full grid-cols-3 bg-slate-950 border border-slate-800">
-                                              <TabsTrigger value="small" className="text-xs font-bold">Small</TabsTrigger>
-                                              <TabsTrigger value="medium" className="text-xs font-bold">Medium</TabsTrigger>
-                                              <TabsTrigger value="large" className="text-xs font-bold">Large</TabsTrigger>
-                                          </TabsList>
-                                      </Tabs>
-                                  ) : (
-                                      <div className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-center text-sm font-bold text-slate-400 uppercase">
-                                          {lobbyState.settings.fieldSize || 'Medium'}
-                                      </div>
-                                  )}
-                                  <p className="text-xs text-slate-500">
-                                      Adjust map dimensions for player count.
-                                  </p>
-                              </div>
-                          </CardContent>
-                      </Card>
-                  </div>
+                          ))}
+                      </CardContent>
+                  </Card>
               </div>
-              {!isHost && (
-                  <div className="flex items-center justify-center gap-3 text-slate-400 animate-pulse py-8">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>Waiting for host to start the match...</span>
-                  </div>
-              )}
+              {/* Settings Panel (Bottom) */}
+              <Card className="bg-slate-900 border-slate-800 shadow-xl mt-6">
+                  <CardHeader className="bg-slate-950/50 border-b border-slate-800 py-3">
+                      <CardTitle className="flex items-center gap-2 text-white text-sm">
+                          <Settings className="w-4 h-4 text-slate-400" />
+                          Match Settings
+                      </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                          {/* Score Limit */}
+                          <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2 text-white font-bold text-sm">
+                                      <Trophy className="w-4 h-4 text-yellow-500" />
+                                      Score Limit
+                                  </div>
+                                  <span className="font-mono text-primary font-bold text-sm">
+                                      {lobbyState.settings.scoreLimit === 0 ? 'Unlimited' : lobbyState.settings.scoreLimit}
+                                  </span>
+                              </div>
+                              {isHost ? (
+                                  <Slider
+                                      value={[lobbyState.settings.scoreLimit]}
+                                      min={0}
+                                      max={10}
+                                      step={1}
+                                      onValueChange={(vals) => updateSettings({ scoreLimit: vals[0] })}
+                                      className="py-2"
+                                  />
+                              ) : (
+                                  <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                      <div
+                                          className="h-full bg-slate-600"
+                                          style={{ width: `${(lobbyState.settings.scoreLimit / 10) * 100}%` }}
+                                      />
+                                  </div>
+                              )}
+                          </div>
+                          {/* Time Limit */}
+                          <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2 text-white font-bold text-sm">
+                                      <Clock className="w-4 h-4 text-blue-500" />
+                                      Time Limit
+                                  </div>
+                                  <span className="font-mono text-primary font-bold text-sm">
+                                      {lobbyState.settings.timeLimit === 0 ? 'Unlimited' : `${Math.floor(lobbyState.settings.timeLimit / 60)}m`}
+                                  </span>
+                              </div>
+                              {isHost ? (
+                                  <Slider
+                                      value={[lobbyState.settings.timeLimit]}
+                                      min={0}
+                                      max={600}
+                                      step={60}
+                                      onValueChange={(vals) => updateSettings({ timeLimit: vals[0] })}
+                                      className="py-2"
+                                  />
+                              ) : (
+                                  <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                      <div
+                                          className="h-full bg-slate-600"
+                                          style={{ width: `${(lobbyState.settings.timeLimit / 600) * 100}%` }}
+                                      />
+                                  </div>
+                              )}
+                          </div>
+                          {/* Field Size */}
+                          <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2 text-white font-bold text-sm">
+                                      <MapIcon className="w-4 h-4 text-emerald-500" />
+                                      Field Size
+                                  </div>
+                                  <span className="font-mono text-primary font-bold uppercase text-sm">
+                                      {lobbyState.settings.fieldSize || 'Medium'}
+                                  </span>
+                              </div>
+                              {isHost ? (
+                                  <Tabs
+                                      value={lobbyState.settings.fieldSize || 'medium'}
+                                      onValueChange={(val) => updateSettings({ fieldSize: val as any })}
+                                      className="w-full"
+                                  >
+                                      <TabsList className="grid w-full grid-cols-3 bg-slate-950 border border-slate-800 h-8">
+                                          <TabsTrigger value="small" className="text-[10px] font-bold h-6">Small</TabsTrigger>
+                                          <TabsTrigger value="medium" className="text-[10px] font-bold h-6">Medium</TabsTrigger>
+                                          <TabsTrigger value="large" className="text-[10px] font-bold h-6">Large</TabsTrigger>
+                                      </TabsList>
+                                  </Tabs>
+                              ) : (
+                                  <div className="w-full bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs font-bold text-slate-400 uppercase">
+                                      {lobbyState.settings.fieldSize || 'Medium'}
+                                  </div>
+                              )}
+                          </div>
+                      </div>
+                  </CardContent>
+              </Card>
           </div>
       );
   }
@@ -597,16 +678,18 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
             <span className="text-sm font-bold text-slate-400">YOU ARE</span>
             <span className={cn(
                 "px-3 py-1 rounded-full text-white font-bold text-sm shadow-lg",
-                matchInfo?.team === 'red' ? 'bg-red-500 shadow-red-500/20' : 'bg-blue-500 shadow-blue-500/20'
+                matchInfo?.team === 'red' ? 'bg-red-500 shadow-red-500/20' :
+                matchInfo?.team === 'blue' ? 'bg-blue-500 shadow-blue-500/20' :
+                'bg-slate-700 shadow-slate-500/20'
             )}>
-                TEAM {matchInfo?.team.toUpperCase()}
+                {matchInfo?.team === 'spectator' ? 'SPECTATING' : `TEAM ${matchInfo?.team.toUpperCase()}`}
             </span>
         </div>
       </div>
       <div className="relative rounded-xl overflow-hidden shadow-2xl border border-slate-800">
         <GameCanvas
             externalState={gameState}
-            onInput={handleInput}
+            onInput={matchInfo?.team === 'spectator' ? undefined : handleInput}
             winningScore={lobbyState?.settings.scoreLimit ?? 3}
             currentUserId={profile?.id}
         />
@@ -615,7 +698,10 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
             <div className="flex-1 overflow-y-auto bg-black/60 backdrop-blur-md rounded-lg p-3 space-y-2 scrollbar-hide border border-white/10 shadow-xl">
                 {chatMessages.map(msg => (
                     <div key={msg.id} className="text-sm text-white drop-shadow-md">
-                        <span className={cn("font-bold mr-2", msg.team === 'red' ? 'text-red-400' : 'text-blue-400')}>
+                        <span className={cn("font-bold mr-2",
+                            msg.team === 'red' ? 'text-red-400' :
+                            msg.team === 'blue' ? 'text-blue-400' : 'text-slate-400'
+                        )}>
                             {msg.sender}:
                         </span>
                         <span className="text-slate-200">{msg.message}</span>

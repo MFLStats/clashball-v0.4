@@ -138,15 +138,21 @@ export interface GameEvent {
   assisterId?: string;
 }
 // --- Lobby Types ---
+export type LobbyTeam = 'red' | 'blue' | 'spectator';
 export interface LobbySettings {
   scoreLimit: number; // 0 = unlimited
   timeLimit: number; // seconds, 0 = unlimited
   fieldSize: 'small' | 'medium' | 'large';
 }
+export interface LobbyPlayer {
+    id: string;
+    username: string;
+    team: LobbyTeam;
+}
 export interface LobbyState {
     code: string;
     hostId: string;
-    players: { id: string; username: string }[];
+    players: LobbyPlayer[];
     status: 'waiting' | 'playing';
     settings: LobbySettings;
 }
@@ -165,17 +171,18 @@ export type WSMessage =
   | { type: 'create_lobby'; userId: string; username: string }
   | { type: 'join_lobby'; code: string; userId: string; username: string }
   | { type: 'update_lobby_settings'; settings: Partial<LobbySettings> }
+  | { type: 'switch_team'; team: LobbyTeam }
   | { type: 'kick_player'; targetId: string }
   | { type: 'kicked' }
   | { type: 'lobby_update'; state: LobbyState }
   | { type: 'start_lobby_match' }
   | { type: 'input'; move: { x: number; y: number }; kick: boolean }
-  | { type: 'match_found'; matchId: string; team: 'red' | 'blue'; opponent?: string; opponents?: string[] }
-  | { type: 'match_started'; matchId: string; team: 'red' | 'blue'; opponent?: string; opponents?: string[] }
+  | { type: 'match_found'; matchId: string; team: 'red' | 'blue' | 'spectator'; opponent?: string; opponents?: string[] }
+  | { type: 'match_started'; matchId: string; team: 'red' | 'blue' | 'spectator'; opponent?: string; opponents?: string[] }
   | { type: 'game_state'; state: any } // Typed as 'any' here to avoid circular dependency, but effectively GameState
   | { type: 'game_events'; events: GameEvent[] }
   | { type: 'game_over'; winner: 'red' | 'blue'; stats?: Record<string, PlayerMatchStats> }
   | { type: 'error'; message: string }
   | { type: 'ping' }
   | { type: 'pong' }
-  | { type: 'chat'; message: string; sender?: string; team?: 'red' | 'blue' };
+  | { type: 'chat'; message: string; sender?: string; team?: 'red' | 'blue' | 'spectator' };

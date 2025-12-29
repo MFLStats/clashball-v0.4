@@ -3,7 +3,7 @@ import type {
     DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage,
     GameMode, ModeStats, TeamProfile, AuthPayload, AuthResponse,
     TournamentState, TournamentParticipant, LobbyState, LeaderboardEntry, MatchHistoryEntry,
-    TeamMember, LobbyInfo, PlayerMatchStats, LobbySettings
+    TeamMember, LobbyInfo, PlayerMatchStats, LobbySettings, LobbyTeam
 } from '@shared/types';
 import { MOCK_ITEMS } from '@shared/mock-data';
 import { Match } from './match';
@@ -21,7 +21,7 @@ const RANKED_SETTINGS: LobbySettings = {
 interface Lobby {
     code: string;
     hostId: string;
-    players: { id: string; ws: WebSocket; username: string }[];
+    players: { id: string; ws: WebSocket; username: string; team: LobbyTeam }[];
     status: 'waiting' | 'playing';
     settings: LobbySettings;
 }
@@ -109,6 +109,10 @@ export class GlobalDurableObject extends DurableObject {
                     this.handleUpdateLobbySettings(ws, msg.settings);
                     break;
                 }
+                case 'switch_team': {
+                    this.handleSwitchTeam(ws, msg.team);
+                    break;
+                }
                 case 'kick_player': {
                     this.handleKickPlayer(ws, msg.targetId);
                     break;
@@ -151,7 +155,7 @@ export class GlobalDurableObject extends DurableObject {
                                         type: 'chat',
                                         message: msg.message.slice(0, 100),
                                         sender: sender.username,
-                                        team: 'red' // Default color for lobby chat
+                                        team: sender.team // Use actual team color
                                     });
                                     lobby.players.forEach(p => {
                                         try { p.ws.send(chatMsg); } catch(e) { /* ignore send errors */ }
@@ -243,7 +247,7 @@ export class GlobalDurableObject extends DurableObject {
             this.broadcastQueueStatus(mode);
             const matchPlayers = players.map(p => ({ userId: p.userId, ws: p.ws, username: p.username }));
             // Ranked matches use standard settings
-            this.startMatch(matchPlayers, mode, RANKED_SETTINGS);
+            this.startMatch(matchPlayers, [], mode, RANKED_SETTINGS);
         }
     }
     // --- Lobby Logic ---
@@ -260,7 +264,7 @@ export class GlobalDurableObject extends DurableObject {
         const lobby: Lobby = {
             code,
             hostId: userId,
-            players: [{ id: userId, ws, username }],
+            players: [{ id: userId, ws, username, team: 'spectator' }], // Creator starts as spectator
             status: 'waiting',
             settings: { scoreLimit: 3, timeLimit: 180, fieldSize: 'medium' } // Default settings
         };
@@ -278,12 +282,12 @@ export class GlobalDurableObject extends DurableObject {
             ws.send(JSON.stringify({ type: 'error', message: 'Match already in progress' }));
             return;
         }
-        if (lobby.players.length >= 8) { // Max 4v4
+        if (lobby.players.length >= 16) { // Hard cap for lobby size (players + spectators)
             ws.send(JSON.stringify({ type: 'error', message: 'Lobby is full' }));
             return;
         }
-        // Add player
-        lobby.players.push({ id: userId, ws, username });
+        // Add player as spectator by default
+        lobby.players.push({ id: userId, ws, username, team: 'spectator' });
         this.sessions.set(ws, { userId, lobbyCode: code });
         this.broadcastLobbyUpdate(lobby);
     }
@@ -298,6 +302,26 @@ export class GlobalDurableObject extends DurableObject {
         }
         // Update settings
         lobby.settings = { ...lobby.settings, ...settings };
+        this.broadcastLobbyUpdate(lobby);
+    }
+    handleSwitchTeam(ws: WebSocket, team: LobbyTeam) {
+        const session = this.sessions.get(ws);
+        if (!session || !session.lobbyCode) return;
+        const lobby = this.lobbies.get(session.lobbyCode);
+        if (!lobby) return;
+        const player = lobby.players.find(p => p.id === session.userId);
+        if (!player) return;
+        if (player.team === team) return; // No change
+        // Check limits for Red/Blue
+        if (team === 'red' || team === 'blue') {
+            const currentCount = lobby.players.filter(p => p.team === team).length;
+            const maxPerTeam = lobby.settings.fieldSize === 'small' ? 2 : lobby.settings.fieldSize === 'medium' ? 3 : 4;
+            if (currentCount >= maxPerTeam) {
+                ws.send(JSON.stringify({ type: 'error', message: `Team ${team.toUpperCase()} is full` }));
+                return;
+            }
+        }
+        player.team = team;
         this.broadcastLobbyUpdate(lobby);
     }
     handleKickPlayer(ws: WebSocket, targetId: string) {
@@ -338,29 +362,38 @@ export class GlobalDurableObject extends DurableObject {
             ws.send(JSON.stringify({ type: 'error', message: 'Only host can start match' }));
             return;
         }
-        if (lobby.players.length < 2) {
-            ws.send(JSON.stringify({ type: 'error', message: 'Need at least 2 players' }));
+        const redPlayers = lobby.players.filter(p => p.team === 'red');
+        const bluePlayers = lobby.players.filter(p => p.team === 'blue');
+        const spectators = lobby.players.filter(p => p.team === 'spectator');
+        if (redPlayers.length === 0 || bluePlayers.length === 0) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Need at least 1 player on each team' }));
             return;
         }
         lobby.status = 'playing';
         this.broadcastLobbyUpdate(lobby);
-        // Determine mode based on player count
-        const count = lobby.players.length;
-        const mode: GameMode = count <= 2 ? '1v1' : count <= 4 ? '2v2' : count <= 6 ? '3v3' : '4v4';
-        // Start Match
-        // We need to map lobby players to match players format
-        const matchPlayers = lobby.players.map(p => ({
+        // Determine mode based on max team size
+        const maxTeamSize = Math.max(redPlayers.length, bluePlayers.length);
+        const mode: GameMode = maxTeamSize <= 1 ? '1v1' : maxTeamSize <= 2 ? '2v2' : maxTeamSize <= 3 ? '3v3' : '4v4';
+        // Map active players
+        const matchPlayers = [...redPlayers, ...bluePlayers].map(p => ({
+            userId: p.id,
+            ws: p.ws,
+            username: p.username,
+            team: p.team as 'red' | 'blue' // Explicit cast as we filtered
+        }));
+        // Map spectators
+        const matchSpectators = spectators.map(p => ({
             userId: p.id,
             ws: p.ws,
             username: p.username
         }));
-        this.startMatch(matchPlayers, mode, lobby.settings);
+        this.startMatch(matchPlayers, matchSpectators, mode, lobby.settings);
     }
     broadcastLobbyUpdate(lobby: Lobby) {
         const state: LobbyState = {
             code: lobby.code,
             hostId: lobby.hostId,
-            players: lobby.players.map(p => ({ id: p.id, username: p.username })),
+            players: lobby.players.map(p => ({ id: p.id, username: p.username, team: p.team })),
             status: lobby.status,
             settings: lobby.settings
         };
@@ -378,7 +411,7 @@ export class GlobalDurableObject extends DurableObject {
                     code: lobby.code,
                     hostName: host ? host.username : 'Unknown',
                     playerCount: lobby.players.length,
-                    maxPlayers: 8,
+                    maxPlayers: 16, // Hard cap
                     status: lobby.status
                 });
             }
@@ -386,15 +419,21 @@ export class GlobalDurableObject extends DurableObject {
         return lobbies;
     }
     // --- Match Logic ---
-    startMatch(players: { userId: string; ws: WebSocket; username: string }[], mode: GameMode, settings: LobbySettings) {
+    startMatch(
+        players: { userId: string; ws: WebSocket; username: string; team?: 'red' | 'blue' }[],
+        spectators: { userId: string; ws: WebSocket; username: string }[],
+        mode: GameMode,
+        settings: LobbySettings
+    ) {
         const matchId = crypto.randomUUID();
+        // If team is not provided (Ranked), assign automatically
         const matchPlayers = players.map((p, i) => ({
             id: p.userId,
             ws: p.ws,
             username: p.username,
-            team: (i < players.length / 2 ? 'red' : 'blue') as 'red' | 'blue'
+            team: p.team || (i < players.length / 2 ? 'red' : 'blue') as 'red' | 'blue'
         }));
-        const match = new Match(matchId, matchPlayers, settings, (id, winner) => {
+        const match = new Match(matchId, matchPlayers, spectators, settings, (id, winner) => {
             // Retrieve stats before deleting match
             const matchInstance = this.matches.get(id);
             const playerStats = matchInstance ? Object.fromEntries(matchInstance.matchStats) : undefined;
@@ -420,7 +459,22 @@ export class GlobalDurableObject extends DurableObject {
                 }));
             } catch (err) {
                 console.error(`Failed to notify player ${p.username} of match start:`, err);
-                // Continue loop to notify others
+            }
+        });
+        // Notify Spectators
+        spectators.forEach(s => {
+            try {
+                const session = this.sessions.get(s.ws);
+                if (session) session.matchId = matchId;
+                s.ws.send(JSON.stringify({
+                    type: 'match_started',
+                    matchId,
+                    team: 'spectator',
+                    opponent: 'Spectating Match',
+                    opponents: []
+                }));
+            } catch (err) {
+                console.error(`Failed to notify spectator ${s.username} of match start:`, err);
             }
         });
         match.start();

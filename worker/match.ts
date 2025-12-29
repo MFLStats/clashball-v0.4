@@ -3,6 +3,7 @@ import { WSMessage, PlayerMatchStats, LobbySettings } from '@shared/types';
 export class Match {
   id: string;
   players: Map<string, { ws: WebSocket; team: 'red' | 'blue'; username: string }>;
+  spectators: Map<string, { ws: WebSocket; username: string }>;
   gameState: GameState;
   interval: any;
   onEnd: (matchId: string, winner: 'red' | 'blue') => void;
@@ -12,11 +13,13 @@ export class Match {
   constructor(
     id: string,
     players: { id: string; ws: WebSocket; team: 'red' | 'blue'; username: string }[],
+    spectators: { id: string; ws: WebSocket; username: string }[],
     settings: LobbySettings,
     onEnd: (id: string, winner: 'red' | 'blue') => void
   ) {
     this.id = id;
     this.players = new Map();
+    this.spectators = new Map();
     this.settings = settings;
     this.onEnd = onEnd;
     // Initialize Game State with custom time limit and field size
@@ -45,6 +48,10 @@ export class Match {
         cleanSheet: false
       });
     });
+    // Store Spectators
+    spectators.forEach(s => {
+        this.spectators.set(s.id, { ws: s.ws, username: s.username });
+    });
   }
   start() {
     this.lastTime = Date.now();
@@ -63,21 +70,35 @@ export class Match {
     if (this.interval) clearInterval(this.interval);
   }
   handleInput(userId: string, input: { move: { x: number; y: number }; kick: boolean }) {
-    const player = this.gameState.players.find(p => p.id === userId);
-    if (player) {
-      player.input = input;
+    // Only process input if user is a player
+    if (this.players.has(userId)) {
+        const player = this.gameState.players.find(p => p.id === userId);
+        if (player) {
+            player.input = input;
+        }
     }
   }
   handleChat(userId: string, message: string) {
-    const player = this.gameState.players.find(p => p.id === userId);
-    if (!player) return;
+    let senderName = 'Unknown';
+    let team: 'red' | 'blue' | 'spectator' = 'spectator';
+    if (this.players.has(userId)) {
+        const p = this.players.get(userId)!;
+        senderName = p.username;
+        team = p.team;
+    } else if (this.spectators.has(userId)) {
+        const s = this.spectators.get(userId)!;
+        senderName = s.username;
+        team = 'spectator';
+    } else {
+        return; // Unknown user
+    }
     // Basic sanitization (truncate)
     const cleanMessage = message.slice(0, 100);
     this.broadcast({
         type: 'chat',
         message: cleanMessage,
-        sender: player.username,
-        team: player.team
+        sender: senderName,
+        team: team
     });
   }
   private update(dt: number) {
@@ -166,12 +187,21 @@ export class Match {
   }
   private broadcast(msg: WSMessage) {
     const str = JSON.stringify(msg);
+    // Send to Players
     this.players.forEach(({ ws }) => {
       try {
         ws.send(str);
       } catch (e) {
         // Handle disconnects?
       }
+    });
+    // Send to Spectators
+    this.spectators.forEach(({ ws }) => {
+        try {
+            ws.send(str);
+        } catch (e) {
+            // Handle disconnects?
+        }
     });
   }
 }

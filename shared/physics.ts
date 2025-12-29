@@ -55,18 +55,18 @@ export class PhysicsEngine {
   static readonly FIELD_HEIGHT = 600;
   static readonly GOAL_HEIGHT = 180;
   // Movement & Physics (Per Second)
-  static readonly PLAYER_MAX_SPEED = 240; 
-  static readonly PLAYER_ACCELERATION = 1200; 
+  static readonly PLAYER_MAX_SPEED = 240;
+  static readonly PLAYER_ACCELERATION = 1200;
   // Damping Base (Applied per 1/60s)
-  static readonly PLAYER_DAMPING_BASE = 0.89; 
-  static readonly BALL_DAMPING_BASE = 0.990; 
+  static readonly PLAYER_DAMPING_BASE = 0.89;
+  static readonly BALL_DAMPING_BASE = 0.990;
   static readonly WALL_BOUNCE = 0.75;
   static readonly PLAYER_BOUNCE = 0.5;
   // Velocity threshold for stopping
   static readonly STOP_THRESHOLD = 0.6;
   // Assist Window (seconds)
   static readonly ASSIST_WINDOW = 3.0;
-  static createInitialState(): GameState {
+  static createInitialState(timeLimit: number = 180): GameState {
     return {
       players: [
         {
@@ -104,7 +104,7 @@ export class PhysicsEngine {
         goalHeight: this.GOAL_HEIGHT
       },
       status: 'playing',
-      timeRemaining: 180, // 3 minutes in seconds
+      timeRemaining: timeLimit,
       isOvertime: false,
       goalTimer: 0
     };
@@ -127,19 +127,32 @@ export class PhysicsEngine {
         return { state: newState, events };
     }
     if (newState.status !== 'playing') return { state: newState, events };
-    // Update Time
-    newState.timeRemaining -= dt;
-    if (newState.timeRemaining <= 0) {
-        newState.timeRemaining = 0;
-        // Check for Overtime Condition
-        if (newState.score.red === newState.score.blue) {
-            if (!newState.isOvertime) {
-                newState.isOvertime = true;
+    // Update Time (Only if timeRemaining > 0 or if it was initialized > 0)
+    // If timeLimit was 0 (unlimited), timeRemaining might be 0 initially.
+    // But createInitialState sets it to timeLimit.
+    // If timeLimit is 0, we treat it as unlimited, so we don't decrement or check for 0.
+    // However, the current logic decrements. Let's assume if initial time was 0, we don't decrement.
+    // But we don't know initial time here easily without passing it.
+    // A simple hack: if timeRemaining is exactly 0 and we are playing, maybe it's unlimited?
+    // No, timeRemaining hits 0 when game ends.
+    // Let's assume for now that if the game was started with 0 time, the PhysicsEngine caller handles the "Unlimited" logic
+    // by passing a very large number or we handle it here.
+    // Actually, the requirement says "0 = unlimited".
+    // If timeRemaining is > 0, we decrement.
+    if (newState.timeRemaining > 0) {
+        newState.timeRemaining -= dt;
+        if (newState.timeRemaining <= 0) {
+            newState.timeRemaining = 0;
+            // Check for Overtime Condition
+            if (newState.score.red === newState.score.blue) {
+                if (!newState.isOvertime) {
+                    newState.isOvertime = true;
+                }
+            } else {
+                // Regulation ended with a winner
+                newState.status = 'ended';
+                events.push({ type: 'whistle' });
             }
-        } else {
-            // Regulation ended with a winner
-            newState.status = 'ended';
-            events.push({ type: 'whistle' });
         }
     }
     // Calculate time-adjusted damping
@@ -202,7 +215,7 @@ export class PhysicsEngine {
     }
     // Goal Detection & X-Axis Walls
     const checkGoal = (isLeft: boolean) => {
-        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 && 
+        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 &&
                        b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
         if (isGoal) {
             const scoringTeam = isLeft ? 'blue' : 'red';
@@ -214,15 +227,15 @@ export class PhysicsEngine {
                 if (b.lastTouch.team === scoringTeam) {
                     scorerId = b.lastTouch.id;
                     // Check Assist
-                    if (b.previousTouch && 
-                        b.previousTouch.team === scoringTeam && 
+                    if (b.previousTouch &&
+                        b.previousTouch.team === scoringTeam &&
                         b.previousTouch.id !== scorerId &&
                         Math.abs(b.lastTouch.time - b.previousTouch.time) < this.ASSIST_WINDOW) {
                         assisterId = b.previousTouch.id;
                     }
                 } else {
                     // Own Goal
-                    scorerId = b.lastTouch.id; 
+                    scorerId = b.lastTouch.id;
                 }
             }
             events.push({ type: 'goal', team: scoringTeam, scorerId, assisterId });
@@ -324,7 +337,7 @@ export class PhysicsEngine {
         const baseX = isRed ? 150 : state.field.width - 150;
         players.forEach((p, index) => {
             p.vel = { x: 0, y: 0 };
-            p.input = { move: { x: 0, y: 0 }, kick: false }; 
+            p.input = { move: { x: 0, y: 0 }, kick: false };
             if (count === 1) {
                 p.pos = { x: baseX, y: state.field.height / 2 };
             } else {

@@ -3,7 +3,7 @@ import type {
     DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage,
     GameMode, ModeStats, TeamProfile, AuthPayload, AuthResponse,
     TournamentState, TournamentParticipant, LobbyState, LeaderboardEntry, MatchHistoryEntry,
-    TeamMember, LobbyInfo, PlayerMatchStats
+    TeamMember, LobbyInfo, PlayerMatchStats, LobbySettings
 } from '@shared/types';
 import { MOCK_ITEMS } from '@shared/mock-data';
 import { Match } from './match';
@@ -12,11 +12,17 @@ const TAU = 0.5;
 const VOLATILITY_DEFAULT = 0.06;
 const RATING_DEFAULT = 1200;
 const RD_DEFAULT = 350;
+// Default Ranked Settings
+const RANKED_SETTINGS: LobbySettings = {
+    scoreLimit: 3,
+    timeLimit: 180
+};
 interface Lobby {
     code: string;
     hostId: string;
     players: { id: string; ws: WebSocket; username: string }[];
     status: 'waiting' | 'playing';
+    settings: LobbySettings;
 }
 export class GlobalDurableObject extends DurableObject {
     // State
@@ -96,6 +102,10 @@ export class GlobalDurableObject extends DurableObject {
                 }
                 case 'join_lobby': {
                     this.handleJoinLobby(ws, msg.code, msg.userId, msg.username);
+                    break;
+                }
+                case 'update_lobby_settings': {
+                    this.handleUpdateLobbySettings(ws, msg.settings);
                     break;
                 }
                 case 'start_lobby_match': {
@@ -206,7 +216,8 @@ export class GlobalDurableObject extends DurableObject {
             // Update queue status for remaining players
             this.broadcastQueueStatus(mode);
             const matchPlayers = players.map(p => ({ userId: p.userId, ws: p.ws, username: p.username }));
-            this.startMatch(matchPlayers, mode);
+            // Ranked matches use standard settings
+            this.startMatch(matchPlayers, mode, RANKED_SETTINGS);
         }
     }
     // --- Lobby Logic ---
@@ -224,7 +235,8 @@ export class GlobalDurableObject extends DurableObject {
             code,
             hostId: userId,
             players: [{ id: userId, ws, username }],
-            status: 'waiting'
+            status: 'waiting',
+            settings: { scoreLimit: 3, timeLimit: 180 } // Default settings
         };
         this.lobbies.set(code, lobby);
         this.sessions.set(ws, { userId, lobbyCode: code });
@@ -247,6 +259,19 @@ export class GlobalDurableObject extends DurableObject {
         // Add player
         lobby.players.push({ id: userId, ws, username });
         this.sessions.set(ws, { userId, lobbyCode: code });
+        this.broadcastLobbyUpdate(lobby);
+    }
+    handleUpdateLobbySettings(ws: WebSocket, settings: Partial<LobbySettings>) {
+        const session = this.sessions.get(ws);
+        if (!session || !session.lobbyCode) return;
+        const lobby = this.lobbies.get(session.lobbyCode);
+        if (!lobby) return;
+        if (lobby.hostId !== session.userId) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Only host can update settings' }));
+            return;
+        }
+        // Update settings
+        lobby.settings = { ...lobby.settings, ...settings };
         this.broadcastLobbyUpdate(lobby);
     }
     handleStartLobbyMatch(ws: WebSocket) {
@@ -274,14 +299,15 @@ export class GlobalDurableObject extends DurableObject {
             ws: p.ws,
             username: p.username
         }));
-        this.startMatch(matchPlayers, mode);
+        this.startMatch(matchPlayers, mode, lobby.settings);
     }
     broadcastLobbyUpdate(lobby: Lobby) {
         const state: LobbyState = {
             code: lobby.code,
             hostId: lobby.hostId,
             players: lobby.players.map(p => ({ id: p.id, username: p.username })),
-            status: lobby.status
+            status: lobby.status,
+            settings: lobby.settings
         };
         const msg = JSON.stringify({ type: 'lobby_update', state });
         lobby.players.forEach(p => {
@@ -305,7 +331,7 @@ export class GlobalDurableObject extends DurableObject {
         return lobbies;
     }
     // --- Match Logic ---
-    startMatch(players: { userId: string; ws: WebSocket; username: string }[], mode: GameMode) {
+    startMatch(players: { userId: string; ws: WebSocket; username: string }[], mode: GameMode, settings: LobbySettings) {
         const matchId = crypto.randomUUID();
         const matchPlayers = players.map((p, i) => ({
             id: p.userId,
@@ -313,7 +339,7 @@ export class GlobalDurableObject extends DurableObject {
             username: p.username,
             team: (i < players.length / 2 ? 'red' : 'blue') as 'red' | 'blue'
         }));
-        const match = new Match(matchId, matchPlayers, (id, winner) => {
+        const match = new Match(matchId, matchPlayers, settings, (id, winner) => {
             // Retrieve stats before deleting match
             const matchInstance = this.matches.get(id);
             const playerStats = matchInstance ? Object.fromEntries(matchInstance.matchStats) : undefined;
@@ -360,7 +386,7 @@ export class GlobalDurableObject extends DurableObject {
             if (profiles.length < 2) return null; // Need at least 2 players to form a "team" context for ranking usually
             const first = profiles[0].teams || [];
             // Find intersection of all players' team lists
-            const common = first.filter(teamId => 
+            const common = first.filter(teamId =>
                 profiles.every(p => (p.teams || []).includes(teamId))
             );
             return common.length > 0 ? common[0] : null; // Return first common team found

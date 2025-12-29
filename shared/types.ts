@@ -138,11 +138,16 @@ export interface GameEvent {
   assisterId?: string;
 }
 // --- Lobby Types ---
+export interface LobbySettings {
+  scoreLimit: number; // 0 = unlimited
+  timeLimit: number; // seconds, 0 = unlimited
+}
 export interface LobbyState {
     code: string;
     hostId: string;
     players: { id: string; username: string }[];
     status: 'waiting' | 'playing';
+    settings: LobbySettings;
 }
 export interface LobbyInfo {
   code: string;
@@ -158,6 +163,7 @@ export type WSMessage =
   | { type: 'queue_update'; count: number }
   | { type: 'create_lobby'; userId: string; username: string }
   | { type: 'join_lobby'; code: string; userId: string; username: string }
+  | { type: 'update_lobby_settings'; settings: Partial<LobbySettings> }
   | { type: 'lobby_update'; state: LobbyState }
   | { type: 'start_lobby_match' }
   | { type: 'input'; move: { x: number; y: number }; kick: boolean }

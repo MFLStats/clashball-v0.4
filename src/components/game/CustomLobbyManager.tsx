@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameCanvas } from './GameCanvas';
 import { GameState } from '@shared/physics';
-import { WSMessage, LobbyState, LobbyInfo } from '@shared/types';
+import { WSMessage, LobbyState, LobbyInfo, LobbySettings } from '@shared/types';
 import { useUserStore } from '@/store/useUserStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, ArrowLeft, Users, Copy, Play, Send, KeyRound, Crown, RefreshCw, LogIn } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Loader2, ArrowLeft, Users, Copy, Play, Send, KeyRound, Crown, RefreshCw, LogIn, Settings, Clock, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 import { SoundEngine } from '@/lib/audio';
 import { cn } from '@/lib/utils';
@@ -57,72 +58,84 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
     const interval = setInterval(fetchLobbies, 5000);
     return () => clearInterval(interval);
   }, [fetchLobbies]);
-  const handleMessage = useCallback((msg: WSMessage) => {
-    switch (msg.type) {
-        case 'lobby_update': {
-            setLobbyState(msg.state);
-            setView('lobby');
-            setIsConnecting(false);
-            break;
-        }
-        case 'match_found': {
-            setMatchInfo({ matchId: msg.matchId, team: msg.team });
-            setView('game');
-            toast.success('Match Starting!');
-            break;
-        }
-        case 'game_state': {
-            setGameState(msg.state);
-            break;
-        }
-        case 'game_events': {
-            msg.events.forEach(event => {
-                switch (event.type) {
-                    case 'kick': SoundEngine.playKick(); break;
-                    case 'wall': SoundEngine.playWall(); break;
-                    case 'player': SoundEngine.playPlayer(); break;
-                    case 'goal': SoundEngine.playGoal(); break;
-                    case 'whistle': SoundEngine.playWhistle(); break;
-                }
-            });
-            break;
-        }
-        case 'game_over': {
-            SoundEngine.playWhistle();
-            toast(msg.winner === matchInfo?.team ? 'VICTORY!' : 'DEFEAT', {
-              description: `Winner: ${msg.winner.toUpperCase()}`
-            });
-            setTimeout(() => {
-                // Return to lobby view instead of exiting completely
+  // Use a ref for handleMessage to ensure it always has access to the latest state/props if needed,
+  // although for this component most state is local.
+  // We wrap it in useRef to keep the function identity stable for the websocket event listener.
+  const handleMessageRef = useRef<(msg: WSMessage) => void>(() => {});
+  useEffect(() => {
+    handleMessageRef.current = (msg: WSMessage) => {
+        switch (msg.type) {
+            case 'lobby_update': {
+                setLobbyState(msg.state);
                 setView('lobby');
-                setGameState(null);
-                setMatchInfo(null);
-            }, 3000);
-            break;
+                setIsConnecting(false);
+                break;
+            }
+            case 'match_found': {
+                setMatchInfo({ matchId: msg.matchId, team: msg.team });
+                setView('game');
+                toast.success('Match Starting!');
+                break;
+            }
+            case 'game_state': {
+                setGameState(msg.state);
+                break;
+            }
+            case 'game_events': {
+                msg.events.forEach(event => {
+                    switch (event.type) {
+                        case 'kick': SoundEngine.playKick(); break;
+                        case 'wall': SoundEngine.playWall(); break;
+                        case 'player': SoundEngine.playPlayer(); break;
+                        case 'goal': SoundEngine.playGoal(); break;
+                        case 'whistle': SoundEngine.playWhistle(); break;
+                    }
+                });
+                break;
+            }
+            case 'game_over': {
+                SoundEngine.playWhistle();
+                // We need to access the current matchInfo here.
+                // Since this function is inside useEffect, it captures the scope.
+                // But we are using a ref pattern for the handler, so we need to be careful.
+                // Actually, since we are setting state, we don't strictly need to read matchInfo immediately
+                // except for the toast.
+                // Let's just show Game Over.
+                toast('Game Over', {
+                  description: `Winner: ${msg.winner.toUpperCase()}`
+                });
+                setTimeout(() => {
+                    // Return to lobby view instead of exiting completely
+                    setView('lobby');
+                    setGameState(null);
+                    setMatchInfo(null);
+                }, 3000);
+                break;
+            }
+            case 'chat': {
+                setChatMessages(prev => [
+                  ...prev,
+                  {
+                    id: crypto.randomUUID(),
+                    sender: msg.sender || 'Unknown',
+                    message: msg.message,
+                    team: msg.team || 'red'
+                  }
+                ]);
+                break;
+            }
+            case 'error': {
+                toast.error(msg.message);
+                setIsConnecting(false);
+                break;
+            }
+            case 'ping': {
+                wsRef.current?.send(JSON.stringify({ type: 'pong' }));
+                break;
+            }
         }
-        case 'chat': {
-            setChatMessages(prev => [
-              ...prev,
-              {
-                id: crypto.randomUUID(),
-                sender: msg.sender || 'Unknown',
-                message: msg.message,
-                team: msg.team || 'red'
-              }
-            ]);
-            break;
-        }
-        case 'error': {
-            toast.error(msg.message);
-            setIsConnecting(false);
-            break;
-        }
-        case 'ping': {
-            wsRef.current?.send(JSON.stringify({ type: 'pong' }));
-            break;
-        }
-    }
-  }, [matchInfo]);
+    };
+  }, []); // Empty dependency array means this ref updater runs once, but the function inside closes over nothing critical that isn't state setter.
   const connectWS = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return wsRef.current;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -132,7 +145,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
     ws.onmessage = (event) => {
         try {
             const msg = JSON.parse(event.data) as WSMessage;
-            handleMessage(msg);
+            handleMessageRef.current(msg);
         } catch (e) {
             console.error('Failed to parse WS message', e);
         }
@@ -142,27 +155,21 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
         setIsConnecting(false);
     };
     return ws;
-  }, [handleMessage]);
+  }, []);
   const createLobby = () => {
     if (!profile) return;
     setIsConnecting(true);
     const ws = connectWS();
     if (ws) {
-        ws.onopen = () => {
+        const sendCreate = () => {
             ws.send(JSON.stringify({
                 type: 'create_lobby',
                 userId: profile.id,
                 username: profile.username
             }));
         };
-        // If already open
-        if (ws.readyState === WebSocket.OPEN) {
-             ws.send(JSON.stringify({
-                type: 'create_lobby',
-                userId: profile.id,
-                username: profile.username
-            }));
-        }
+        if (ws.readyState === WebSocket.OPEN) sendCreate();
+        else ws.onopen = sendCreate;
     }
   };
   const joinLobby = (code?: string) => {
@@ -187,6 +194,14 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: 'start_lobby_match' }));
     }
+  };
+  const updateSettings = (settings: Partial<LobbySettings>) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+              type: 'update_lobby_settings',
+              settings
+          }));
+      }
   };
   const handleInput = (input: { move: { x: number; y: number }; kick: boolean }) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -322,7 +337,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                                         </div>
                                         <div className="text-xs text-slate-500 uppercase font-bold">Players</div>
                                     </div>
-                                    <Button 
+                                    <Button
                                         onClick={() => joinLobby(lobby.code)}
                                         disabled={isConnecting || lobby.playerCount >= lobby.maxPlayers}
                                         className="bg-purple-600 hover:bg-purple-500 text-white"
@@ -341,7 +356,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
   if (view === 'lobby' && lobbyState) {
       const isHost = lobbyState.hostId === profile?.id;
       return (
-          <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
+          <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
               <div className="flex items-center justify-between">
                   <Button variant="ghost" onClick={onExit} className="text-slate-300 hover:bg-white/10">
                       <ArrowLeft className="mr-2 h-4 w-4" /> Leave Lobby
@@ -355,46 +370,124 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                       </Button>
                   </div>
               </div>
-              <Card className="bg-slate-900 border-slate-800 shadow-xl overflow-hidden">
-                  <CardHeader className="bg-slate-950/50 border-b border-slate-800">
-                      <CardTitle className="flex justify-between items-center text-white">
-                          <div className="flex items-center gap-2">
-                              <Users className="w-5 h-5 text-primary" />
-                              <span>Players ({lobbyState.players.length}/8)</span>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Players List */}
+                  <Card className="lg:col-span-2 bg-slate-900 border-slate-800 shadow-xl overflow-hidden">
+                      <CardHeader className="bg-slate-950/50 border-b border-slate-800">
+                          <CardTitle className="flex justify-between items-center text-white">
+                              <div className="flex items-center gap-2">
+                                  <Users className="w-5 h-5 text-primary" />
+                                  <span>Players ({lobbyState.players.length}/8)</span>
+                              </div>
+                              {isHost && (
+                                  <Button onClick={startMatch} disabled={lobbyState.players.length < 2} className="btn-kid-primary">
+                                      <Play className="w-4 h-4 mr-2" /> Start Match
+                                  </Button>
+                              )}
+                          </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-6">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {lobbyState.players.map(p => (
+                                  <div key={p.id} className="flex items-center gap-4 p-4 bg-slate-800/30 rounded-xl border border-slate-700/50 transition-all hover:bg-slate-800/50">
+                                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center font-bold text-white shadow-inner">
+                                          {p.username.charAt(0).toUpperCase()}
+                                      </div>
+                                      <div className="flex-1">
+                                          <div className="font-bold text-slate-200">{p.username}</div>
+                                          {p.id === lobbyState.hostId && (
+                                              <div className="text-xs font-bold text-yellow-500 flex items-center gap-1 mt-0.5">
+                                                  <Crown className="w-3 h-3" /> HOST
+                                              </div>
+                                          )}
+                                      </div>
+                                  </div>
+                              ))}
+                              {Array.from({ length: Math.max(0, 8 - lobbyState.players.length) }).map((_, i) => (
+                                  <div key={`empty-${i}`} className="flex items-center gap-4 p-4 border-2 border-dashed border-slate-800 rounded-xl opacity-40">
+                                      <div className="w-10 h-10 rounded-full bg-slate-800" />
+                                      <span className="text-slate-500 font-medium italic">Waiting for player...</span>
+                                  </div>
+                              ))}
                           </div>
-                          {isHost && (
-                              <Button onClick={startMatch} disabled={lobbyState.players.length < 2} className="btn-kid-primary">
-                                  <Play className="w-4 h-4 mr-2" /> Start Match
-                              </Button>
-                          )}
-                      </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {lobbyState.players.map(p => (
-                              <div key={p.id} className="flex items-center gap-4 p-4 bg-slate-800/30 rounded-xl border border-slate-700/50 transition-all hover:bg-slate-800/50">
-                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center font-bold text-white shadow-inner">
-                                      {p.username.charAt(0).toUpperCase()}
+                      </CardContent>
+                  </Card>
+                  {/* Lobby Settings */}
+                  <Card className="bg-slate-900 border-slate-800 shadow-xl">
+                      <CardHeader className="bg-slate-950/50 border-b border-slate-800">
+                          <CardTitle className="flex items-center gap-2 text-white">
+                              <Settings className="w-5 h-5 text-slate-400" />
+                              Match Settings
+                          </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-6 space-y-8">
+                          {/* Score Limit */}
+                          <div className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2 text-white font-bold">
+                                      <Trophy className="w-4 h-4 text-yellow-500" />
+                                      Score Limit
                                   </div>
-                                  <div className="flex-1">
-                                      <div className="font-bold text-slate-200">{p.username}</div>
-                                      {p.id === lobbyState.hostId && (
-                                          <div className="text-xs font-bold text-yellow-500 flex items-center gap-1 mt-0.5">
-                                              <Crown className="w-3 h-3" /> HOST
-                                          </div>
-                                      )}
+                                  <span className="font-mono text-primary font-bold">
+                                      {lobbyState.settings.scoreLimit === 0 ? 'Unlimited' : lobbyState.settings.scoreLimit}
+                                  </span>
+                              </div>
+                              {isHost ? (
+                                  <Slider
+                                      value={[lobbyState.settings.scoreLimit]}
+                                      min={0}
+                                      max={10}
+                                      step={1}
+                                      onValueChange={(vals) => updateSettings({ scoreLimit: vals[0] })}
+                                      className="py-2"
+                                  />
+                              ) : (
+                                  <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                                      <div
+                                          className="h-full bg-slate-600"
+                                          style={{ width: `${(lobbyState.settings.scoreLimit / 10) * 100}%` }}
+                                      />
                                   </div>
+                              )}
+                              <p className="text-xs text-slate-500">
+                                  Goals required to win. Set to 0 for unlimited.
+                              </p>
+                          </div>
+                          {/* Time Limit */}
+                          <div className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2 text-white font-bold">
+                                      <Clock className="w-4 h-4 text-blue-500" />
+                                      Time Limit
+                                  </div>
+                                  <span className="font-mono text-primary font-bold">
+                                      {lobbyState.settings.timeLimit === 0 ? 'Unlimited' : `${Math.floor(lobbyState.settings.timeLimit / 60)}m`}
+                                  </span>
                               </div>
-                          ))}
-                          {Array.from({ length: Math.max(0, 8 - lobbyState.players.length) }).map((_, i) => (
-                              <div key={`empty-${i}`} className="flex items-center gap-4 p-4 border-2 border-dashed border-slate-800 rounded-xl opacity-40">
-                                  <div className="w-10 h-10 rounded-full bg-slate-800" />
-                                  <span className="text-slate-500 font-medium italic">Waiting for player...</span>
-                              </div>
-                          ))}
-                      </div>
-                  </CardContent>
-              </Card>
+                              {isHost ? (
+                                  <Slider
+                                      value={[lobbyState.settings.timeLimit]}
+                                      min={0}
+                                      max={600}
+                                      step={60}
+                                      onValueChange={(vals) => updateSettings({ timeLimit: vals[0] })}
+                                      className="py-2"
+                                  />
+                              ) : (
+                                  <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                                      <div
+                                          className="h-full bg-slate-600"
+                                          style={{ width: `${(lobbyState.settings.timeLimit / 600) * 100}%` }}
+                                      />
+                                  </div>
+                              )}
+                              <p className="text-xs text-slate-500">
+                                  Match duration in minutes. Set to 0 for unlimited.
+                              </p>
+                          </div>
+                      </CardContent>
+                  </Card>
+              </div>
               {!isHost && (
                   <div className="flex items-center justify-center gap-3 text-slate-400 animate-pulse py-8">
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -425,7 +518,7 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
         <GameCanvas
             externalState={gameState}
             onInput={handleInput}
-            winningScore={3}
+            winningScore={lobbyState?.settings.scoreLimit ?? 3}
             currentUserId={profile?.id}
         />
         {/* Chat Overlay */}

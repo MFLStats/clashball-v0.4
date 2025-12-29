@@ -482,9 +482,9 @@ export function GameCanvas({
                 } else if (currentState.score.blue > currentState.score.red) {
                     handleGameOver('blue');
                 }
-            } else if (currentState.score.red >= winningScore && !currentState.isOvertime) {
+            } else if (winningScore > 0 && currentState.score.red >= winningScore && !currentState.isOvertime) {
                 handleGameOver('red');
-            } else if (currentState.score.blue >= winningScore && !currentState.isOvertime) {
+            } else if (winningScore > 0 && currentState.score.blue >= winningScore && !currentState.isOvertime) {
                 handleGameOver('blue');
             } else {
                 if (particles) {
@@ -560,7 +560,7 @@ export function GameCanvas({
         </div>
         <div className="flex flex-col items-center">
             <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">
-                {gameOver ? 'MATCH ENDED' : isOvertime ? 'SUDDEN DEATH' : `First to ${winningScore}`}
+                {gameOver ? 'MATCH ENDED' : isOvertime ? 'SUDDEN DEATH' : winningScore > 0 ? `First to ${winningScore}` : 'Unlimited Score'}
             </div>
             <div className={`px-3 py-1 rounded text-white font-mono text-sm border ${isOvertime ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400 animate-pulse' : 'bg-slate-800 border-slate-700'}`}>
                 {isOvertime ? 'OVERTIME' : `${minutes}:${seconds.toString().padStart(2, '0')}`}

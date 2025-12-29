@@ -1,5 +1,5 @@
 import { PhysicsEngine, GameState } from '@shared/physics';
-import { WSMessage, PlayerMatchStats } from '@shared/types';
+import { WSMessage, PlayerMatchStats, LobbySettings } from '@shared/types';
 export class Match {
   id: string;
   players: Map<string, { ws: WebSocket; team: 'red' | 'blue'; username: string }>;
@@ -7,13 +7,20 @@ export class Match {
   interval: any;
   onEnd: (matchId: string, winner: 'red' | 'blue') => void;
   matchStats: Map<string, PlayerMatchStats> = new Map();
+  settings: LobbySettings;
   private lastTime: number = Date.now();
-  constructor(id: string, players: { id: string; ws: WebSocket; team: 'red' | 'blue'; username: string }[], onEnd: (id: string, winner: 'red' | 'blue') => void) {
+  constructor(
+    id: string,
+    players: { id: string; ws: WebSocket; team: 'red' | 'blue'; username: string }[],
+    settings: LobbySettings,
+    onEnd: (id: string, winner: 'red' | 'blue') => void
+  ) {
     this.id = id;
     this.players = new Map();
+    this.settings = settings;
     this.onEnd = onEnd;
-    // Initialize Game State
-    this.gameState = PhysicsEngine.createInitialState();
+    // Initialize Game State with custom time limit
+    this.gameState = PhysicsEngine.createInitialState(settings.timeLimit);
     // Override players in state with actual connected players
     this.gameState.players = players.map(p => ({
       id: p.id,
@@ -116,12 +123,13 @@ export class Match {
             // Fallback for extremely rare edge cases (should not happen with Golden Goal logic)
             this.endGame('red');
         }
-    } else if (this.gameState.score.red >= 3 && !this.gameState.isOvertime) {
-        // Regulation Mercy Rule / Score Limit
-        this.endGame('red');
-    } else if (this.gameState.score.blue >= 3 && !this.gameState.isOvertime) {
-        // Regulation Mercy Rule / Score Limit
-        this.endGame('blue');
+    } else if (this.settings.scoreLimit > 0) {
+        // Check Score Limit (Mercy Rule)
+        if (this.gameState.score.red >= this.settings.scoreLimit && !this.gameState.isOvertime) {
+            this.endGame('red');
+        } else if (this.gameState.score.blue >= this.settings.scoreLimit && !this.gameState.isOvertime) {
+            this.endGame('blue');
+        }
     }
   }
   private endGame(winner: 'red' | 'blue') {

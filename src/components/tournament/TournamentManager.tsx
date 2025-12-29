@@ -92,7 +92,7 @@ export function TournamentManager({ onExit, participants, startTime, tournamentN
      placeholders.push({ id: uuidv4(), round: 2, matchIndex: 0, player1: null, player2: null, p1Ready: false, p2Ready: false, status: 'pending' });
      return placeholders;
   }, []);
-  const generateRandomBracket = useCallback(() => {
+  const generateSeededBracket = useCallback(() => {
     let allPlayers: { name: string; rating: number; id: string }[] = [];
     if (participants && participants.length > 0) {
         allPlayers = participants.map(p => ({ name: p.username, rating: p.rating, id: p.userId }));
@@ -108,28 +108,32 @@ export function TournamentManager({ onExit, participants, startTime, tournamentN
             allPlayers.push({ name: botName, rating: Math.floor(Math.random() * 600) + 800, id: `bot-${i}` });
         });
     }
-    // Random Shuffle instead of Skill Sort
-    allPlayers = allPlayers
-        .map(value => ({ value, sort: Math.random() }))
-        .sort((a, b) => a.sort - b.sort)
-        .map(({ value }) => value);
+    // Sort by rating descending for seeding
+    allPlayers.sort((a, b) => b.rating - a.rating);
     const top8 = allPlayers.slice(0, 8);
     // Ensure user is in top 8 if not already (rare edge case with >8 participants)
     if (!top8.some(p => p.name === userTeamName)) {
         const userIndex = allPlayers.findIndex(p => p.name === userTeamName);
         if (userIndex !== -1) {
             const userEntry = allPlayers[userIndex];
-            // Replace a random bot/player in top 8 with user
-            const replaceIdx = Math.floor(Math.random() * 8);
-            top8[replaceIdx] = userEntry;
+            // Replace the lowest rated player (index 7) with user
+            top8[7] = userEntry;
+            // Re-sort just in case user isn't lowest
+            top8.sort((a, b) => b.rating - a.rating);
         }
     }
     const seeds = top8.map(p => ({ username: p.name, userId: p.id, country: 'US', rank: 'Bronze', rating: p.rating }));
+    // Standard Seeding Pattern for 8 players:
+    // Match 0: 1 vs 8 (Indices 0, 7)
+    // Match 1: 4 vs 5 (Indices 3, 4)
+    // Match 2: 3 vs 6 (Indices 2, 5)
+    // Match 3: 2 vs 7 (Indices 1, 6)
+    // Note: Bracket.tsx connects Match 0 & 1 to Semi 0, Match 2 & 3 to Semi 1.
     const initialMatches: TournamentMatch[] = [
-        { id: uuidv4(), round: 0, matchIndex: 0, player1: seeds[0], player2: seeds[1], p1Ready: true, p2Ready: true, status: 'scheduled' },
-        { id: uuidv4(), round: 0, matchIndex: 1, player1: seeds[2], player2: seeds[3], p1Ready: true, p2Ready: true, status: 'scheduled' },
-        { id: uuidv4(), round: 0, matchIndex: 2, player1: seeds[4], player2: seeds[5], p1Ready: true, p2Ready: true, status: 'scheduled' },
-        { id: uuidv4(), round: 0, matchIndex: 3, player1: seeds[6], player2: seeds[7], p1Ready: true, p2Ready: true, status: 'scheduled' },
+        { id: uuidv4(), round: 0, matchIndex: 0, player1: seeds[0], player2: seeds[7], p1Ready: true, p2Ready: true, status: 'scheduled' },
+        { id: uuidv4(), round: 0, matchIndex: 1, player1: seeds[3], player2: seeds[4], p1Ready: true, p2Ready: true, status: 'scheduled' },
+        { id: uuidv4(), round: 0, matchIndex: 2, player1: seeds[2], player2: seeds[5], p1Ready: true, p2Ready: true, status: 'scheduled' },
+        { id: uuidv4(), round: 0, matchIndex: 3, player1: seeds[1], player2: seeds[6], p1Ready: true, p2Ready: true, status: 'scheduled' },
     ];
     for (let i = 0; i < 2; i++) initialMatches.push({ id: uuidv4(), round: 1, matchIndex: i, player1: null, player2: null, p1Ready: false, p2Ready: false, status: 'pending' });
     initialMatches.push({ id: uuidv4(), round: 2, matchIndex: 0, player1: null, player2: null, p1Ready: false, p2Ready: false, status: 'pending' });
@@ -144,9 +148,9 @@ export function TournamentManager({ onExit, participants, startTime, tournamentN
         setMatches(generatePlaceholders());
     } else {
         setIsWaiting(false);
-        generateRandomBracket();
+        generateSeededBracket();
     }
-  }, [startTime, matches.length, generateRandomBracket, generatePlaceholders, isOnline]);
+  }, [startTime, matches.length, generateSeededBracket, generatePlaceholders, isOnline]);
   // Timer Logic (Visual Only)
   useEffect(() => {
     if (tournamentState !== 'bracket') return;
@@ -157,12 +161,12 @@ export function TournamentManager({ onExit, participants, startTime, tournamentN
             setTimeRemaining(diff);
             if (diff <= 0 && !isOnline) {
                 setIsWaiting(false);
-                generateRandomBracket();
+                generateSeededBracket();
             }
         }
     }, 1000);
     return () => clearInterval(interval);
-  }, [tournamentState, isWaiting, startTime, generateRandomBracket, isOnline]);
+  }, [tournamentState, isWaiting, startTime, generateSeededBracket, isOnline]);
   const formatTime = (ms: number) => {
       const seconds = Math.ceil(ms / 1000);
       const m = Math.floor(seconds / 60);

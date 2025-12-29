@@ -31,7 +31,7 @@ export function Leaderboard() {
   }, [mode]);
   const topThree = entries.slice(0, 3);
   const restOfPlayers = entries.slice(3);
-  const filteredPlayers = restOfPlayers.filter(p => 
+  const filteredPlayers = restOfPlayers.filter(p =>
     p.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
   return (
@@ -43,7 +43,7 @@ export function Leaderboard() {
         </div>
         <div>
             <h1 className="text-4xl font-display font-bold text-white mb-2 text-glow">Global Rankings</h1>
-            <p className="text-slate-400 text-lg">Season 1 ��� Top 50 Players</p>
+            <p className="text-slate-400 text-lg">Season 1 • Top 50 Players</p>
         </div>
       </div>
       <Tabs value={mode} onValueChange={(v) => setMode(v as GameMode)} className="w-full animate-slide-up">
@@ -86,8 +86,8 @@ export function Leaderboard() {
                             </h3>
                             <div className="relative w-full md:w-64">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                <Input 
-                                    placeholder="Search player..." 
+                                <Input
+                                    placeholder="Search player..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     className="pl-9 bg-slate-900 border-slate-700 text-white placeholder:text-slate-600 focus:border-primary/50 rounded-xl"

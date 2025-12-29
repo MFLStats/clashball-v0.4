@@ -80,6 +80,7 @@ export function TournamentPage() {
     }
   };
   const isJoined = state?.participants.some(p => p.userId === profile?.id);
+  const timerLabel = state?.status === 'open' ? 'TOURNAMENT STARTS IN' : 'NEXT ROUND IN';
   if (view === 'bracket') {
     return (
       <AppLayout container>
@@ -88,6 +89,7 @@ export function TournamentPage() {
           participants={state?.participants}
           startTime={state?.nextStartTime || Date.now()}
           tournamentName="Blitz Cup"
+          bracket={state?.bracket}
         />
       </AppLayout>
     );
@@ -126,7 +128,7 @@ export function TournamentPage() {
                 <div className="bg-black/30 backdrop-blur-sm px-6 py-3 rounded-2xl border border-white/10 flex items-center gap-4">
                   <Clock className="w-8 h-8 text-blue-400" />
                   <div className="text-left">
-                    <div className="text-xs text-slate-400 font-bold uppercase">Next Round In</div>
+                    <div className="text-xs text-slate-400 font-bold uppercase">{timerLabel}</div>
                     <div className="text-3xl font-mono font-bold text-white tabular-nums tracking-tight">{timeLeft}</div>
                   </div>
                 </div>

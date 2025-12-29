@@ -493,25 +493,45 @@ export class GlobalDurableObject extends DurableObject {
         };
     }
     generateBracket() {
-        // Shuffle participants
-        const shuffled = [...this.tournamentParticipants].sort(() => Math.random() - 0.5);
-        const count = shuffled.length;
+        // Sort participants by rating (descending) for seeding
+        const sortedParticipants = [...this.tournamentParticipants].sort((a, b) => b.rating - a.rating);
+        const count = sortedParticipants.length;
         // Calculate size (next power of 2)
         let size = 2;
         while (size < count) size *= 2;
         // Round 0 Matches
         const matches: TournamentMatch[] = [];
         const byes = size - count;
-        // Create matches
+        // Create slots array filled with participants or null (for byes)
         const slots: (TournamentParticipant | null)[] = new Array(size).fill(null);
         for (let i = 0; i < count; i++) {
-            slots[i] = shuffled[i];
+            slots[i] = sortedParticipants[i];
         }
-        // Now create Round 0 matches
+        // Now create Round 0 matches with standard seeding pattern
+        // For 8 players: 1v8, 4v5, 3v6, 2v7
+        // Indices: (0,7), (3,4), (2,5), (1,6)
+        // This ensures 1 and 2 are on opposite sides of the bracket
         const round0Matches = size / 2;
+        // Helper to get seeded indices
+        // Simple seeding for 8: [0, 7, 3, 4, 2, 5, 1, 6]
+        // This maps to: Match 0 (1v8), Match 1 (4v5), Match 2 (3v6), Match 3 (2v7)
+        // Note: Bracket.tsx connects Match 0 & 1 to Semi 0, Match 2 & 3 to Semi 1.
+        // So Semi 0 is (1v8) vs (4v5). Semi 1 is (3v6) vs (2v7).
+        // This is correct: 1 plays 4 in semis, 2 plays 3 in semis.
+        const seedOrder = [0, 7, 3, 4, 2, 5, 1, 6];
+        // Fallback for non-8 sizes (simple sequential for now, or expand logic if needed)
+        // For MVP with max 8-16 players, we can stick to a simple fill if not exactly 8
+        // But let's try to be generic if possible.
+        // For now, let's use the explicit 8-seed pattern if size is 8, else sequential
         for (let i = 0; i < round0Matches; i++) {
-            const p1 = slots[i * 2];
-            const p2 = slots[i * 2 + 1];
+            let p1Index = i * 2;
+            let p2Index = i * 2 + 1;
+            if (size === 8) {
+                p1Index = seedOrder[i * 2];
+                p2Index = seedOrder[i * 2 + 1];
+            }
+            const p1 = slots[p1Index];
+            const p2 = slots[p2Index];
             const matchId = crypto.randomUUID();
             const match: TournamentMatch = {
                 id: matchId,

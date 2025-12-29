@@ -11,6 +11,10 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     // Simplified: Delegate handshake entirely to Durable Object to prevent header casing issues
     // Added explicit Upgrade header check to fail fast for non-WS requests
     app.get('/api/ws', async (c) => {
+        const upgrade = c.req.header('Upgrade');
+        if (!upgrade || upgrade.toLowerCase() !== 'websocket') {
+            return c.text('Expected Upgrade: websocket', 426);
+        }
         const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
         // Pass the raw request to the DO. The DO's fetch method will handle the Upgrade check
         // and acceptWebSocket call.

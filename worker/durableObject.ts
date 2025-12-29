@@ -45,7 +45,9 @@ export class GlobalDurableObject extends DurableObject {
     }
     // --- WebSocket Handling (Hibernation API) ---
     async fetch(request: Request): Promise<Response> {
+        const url = new URL(request.url);
         const upgradeHeader = request.headers.get('Upgrade');
+        console.log(`[DurableObject] Fetch: ${url.pathname}, Upgrade: ${upgradeHeader}`);
         if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
             return new Response('Durable Object expected Upgrade: websocket', { status: 426 });
         }
@@ -74,6 +76,7 @@ export class GlobalDurableObject extends DurableObject {
         }
     }
     async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
+        console.log(`[DurableObject] WS Close: ${code} ${reason}`);
         this.handleDisconnect(ws);
     }
     async webSocketError(ws: WebSocket, error: any) {
@@ -514,7 +517,7 @@ export class GlobalDurableObject extends DurableObject {
             if (profiles.length < 2) return null; // Need at least 2 players to form a "team" context for ranking usually
             const first = profiles[0].teams || [];
             // Find intersection of all players' team lists
-            const common = first.filter(teamId =>
+            const common = first.filter(teamId => 
                 profiles.every(p => (p.teams || []).includes(teamId))
             );
             return common.length > 0 ? common[0] : null; // Return first common team found

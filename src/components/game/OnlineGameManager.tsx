@@ -36,8 +36,9 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   const wsRef = useRef<WebSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const lastPingTimeRef = useRef<number>(0);
-  const connectionLock = useRef(false);
   const isMountedRef = useRef(true);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -128,10 +129,11 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         return;
     }
     setStatus('connecting');
+    // Strict protocol handling
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/api/ws`;
-    console.log(`Connecting to WebSocket: ${wsUrl}`);
+    console.log(`Connecting to WebSocket: ${wsUrl} (Attempt ${reconnectAttemptsRef.current + 1})`);
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
     ws.onopen = () => {
@@ -139,6 +141,9 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
           ws.close();
           return;
       }
+      if (ws !== wsRef.current) return;
+      console.log('WebSocket Connected');
+      reconnectAttemptsRef.current = 0;
       setStatus('searching');
       // Join Queue
       ws.send(JSON.stringify({
@@ -159,27 +164,32 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     };
     ws.onclose = (event) => {
       if (!isMountedRef.current) return;
-      console.log('WebSocket closed', event.code, event.reason);
-      // Only show error if it wasn't a clean close initiated by us (usually)
-      if (status !== 'error') {
+      if (ws !== wsRef.current) return;
+      console.log(`WebSocket closed: Code ${event.code}, Reason: ${event.reason || 'No reason provided'}`);
+      wsRef.current = null;
+      // Reconnection Logic
+      if (reconnectAttemptsRef.current < 5) {
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000);
+          reconnectAttemptsRef.current++;
+          console.log(`Reconnecting in ${delay}ms...`);
+          reconnectTimeoutRef.current = setTimeout(() => {
+              if (isMountedRef.current) connect();
+          }, delay);
+      } else {
           setStatus('error');
       }
-      wsRef.current = null;
     };
     ws.onerror = (error) => {
       console.error('WebSocket connection error', error);
-      if (isMountedRef.current) {
-          setStatus('error');
-      }
     };
-  }, [userId, username, mode, onExit, handleMessage, status]);
+  }, [userId, username, mode, onExit, handleMessage]);
   // Initial Connection
   useEffect(() => {
-    if (connectionLock.current) return;
-    connectionLock.current = true;
     connect();
     return () => {
-      connectionLock.current = false;
+      if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+      }
       if (wsRef.current) {
         // Try to leave queue gracefully
         if (wsRef.current.readyState === WebSocket.OPEN) {
@@ -227,6 +237,11 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       if (wsRef.current) {
           wsRef.current.close();
           wsRef.current = null;
+      }
+      reconnectAttemptsRef.current = 0;
+      if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
       }
       connect();
   }, [connect]);

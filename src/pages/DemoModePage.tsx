@@ -3,12 +3,18 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { GameCanvas } from '@/components/game/GameCanvas';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Users, Zap } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ArrowLeft, Users, Zap, Bot } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { GameMode } from '@shared/types';
 export function DemoModePage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<GameMode>('1v1');
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+  const [resetKey, setResetKey] = useState(0);
+  const handlePlayAgain = () => {
+    setResetKey(prev => prev + 1);
+  };
   return (
     <AppLayout container>
       <div className="space-y-8 animate-fade-in pb-12">
@@ -22,36 +28,56 @@ export function DemoModePage() {
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Team Mode Demo</span>
           </div>
         </div>
-        {/* Mode Selector */}
+        {/* Controls Container */}
         <div className="flex flex-col items-center space-y-6">
             <div className="text-center">
                 <h1 className="text-4xl font-display font-bold text-white mb-2">Test Arena</h1>
                 <p className="text-slate-400">Experience 2v2, 3v3, and 4v4 gameplay with bots.</p>
             </div>
-            <Tabs value={mode} onValueChange={(v) => setMode(v as GameMode)} className="w-full max-w-2xl">
-                <TabsList className="grid w-full grid-cols-4 bg-slate-900/80 backdrop-blur-md border border-slate-800 p-1 h-auto rounded-xl shadow-lg">
-                    {(['1v1', '2v2', '3v3', '4v4'] as GameMode[]).map((m) => (
-                        <TabsTrigger
-                            key={m}
-                            value={m}
-                            className="px-4 py-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-slate-400 font-bold transition-all"
-                        >
-                            {m}
-                        </TabsTrigger>
-                    ))}
-                </TabsList>
-            </Tabs>
+            <div className="flex flex-col md:flex-row gap-4 w-full max-w-3xl">
+                {/* Mode Selector */}
+                <Tabs value={mode} onValueChange={(v) => setMode(v as GameMode)} className="flex-1">
+                    <TabsList className="grid w-full grid-cols-4 bg-slate-900/80 backdrop-blur-md border border-slate-800 p-1 h-12 rounded-xl shadow-lg">
+                        {(['1v1', '2v2', '3v3', '4v4'] as GameMode[]).map((m) => (
+                            <TabsTrigger
+                                key={m}
+                                value={m}
+                                className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-slate-400 font-bold transition-all h-full"
+                            >
+                                {m}
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+                </Tabs>
+                {/* Difficulty Selector */}
+                <div className="w-full md:w-48">
+                    <Select value={difficulty} onValueChange={(v: any) => setDifficulty(v)}>
+                        <SelectTrigger className="bg-slate-900/80 border-slate-800 text-white h-12 rounded-xl">
+                            <div className="flex items-center gap-2">
+                                <Bot className="w-4 h-4 text-slate-400" />
+                                <SelectValue placeholder="Difficulty" />
+                            </div>
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                            <SelectItem value="easy" className="focus:bg-slate-800">Easy Bot</SelectItem>
+                            <SelectItem value="medium" className="focus:bg-slate-800">Medium Bot</SelectItem>
+                            <SelectItem value="hard" className="focus:bg-slate-800">Hard Bot</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
         </div>
         {/* Game Canvas */}
         <div className="border-4 border-slate-800 rounded-xl overflow-hidden shadow-2xl">
-            {/* Key prop forces remount on mode change to reset physics state */}
+            {/* Key prop forces remount on mode or resetKey change to reset physics state */}
             <GameCanvas
-                key={mode}
+                key={`${mode}-${resetKey}`}
                 mode={mode}
                 winningScore={3}
-                botDifficulty="medium"
+                botDifficulty={difficulty}
                 playerNames={{ red: 'You', blue: 'Bot Team' }}
                 onLeave={() => navigate('/')}
+                onPlayAgain={handlePlayAgain}
             />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center text-sm text-slate-500">

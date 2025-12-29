@@ -37,8 +37,8 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
     if (!allPlayers.some(p => p.name === userTeamName)) {
         allPlayers.unshift({ name: userTeamName, rating: profile?.stats['1v1'].rating || 1200 });
     }
-    // Fill with bots if needed
-    const needed = 8 - allPlayers.length;
+    // Fill with bots if needed (ensure at least 8 for a full bracket)
+    const needed = Math.max(0, 8 - allPlayers.length);
     if (needed > 0) {
         const availableBots = BOT_NAMES.filter(b => !allPlayers.some(p => p.name === b));
         const shuffledBots = [...availableBots].sort(() => Math.random() - 0.5).slice(0, needed);
@@ -48,6 +48,22 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
     }
     // 2. Sort by Rating (Descending)
     allPlayers.sort((a, b) => b.rating - a.rating);
+    // 2b. Force User into Top 8 if not present (Seeding Guarantee)
+    // We check if the user is within the top 8 seeds. If not, we force them into the 8th seed spot
+    // by replacing the player at index 7. This ensures the user always gets to play.
+    const top8 = allPlayers.slice(0, 8);
+    const userInTop8 = top8.some(p => p.name === userTeamName);
+    if (!userInTop8) {
+        const userIndex = allPlayers.findIndex(p => p.name === userTeamName);
+        if (userIndex !== -1) {
+            const userEntry = allPlayers[userIndex];
+            // Remove user from their current low-rank position
+            allPlayers.splice(userIndex, 1);
+            // Insert user at index 7 (8th seed)
+            // This bumps the previous 8th seed down to 9th (out of the tournament)
+            allPlayers.splice(7, 0, userEntry);
+        }
+    }
     const seeds = allPlayers.slice(0, 8).map(p => p.name);
     // 3. Create Bracket with Seeding (1v8, 4v5, 2v7, 3v6)
     const initialMatches: TournamentMatch[] = [

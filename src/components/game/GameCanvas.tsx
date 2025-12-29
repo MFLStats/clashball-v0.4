@@ -39,9 +39,11 @@ export function GameCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
-  // Initialize with correct mode
-  const gameStateRef = useRef<GameState>(PhysicsEngine.createInitialState(180, 'medium', mode));
-  const displayStateRef = useRef<GameState>(PhysicsEngine.createInitialState(180, 'medium', mode));
+  // Determine Field Size based on Mode
+  const fieldSize = mode === '4v4' ? 'large' : 'medium';
+  // Initialize with correct mode and field size
+  const gameStateRef = useRef<GameState>(PhysicsEngine.createInitialState(180, fieldSize, mode));
+  const displayStateRef = useRef<GameState>(PhysicsEngine.createInitialState(180, fieldSize, mode));
   const keysRef = useRef<Record<string, boolean>>({});
   const touchInputRef = useRef<{ move: { x: number; y: number }; kick: boolean }>({
     move: { x: 0, y: 0 },
@@ -663,8 +665,9 @@ export function GameCanvas({
     return () => cancelAnimationFrame(requestRef.current);
   }, [score, isPaused, gameOver, winningScore, onInput, handleGameOver, botDifficulty, render, particles]);
   const handleReset = () => {
-    gameStateRef.current = PhysicsEngine.createInitialState(180, 'medium', mode);
-    displayStateRef.current = PhysicsEngine.createInitialState(180, 'medium', mode);
+    // Use the derived fieldSize here
+    gameStateRef.current = PhysicsEngine.createInitialState(180, fieldSize, mode);
+    displayStateRef.current = PhysicsEngine.createInitialState(180, fieldSize, mode);
     // Reset Stats
     const players = gameStateRef.current.players;
     players.forEach(p => {

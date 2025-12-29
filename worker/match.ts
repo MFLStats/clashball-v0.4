@@ -107,19 +107,21 @@ export class Match {
     }
     // Check Win Condition (Score or Time)
     if (this.gameState.status === 'ended') {
-        // Time up - determine winner by score
+        // Game ended via Time Expiry (Regulation) or Golden Goal (Overtime)
         if (this.gameState.score.red > this.gameState.score.blue) {
             this.endGame('red');
         } else if (this.gameState.score.blue > this.gameState.score.red) {
             this.endGame('blue');
         } else {
-            // Draw - Default to Red for MVP simplicity
+            // Fallback for extremely rare edge cases (should not happen with Golden Goal logic)
             this.endGame('red');
         }
-    } else if (this.gameState.score.red >= 3) {
-      this.endGame('red');
-    } else if (this.gameState.score.blue >= 3) {
-      this.endGame('blue');
+    } else if (this.gameState.score.red >= 3 && !this.gameState.isOvertime) {
+        // Regulation Mercy Rule / Score Limit
+        this.endGame('red');
+    } else if (this.gameState.score.blue >= 3 && !this.gameState.isOvertime) {
+        // Regulation Mercy Rule / Score Limit
+        this.endGame('blue');
     }
   }
   private endGame(winner: 'red' | 'blue') {

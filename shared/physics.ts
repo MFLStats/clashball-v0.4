@@ -40,6 +40,7 @@ export interface GameState {
   field: Field;
   status: 'playing' | 'goal' | 'ended';
   timeRemaining: number;
+  isOvertime: boolean;
 }
 export class PhysicsEngine {
   // Arcade Physics Constants - Tuned for Timestep Independence (Units per Second)
@@ -103,7 +104,8 @@ export class PhysicsEngine {
         goalHeight: this.GOAL_HEIGHT
       },
       status: 'playing',
-      timeRemaining: 180 // 3 minutes in seconds
+      timeRemaining: 180, // 3 minutes in seconds
+      isOvertime: false
     };
   }
   static update(state: GameState, dt: number): { state: GameState; events: GameEvent[] } {
@@ -115,8 +117,17 @@ export class PhysicsEngine {
     newState.timeRemaining -= dt;
     if (newState.timeRemaining <= 0) {
         newState.timeRemaining = 0;
-        newState.status = 'ended';
-        events.push({ type: 'whistle' });
+        // Check for Overtime Condition
+        if (newState.score.red === newState.score.blue) {
+            if (!newState.isOvertime) {
+                newState.isOvertime = true;
+                // We could push an event here if we wanted a specific sound for OT start
+            }
+        } else {
+            // Regulation ended with a winner
+            newState.status = 'ended';
+            events.push({ type: 'whistle' });
+        }
     }
     // Calculate time-adjusted damping
     const playerDamping = Math.pow(this.PLAYER_DAMPING_BASE, dt * 60);
@@ -190,8 +201,8 @@ export class PhysicsEngine {
                 if (b.lastTouch.team === scoringTeam) {
                     scorerId = b.lastTouch.id;
                     // Check Assist
-                    if (b.previousTouch &&
-                        b.previousTouch.team === scoringTeam &&
+                    if (b.previousTouch && 
+                        b.previousTouch.team === scoringTeam && 
                         b.previousTouch.id !== scorerId &&
                         Math.abs(b.lastTouch.time - b.previousTouch.time) < this.ASSIST_WINDOW) {
                         assisterId = b.previousTouch.id;
@@ -202,7 +213,13 @@ export class PhysicsEngine {
                 }
             }
             events.push({ type: 'goal', team: scoringTeam, scorerId, assisterId });
-            this.resetPositions(newState);
+            // GOLDEN GOAL LOGIC
+            if (newState.isOvertime) {
+                newState.status = 'ended';
+                events.push({ type: 'whistle' });
+            } else {
+                this.resetPositions(newState);
+            }
             return true;
         }
         return false;

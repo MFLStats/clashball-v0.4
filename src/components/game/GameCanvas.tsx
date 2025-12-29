@@ -47,6 +47,7 @@ export function GameCanvas({
   const [score, setScore] = useState({ red: 0, blue: 0 });
   const [isPaused, setIsPaused] = useState(false);
   const [gameOver, setGameOver] = useState<'red' | 'blue' | null>(null);
+  const [isOvertime, setIsOvertime] = useState(false);
   // STRICT ZUSTAND RULE: Select primitives individually
   const showNames = useSettingsStore(s => s.showNames);
   const particles = useSettingsStore(s => s.particles);
@@ -267,6 +268,25 @@ export function GameCanvas({
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 2.5;
     ctx.stroke();
+    // --- 6. Overtime Overlay ---
+    if (state.isOvertime) {
+        ctx.save();
+        ctx.font = 'bold 48px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 10;
+        // Pulse effect
+        const scale = 1 + Math.sin(Date.now() / 200) * 0.05;
+        ctx.translate(width / 2, height / 4);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = '#fbbf24'; // Gold
+        ctx.fillText('GOLDEN GOAL', 0, 0);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeText('GOLDEN GOAL', 0, 0);
+        ctx.restore();
+    }
   }, [currentUserId, showNames]);
   // Game Loop
   useEffect(() => {
@@ -369,6 +389,7 @@ export function GameCanvas({
         current.timeRemaining = targetState.timeRemaining;
         current.field = targetState.field;
         current.status = targetState.status;
+        current.isOvertime = targetState.isOvertime;
       } else {
         // Local Mode: Run physics
         const { state: newState, events } = PhysicsEngine.update(gameStateRef.current, dt);
@@ -405,14 +426,23 @@ export function GameCanvas({
         });
       }
       const currentState = displayStateRef.current;
+      // Update Overtime State for UI
+      setIsOvertime(currentState.isOvertime);
       // Check for score change (Visual only for online, authoritative for local)
       if (currentState.score.red !== score.red || currentState.score.blue !== score.blue) {
         setScore(currentState.score);
         // Only trigger local win condition if not online (server sends game_over)
         if (!targetState) {
-            if (currentState.score.red >= winningScore) {
+            if (currentState.status === 'ended') {
+                // Golden Goal or Time Limit reached with winner
+                if (currentState.score.red > currentState.score.blue) {
+                    handleGameOver('red');
+                } else if (currentState.score.blue > currentState.score.red) {
+                    handleGameOver('blue');
+                }
+            } else if (currentState.score.red >= winningScore && !currentState.isOvertime) {
                 handleGameOver('red');
-            } else if (currentState.score.blue >= winningScore) {
+            } else if (currentState.score.blue >= winningScore && !currentState.isOvertime) {
                 handleGameOver('blue');
             } else {
                 if (particles) {
@@ -433,7 +463,8 @@ export function GameCanvas({
           } else if (currentState.score.blue > currentState.score.red) {
               handleGameOver('blue');
           } else {
-              handleGameOver('red'); // Draw default
+              // Should not happen with Golden Goal logic, but fallback
+              handleGameOver('red'); 
           }
       }
       // 3. Render
@@ -459,24 +490,25 @@ export function GameCanvas({
     setScore({ red: 0, blue: 0 });
     setGameOver(null);
     setIsPaused(false);
+    setIsOvertime(false);
     lastTimeRef.current = performance.now();
   };
   // Format time remaining
-  const timeRemaining = latestExternalStateRef.current 
-    ? latestExternalStateRef.current.timeRemaining 
+  const timeRemaining = latestExternalStateRef.current
+    ? latestExternalStateRef.current.timeRemaining
     : gameStateRef.current.timeRemaining;
   const minutes = Math.floor(Math.max(0, timeRemaining) / 60);
   const seconds = Math.floor(Math.max(0, timeRemaining) % 60);
   // Prepare data for summary
   const summaryStats = finalStats || localStatsRef.current;
-  const summaryPlayers = externalState 
+  const summaryPlayers = externalState
     ? externalState.players.map(p => ({ id: p.id, username: p.username, team: p.team }))
     : gameStateRef.current.players.map(p => ({ id: p.id, username: p.username, team: p.team }));
   // Determine user team for victory/defeat message
   // In local mode, user is always 'red' (p1)
   // In online mode, we need to find the user in the players list
-  const userTeam = externalState 
-    ? summaryPlayers.find(p => p.id === currentUserId)?.team 
+  const userTeam = externalState
+    ? summaryPlayers.find(p => p.id === currentUserId)?.team
     : 'red';
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-4xl mx-auto">
@@ -488,10 +520,10 @@ export function GameCanvas({
         </div>
         <div className="flex flex-col items-center">
             <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">
-                {gameOver ? 'MATCH ENDED' : `First to ${winningScore}`}
+                {gameOver ? 'MATCH ENDED' : isOvertime ? 'SUDDEN DEATH' : `First to ${winningScore}`}
             </div>
-            <div className="px-3 py-1 bg-slate-800 rounded text-white font-mono text-sm border border-slate-700">
-                {minutes}:{seconds.toString().padStart(2, '0')}
+            <div className={`px-3 py-1 rounded text-white font-mono text-sm border ${isOvertime ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400 animate-pulse' : 'bg-slate-800 border-slate-700'}`}>
+                {isOvertime ? 'OVERTIME' : `${minutes}:${seconds.toString().padStart(2, '0')}`}
             </div>
         </div>
         <div className="flex items-center gap-4">
@@ -511,7 +543,7 @@ export function GameCanvas({
         <TouchControls onUpdate={handleTouchUpdate} />
         {/* Post Match Summary Overlay */}
         {gameOver && (
-            <PostMatchSummary 
+            <PostMatchSummary
                 winner={gameOver}
                 userTeam={userTeam}
                 score={score}

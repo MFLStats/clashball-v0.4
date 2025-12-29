@@ -345,10 +345,11 @@ export function GameCanvas({
       if (touchInputRef.current.kick) {
         p1Input.kick = true;
       }
+      const targetState = latestExternalStateRef.current;
       if (onInput) {
         // Online Mode: Send input to server
         onInput(p1Input);
-      } else {
+      } else if (!targetState) { // FIX: Only run local/bot logic if NOT online (targetState is null)
         // Local Mode: Update local ref
         gameStateRef.current.players[0].input = p1Input;
         // --- Bot Logic (Predictive AI) ---
@@ -398,7 +399,6 @@ export function GameCanvas({
         gameStateRef.current.players[1].input = { move: botMove, kick: botKick };
       }
       // 2. State Update & Interpolation
-      const targetState = latestExternalStateRef.current;
       if (targetState) {
         // Online Mode: Lerp displayState towards targetState
         const factor = 0.2; // Smoothing factor

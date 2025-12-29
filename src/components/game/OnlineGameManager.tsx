@@ -18,7 +18,7 @@ interface ChatMessage {
   id: string;
   sender: string;
   message: string;
-  team: 'red' | 'blue';
+  team: 'red' | 'blue' | 'spectator';
 }
 export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerProps) {
   const profile = useUserStore(s => s.profile);
@@ -55,8 +55,8 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   const chatEndRef = useRef<HTMLDivElement>(null);
   const lastPingTimeRef = useRef<number>(0);
   // Match info state and ref
-  const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' } | null>(null);
-  const matchInfoRef = useRef<{ matchId: string; team: 'red' | 'blue' } | null>(null);
+  const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' | 'spectator' } | null>(null);
+  const matchInfoRef = useRef<{ matchId: string; team: 'red' | 'blue' | 'spectator' } | null>(null);
   useEffect(() => {
     matchInfoRef.current = matchInfo;
   }, [matchInfo]);
@@ -75,8 +75,12 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
           const info = { matchId: msg.matchId, team: msg.team };
           setMatchInfo(info);
           setStatus('playing');
-          const opponents = msg.opponents?.length ? msg.opponents.join(', ') : msg.opponent;
-          toast.success(`Match Found! You are Team ${msg.team.toUpperCase()}${opponents ? ` vs ${opponents}` : ''}`);
+          if (msg.team === 'spectator') {
+              toast.info('Spectating Match');
+          } else {
+              const opponents = msg.opponents?.length ? msg.opponents.join(', ') : msg.opponent;
+              toast.success(`Match Found! You are Team ${msg.team.toUpperCase()}${opponents ? ` vs ${opponents}` : ''}`);
+          }
           break;
         }
         case 'queue_update': {
@@ -113,7 +117,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
               id: crypto.randomUUID(),
               sender: msg.sender || 'Unknown',
               message: msg.message,
-              team: msg.team || 'red'
+              team: msg.team || 'spectator'
             }
           ]);
           break;
@@ -308,15 +312,18 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         </div>
         <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-slate-500">YOU ARE</span>
-            <span className={`px-3 py-1 rounded-full text-white font-bold text-sm ${matchInfo?.team === 'red' ? 'bg-red-500' : 'bg-blue-500'}`}>
-                TEAM {matchInfo?.team.toUpperCase()}
+            <span className={`px-3 py-1 rounded-full text-white font-bold text-sm ${
+                matchInfo?.team === 'red' ? 'bg-red-500' : 
+                matchInfo?.team === 'blue' ? 'bg-blue-500' : 'bg-slate-500'
+            }`}>
+                {matchInfo?.team === 'spectator' ? 'SPECTATING' : `TEAM ${matchInfo?.team.toUpperCase()}`}
             </span>
         </div>
       </div>
       <div className="relative">
         <GameCanvas
             externalState={gameState}
-            onInput={handleInput}
+            onInput={matchInfo?.team === 'spectator' ? undefined : handleInput}
             winningScore={3}
             currentUserId={userId}
             finalStats={finalStats}
@@ -327,7 +334,10 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             <div className="flex-1 overflow-y-auto bg-black/40 backdrop-blur-sm rounded-lg p-2 space-y-1 scrollbar-hide">
                 {chatMessages.map(msg => (
                     <div key={msg.id} className="text-sm text-white drop-shadow-md">
-                        <span className={`font-bold ${msg.team === 'red' ? 'text-red-300' : 'text-blue-300'}`}>
+                        <span className={`font-bold ${
+                            msg.team === 'red' ? 'text-red-300' : 
+                            msg.team === 'blue' ? 'text-blue-300' : 'text-slate-300'
+                        }`}>
                             {msg.sender}:
                         </span>
                         <span className="ml-1">{msg.message}</span>

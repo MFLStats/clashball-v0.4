@@ -433,7 +433,13 @@ export class GlobalDurableObject extends DurableObject {
             username: p.username,
             team: p.team || (i < players.length / 2 ? 'red' : 'blue') as 'red' | 'blue'
         }));
-        const match = new Match(matchId, matchPlayers, spectators, settings, (id, winner) => {
+        // FIX: Map spectators to use 'id' instead of 'userId' to match Match constructor
+        const matchSpectators = spectators.map(s => ({
+            id: s.userId,
+            ws: s.ws,
+            username: s.username
+        }));
+        const match = new Match(matchId, matchPlayers, matchSpectators, settings, (id, winner) => {
             // Retrieve stats before deleting match
             const matchInstance = this.matches.get(id);
             const playerStats = matchInstance ? Object.fromEntries(matchInstance.matchStats) : undefined;
@@ -462,7 +468,7 @@ export class GlobalDurableObject extends DurableObject {
             }
         });
         // Notify Spectators
-        spectators.forEach(s => {
+        matchSpectators.forEach(s => {
             try {
                 const session = this.sessions.get(s.ws);
                 if (session) session.matchId = matchId;
@@ -495,7 +501,7 @@ export class GlobalDurableObject extends DurableObject {
             if (profiles.length < 2) return null; // Need at least 2 players to form a "team" context for ranking usually
             const first = profiles[0].teams || [];
             // Find intersection of all players' team lists
-            const common = first.filter(teamId =>
+            const common = first.filter(teamId => 
                 profiles.every(p => (p.teams || []).includes(teamId))
             );
             return common.length > 0 ? common[0] : null; // Return first common team found

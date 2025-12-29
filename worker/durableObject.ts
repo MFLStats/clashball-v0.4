@@ -32,8 +32,9 @@ export class GlobalDurableObject extends DurableObject {
     sessions: Map<WebSocket, { userId: string; matchId?: string; lobbyCode?: string }> = new Map();
     lobbies: Map<string, Lobby> = new Map();
     leaderboards: Map<GameMode, LeaderboardEntry[]> = new Map();
-    // Tournament State (In-memory for active pool, could be persisted if needed)
+    // Tournament State
     tournamentParticipants: TournamentParticipant[] = [];
+    currentSlot: number = 0; // Track the current tournament time slot
     constructor(ctx: DurableObjectState, env: any) {
         super(ctx, env);
         // Initialize queues
@@ -51,7 +52,7 @@ export class GlobalDurableObject extends DurableObject {
         const webSocketPair = new WebSocketPair();
         const [client, server] = Object.values(webSocketPair);
         // Use the Hibernation API: acceptWebSocket
-        // This tells the runtime to handle the WebSocket connection and call
+        // This tells the runtime to handle the WebSocket connection and call 
         // webSocketMessage/webSocketClose methods on this class.
         this.ctx.acceptWebSocket(server);
         return new Response(null, {
@@ -521,7 +522,7 @@ export class GlobalDurableObject extends DurableObject {
             if (profiles.length < 2) return null; // Need at least 2 players to form a "team" context for ranking usually
             const first = profiles[0].teams || [];
             // Find intersection of all players' team lists
-            const common = first.filter(teamId =>
+            const common = first.filter(teamId => 
                 profiles.every(p => (p.teams || []).includes(teamId))
             );
             return common.length > 0 ? common[0] : null; // Return first common team found
@@ -1054,13 +1055,20 @@ export class GlobalDurableObject extends DurableObject {
     }
     // --- Tournament Methods ---
     async getTournamentState(): Promise<TournamentState> {
-        // Calculate next 5-minute interval
         const now = Date.now();
         const interval = 5 * 60 * 1000; // 5 minutes
         const nextStartTime = Math.ceil(now / interval) * interval;
-        // If we passed the previous start time significantly, clear old participants
-        // For simplicity in this phase, we just return the current pool for the "next" tournament
-        // In a real system, we'd move them to an "active" match state
+        // Initialize currentSlot if first run
+        if (this.currentSlot === 0) {
+            this.currentSlot = nextStartTime;
+        }
+        // Check for rollover
+        if (nextStartTime > this.currentSlot) {
+            // We moved to a new slot. The previous tournament (at this.currentSlot) has started.
+            // Clear participants for the NEW upcoming tournament (nextStartTime).
+            this.tournamentParticipants = [];
+            this.currentSlot = nextStartTime;
+        }
         return {
             nextStartTime,
             participants: this.tournamentParticipants,

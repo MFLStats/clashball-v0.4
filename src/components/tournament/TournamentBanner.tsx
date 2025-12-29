@@ -1,17 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Trophy, ArrowRight, Zap } from 'lucide-react';
+import { Trophy, ArrowRight, Zap, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '@/lib/api';
 export function TournamentBanner() {
   const navigate = useNavigate();
   const [timeLeft, setTimeLeft] = useState('');
+  const [participantCount, setParticipantCount] = useState(0);
+  const [targetTime, setTargetTime] = useState<number | null>(null);
+  // Fetch Tournament State
   useEffect(() => {
-    // Calculate next 5 min slot
+    const fetchState = async () => {
+      try {
+        const state = await api.tournament.getState();
+        setParticipantCount(state.participants.length);
+        setTargetTime(state.nextStartTime);
+      } catch (e) {
+        console.error("Failed to fetch tournament state", e);
+      }
+    };
+    fetchState();
+    const interval = setInterval(fetchState, 10000); // Poll every 10s
+    return () => clearInterval(interval);
+  }, []);
+  // Timer Logic
+  useEffect(() => {
     const updateTimer = () => {
       const now = Date.now();
-      const interval = 5 * 60 * 1000;
-      const next = Math.ceil(now / interval) * interval;
-      const diff = next - now;
+      let target = targetTime;
+      // Fallback if API hasn't loaded yet
+      if (!target) {
+        const interval = 5 * 60 * 1000;
+        target = Math.ceil(now / interval) * interval;
+      }
+      const diff = Math.max(0, target - now);
       const minutes = Math.floor(diff / 60000);
       const seconds = Math.floor((diff % 60000) / 1000);
       setTimeLeft(`${minutes}:${seconds.toString().padStart(2, '0')}`);
@@ -19,9 +41,9 @@ export function TournamentBanner() {
     updateTimer();
     const timer = setInterval(updateTimer, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [targetTime]);
   return (
-    <div 
+    <div
       className="w-full relative overflow-hidden rounded-2xl shadow-xl cursor-pointer group transform transition-all hover:scale-[1.01]"
       onClick={() => navigate('/tournament')}
     >
@@ -47,18 +69,24 @@ export function TournamentBanner() {
               </h3>
               <Zap className="w-5 h-5 text-yellow-400 fill-current animate-bounce" />
             </div>
-            <p className="text-indigo-200 font-medium text-sm flex items-center gap-2">
-              <span className="px-2 py-0.5 bg-white/10 rounded text-xs font-bold border border-white/20">1v1</span>
-              <span>Tournament Starts In:</span>
-              <span className="font-mono font-bold text-white text-lg bg-black/30 px-2 rounded border border-white/10 shadow-inner">
-                {timeLeft}
-              </span>
-            </p>
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+                <div className="flex items-center gap-2 text-indigo-200 font-medium">
+                    <span className="px-2 py-0.5 bg-white/10 rounded text-xs font-bold border border-white/20">1v1</span>
+                    <span>Next Tournament Starts In:</span>
+                    <span className="font-mono font-bold text-white text-lg bg-black/30 px-2 rounded border border-white/10 shadow-inner">
+                        {timeLeft}
+                    </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-950/30 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                    <Users className="w-3.5 h-3.5" />
+                    <span className="font-bold text-xs">{participantCount} Registered</span>
+                </div>
+            </div>
           </div>
         </div>
         {/* Right Action */}
-        <Button 
-          size="lg" 
+        <Button
+          size="lg"
           className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-300 hover:to-orange-400 text-slate-900 font-black border-b-4 border-orange-700 active:border-b-0 active:translate-y-1 transition-all shadow-lg group-hover:shadow-orange-500/50"
           onClick={(e) => {
             e.stopPropagation();

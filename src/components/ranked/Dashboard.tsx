@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Trophy, Users, Plus, Goal, HandHelping, Crown, Shield, AlertTriangle, Flag, Activity, Calendar, Star, Medal, LogIn, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Trophy, Users, Plus, Goal, HandHelping, Crown, Shield, AlertTriangle, Activity, Calendar, Star, Medal, LogIn, Loader2, Info } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
 import { GameMode, TeamProfile } from '@shared/types';
 import { formatDistanceToNow } from 'date-fns';
@@ -90,6 +90,9 @@ export function Dashboard() {
                         <h1 className="text-4xl md:text-6xl font-display font-bold text-white tracking-tight text-glow">
                             {profile.username}
                         </h1>
+                        <Badge variant="outline" className="border-yellow-500/50 text-yellow-400 bg-yellow-500/10 px-2 py-0.5 text-xs font-bold uppercase tracking-widest ml-2">
+                            Season 1
+                        </Badge>
                     </div>
                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
                         {profile.country && (
@@ -200,8 +203,8 @@ export function Dashboard() {
                     </Card>
                 </div>
                 {/* Rating Chart Section */}
-                <RatingChart
-                    currentRating={profile.stats['1v1'].rating}
+                <RatingChart 
+                    currentRating={profile.stats['1v1'].rating} 
                     recentMatches={profile.recentMatches.filter(m => m.mode === '1v1')}
                     className="bg-slate-900 border-slate-800"
                 />
@@ -324,6 +327,13 @@ export function Dashboard() {
             </TabsContent>
             {/* TEAMS TAB */}
             <TabsContent value="teams" className="animate-fade-in space-y-6">
+                <Alert className="bg-indigo-900/50 border-indigo-500/50 text-indigo-200 mb-6">
+                    <Info className="h-4 w-4 text-indigo-400" />
+                    <AlertTitle className="text-indigo-300 font-bold">Team Ranked is Live!</AlertTitle>
+                    <AlertDescription>
+                        Play with your team members in any lobby (2v2, 3v3, or 4v4) to automatically rank up your Team Stats.
+                    </AlertDescription>
+                </Alert>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Create Team */}
                     <Card className="bg-slate-900 border-slate-800">
@@ -334,8 +344,8 @@ export function Dashboard() {
                         <CardContent>
                             <form onSubmit={handleCreateTeam} className="flex gap-4 items-center">
                                 <div className="flex-1">
-                                    <Input
-                                        placeholder="Enter team name..."
+                                    <Input 
+                                        placeholder="Enter team name..." 
                                         value={newTeamName}
                                         onChange={(e) => setNewTeamName(e.target.value)}
                                         className="bg-slate-950 border-slate-700 text-white placeholder:text-slate-600"
@@ -356,8 +366,8 @@ export function Dashboard() {
                         <CardContent>
                             <form onSubmit={handleJoinTeam} className="flex gap-4 items-center">
                                 <div className="flex-1">
-                                    <Input
-                                        placeholder="ENTER CODE"
+                                    <Input 
+                                        placeholder="ENTER CODE" 
                                         value={joinCode}
                                         onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                                         maxLength={6}
@@ -382,8 +392,8 @@ export function Dashboard() {
                         </Card>
                     ) : (
                         teams.map((team) => (
-                            <Card
-                                key={team.id}
+                            <Card 
+                                key={team.id} 
                                 className="bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors cursor-pointer group"
                                 onClick={() => {
                                     setSelectedTeam(team);
@@ -416,10 +426,10 @@ export function Dashboard() {
                 </div>
             </TabsContent>
         </Tabs>
-        <TeamDetailsDialog
-            team={selectedTeam}
-            open={isJoinDialogOpen}
-            onOpenChange={setIsJoinDialogOpen}
+        <TeamDetailsDialog 
+            team={selectedTeam} 
+            open={isJoinDialogOpen} 
+            onOpenChange={setIsJoinDialogOpen} 
         />
     </div>
   );

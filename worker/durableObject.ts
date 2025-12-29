@@ -331,21 +331,48 @@ export class GlobalDurableObject extends DurableObject {
         match.start();
     }
     async handleMatchEnd(matchId: string, winner: 'red' | 'blue', players: { id: string, team: 'red' | 'blue', username: string }[], mode: GameMode, playerStats?: any) {
-        // 1. Get all user profiles to calculate team averages
+        // 1. Get all user profiles to calculate team averages and detect teams
         const playerProfiles = await Promise.all(players.map(p => this.getUserProfile(p.id)));
         const redPlayers = players.filter(p => p.team === 'red');
         const bluePlayers = players.filter(p => p.team === 'blue');
-        const getAvgRating = (teamPlayers: typeof players) => {
-            if (teamPlayers.length === 0) return 1200;
-            const total = teamPlayers.reduce((sum, p) => {
-                const profile = playerProfiles.find(prof => prof.id === p.id);
-                return sum + (profile?.stats[mode]?.rating || 1200);
-            }, 0);
-            return total / teamPlayers.length;
+        // Helper to get profiles for a specific side
+        const getSideProfiles = (sidePlayers: typeof players) => {
+            return sidePlayers.map(p => playerProfiles.find(prof => prof.id === p.id)).filter(Boolean) as UserProfile[];
         };
-        const redAvg = getAvgRating(redPlayers);
-        const blueAvg = getAvgRating(bluePlayers);
-        // 2. Process updates for each player
+        const redProfiles = getSideProfiles(redPlayers);
+        const blueProfiles = getSideProfiles(bluePlayers);
+        // Helper to find common team ID among a group of players
+        const findCommonTeam = (profiles: UserProfile[]) => {
+            if (profiles.length < 2) return null; // Need at least 2 players to form a "team" context for ranking usually
+            const first = profiles[0].teams || [];
+            // Find intersection of all players' team lists
+            const common = first.filter(teamId => 
+                profiles.every(p => (p.teams || []).includes(teamId))
+            );
+            return common.length > 0 ? common[0] : null; // Return first common team found
+        };
+        const redTeamId = redPlayers.length >= 2 ? findCommonTeam(redProfiles) : null;
+        const blueTeamId = bluePlayers.length >= 2 ? findCommonTeam(blueProfiles) : null;
+        // Calculate Averages (Player based)
+        const getAvgRating = (profiles: UserProfile[]) => {
+            if (profiles.length === 0) return 1200;
+            const total = profiles.reduce((sum, p) => sum + (p.stats[mode]?.rating || 1200), 0);
+            return total / profiles.length;
+        };
+        const redAvg = getAvgRating(redProfiles);
+        const blueAvg = getAvgRating(blueProfiles);
+        // Fetch Team Names if teams are detected (for history logs)
+        let redTeamName = 'Team Red';
+        let blueTeamName = 'Team Blue';
+        if (redTeamId) {
+            const t = await this.getTeam(redTeamId);
+            if (t) redTeamName = t.name;
+        }
+        if (blueTeamId) {
+            const t = await this.getTeam(blueTeamId);
+            if (t) blueTeamName = t.name;
+        }
+        // 2. Process updates for individual players
         const updates = players.map(async (p) => {
             const isRed = p.team === 'red';
             const opponentRating = isRed ? blueAvg : redAvg;
@@ -356,7 +383,8 @@ export class GlobalDurableObject extends DurableObject {
                 const opponent = players.find(op => op.team !== p.team);
                 opponentName = opponent ? opponent.username : 'Opponent';
             } else {
-                opponentName = isRed ? 'Team Blue' : 'Team Red';
+                // If opposing side is a team, use team name
+                opponentName = isRed ? blueTeamName : redTeamName;
             }
             await this.processMatch({
                 matchId,
@@ -369,7 +397,37 @@ export class GlobalDurableObject extends DurableObject {
                 playerStats // Pass the stats map
             });
         });
-        await Promise.all(updates);
+        // 3. Process updates for Teams (if detected)
+        const teamUpdates: Promise<any>[] = [];
+        if (redTeamId) {
+            const result = winner === 'red' ? 'win' : 'loss';
+            teamUpdates.push(this.processMatch({
+                matchId,
+                userId: redPlayers[0].id, // Placeholder, teamId is what matters
+                teamId: redTeamId,
+                opponentRating: blueAvg, // Use player average of opponents
+                opponentName: blueTeamId ? blueTeamName : 'Opponents',
+                result,
+                timestamp: Date.now(),
+                mode,
+                playerStats: undefined // Do not attribute individual stats to team aggregate directly
+            }));
+        }
+        if (blueTeamId) {
+            const result = winner === 'blue' ? 'win' : 'loss';
+            teamUpdates.push(this.processMatch({
+                matchId,
+                userId: bluePlayers[0].id,
+                teamId: blueTeamId,
+                opponentRating: redAvg,
+                opponentName: redTeamId ? redTeamName : 'Opponents',
+                result,
+                timestamp: Date.now(),
+                mode,
+                playerStats: undefined
+            }));
+        }
+        await Promise.all([...updates, ...teamUpdates]);
     }
     // --- Existing RPC Methods ---
     async getCounterValue(): Promise<number> {

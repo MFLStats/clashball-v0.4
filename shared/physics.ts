@@ -48,18 +48,18 @@ export class PhysicsEngine {
   static readonly BALL_RADIUS = 10;
   // Kick Mechanics
   static readonly KICK_TOLERANCE = 5; // Extra range for kicking
-  static readonly KICK_STRENGTH = 450; // Increased from 360 for heavier friction
+  static readonly KICK_STRENGTH = 550; // Increased for faster gameplay (was 450)
   // Field Dimensions
   static readonly FIELD_WIDTH = 1200;
   static readonly FIELD_HEIGHT = 600;
   static readonly GOAL_HEIGHT = 180;
   // Movement & Physics (Per Second)
-  // "Ice Hockey" Feel: Slower top speed, slower acceleration, higher drag
-  static readonly PLAYER_MAX_SPEED = 150; // Reduced from 210
-  static readonly PLAYER_ACCELERATION = 600; // Reduced from 2880
+  // Tuned for faster, snappier arcade feel
+  static readonly PLAYER_MAX_SPEED = 240; // Increased from 150
+  static readonly PLAYER_ACCELERATION = 1200; // Increased from 600 for snappier movement
   // Damping Base (Applied per 1/60s)
-  static readonly PLAYER_DAMPING_BASE = 0.85; // Reduced from 0.90 (More friction)
-  static readonly BALL_DAMPING_BASE = 0.985; // Reduced from 0.990 (More friction)
+  static readonly PLAYER_DAMPING_BASE = 0.89; // Increased from 0.85 (Less friction)
+  static readonly BALL_DAMPING_BASE = 0.990; // Increased from 0.985 (Less friction)
   static readonly WALL_BOUNCE = 0.75;
   static readonly PLAYER_BOUNCE = 0.5;
   // Velocity threshold for stopping
@@ -201,8 +201,8 @@ export class PhysicsEngine {
                 if (b.lastTouch.team === scoringTeam) {
                     scorerId = b.lastTouch.id;
                     // Check Assist
-                    if (b.previousTouch && 
-                        b.previousTouch.team === scoringTeam && 
+                    if (b.previousTouch &&
+                        b.previousTouch.team === scoringTeam &&
                         b.previousTouch.id !== scorerId &&
                         Math.abs(b.lastTouch.time - b.previousTouch.time) < this.ASSIST_WINDOW) {
                         assisterId = b.previousTouch.id;

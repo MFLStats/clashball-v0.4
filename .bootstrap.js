@@ -82,7 +82,8 @@ function runSetupCommands() {
     "bun add -d @types/ws",
     "bun add canvas-confetti @types/canvas-confetti",
     "bun add uuid",
-    "bun add recharts"
+    "bun add recharts",
+    "bun add framer-motion"
 ];
     
     if (commands.length === 0) {

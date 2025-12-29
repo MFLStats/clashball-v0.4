@@ -37,6 +37,16 @@ export class SoundEngine {
     gain.connect(this.masterGain);
     return gain;
   }
+  private static createWhiteNoiseBuffer(): AudioBuffer | null {
+    if (!this.ctx) return null;
+    const bufferSize = 2 * this.ctx.sampleRate; // 2 seconds
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const output = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+    return buffer;
+  }
   static playKick() {
     this.init();
     if (!this.ctx) return;
@@ -130,6 +140,62 @@ export class SoundEngine {
       lfo.start(t);
       osc.stop(t + 0.8);
       lfo.stop(t + 0.8);
+    }
+  }
+  static playCrowdCheer() {
+    this.init();
+    if (!this.ctx || !this.masterGain) return;
+    const t = this.ctx.currentTime;
+    const buffer = this.createWhiteNoiseBuffer();
+    if (!buffer) return;
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(200, t);
+    filter.frequency.linearRampToValueAtTime(1000, t + 1.5); // Rising cheer
+    const gain = this.createGain();
+    if (!gain) return;
+    source.connect(filter);
+    filter.connect(gain);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.4, t + 0.5);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 2.0);
+    source.start(t);
+    source.stop(t + 2.0);
+  }
+  static playHeavyImpact() {
+    this.init();
+    if (!this.ctx || !this.masterGain) return;
+    const t = this.ctx.currentTime;
+    // 1. Low Frequency Thud
+    const osc = this.createOscillator('sine', 80);
+    const oscGain = this.createGain();
+    if (osc && oscGain) {
+      osc.connect(oscGain);
+      osc.frequency.exponentialRampToValueAtTime(10, t + 0.2);
+      oscGain.gain.setValueAtTime(0.8, t);
+      oscGain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+      osc.start(t);
+      osc.stop(t + 0.2);
+    }
+    // 2. Short Noise Burst
+    const buffer = this.createWhiteNoiseBuffer();
+    if (buffer) {
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      const noiseGain = this.createGain();
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 500;
+      if (noiseGain) {
+        source.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.gain.setValueAtTime(0.5, t);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+        source.start(t);
+        source.stop(t + 0.1);
+      }
     }
   }
 }

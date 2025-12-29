@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
-import { Settings, Volume2, Monitor, Keyboard, X } from 'lucide-react';
+import { Settings, Volume2, Monitor, Keyboard, Activity } from 'lucide-react';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { SoundEngine } from '@/lib/audio';
 interface SettingsDialogProps {
@@ -18,9 +18,11 @@ export function SettingsDialog({ trigger, open, onOpenChange }: SettingsDialogPr
   const volume = useSettingsStore(s => s.volume);
   const showNames = useSettingsStore(s => s.showNames);
   const particles = useSettingsStore(s => s.particles);
+  const screenShake = useSettingsStore(s => s.screenShake);
   const setVolume = useSettingsStore(s => s.setVolume);
   const setShowNames = useSettingsStore(s => s.setShowNames);
   const setParticles = useSettingsStore(s => s.setParticles);
+  const setScreenShake = useSettingsStore(s => s.setScreenShake);
   const handleVolumeChange = (vals: number[]) => {
     const newVol = vals[0];
     setVolume(newVol);
@@ -55,7 +57,7 @@ export function SettingsDialog({ trigger, open, onOpenChange }: SettingsDialogPr
             </TabsTrigger>
           </TabsList>
           {/* GENERAL SETTINGS */}
-          <TabsContent value="general" className="space-y-6 py-4 animate-fade-in">
+          <TabsContent value="general" className="space-y-4 py-4 animate-fade-in">
             <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-xl border border-white/5">
               <div className="space-y-1">
                 <Label htmlFor="show-names" className="text-base font-bold text-white">Show Player Names</Label>
@@ -77,6 +79,20 @@ export function SettingsDialog({ trigger, open, onOpenChange }: SettingsDialogPr
                 id="particles"
                 checked={particles}
                 onCheckedChange={setParticles}
+                className="data-[state=checked]:bg-primary"
+              />
+            </div>
+            <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-xl border border-white/5">
+              <div className="space-y-1">
+                <Label htmlFor="screen-shake" className="text-base font-bold text-white flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-yellow-500" /> Screen Shake
+                </Label>
+                <p className="text-sm text-slate-400">Enable camera shake on impacts and goals.</p>
+              </div>
+              <Switch
+                id="screen-shake"
+                checked={screenShake}
+                onCheckedChange={setScreenShake}
                 className="data-[state=checked]:bg-primary"
               />
             </div>

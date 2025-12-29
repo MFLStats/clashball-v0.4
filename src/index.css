@@ -3,41 +3,41 @@
 @tailwind utilities;
 @layer base {
   :root {
-    /* Cyber Soccer Dark Theme - Enforced Default */
-    --background: 222.2 84% 4.9%; /* Slate 950 #020617 */
-    --foreground: 210 40% 98%;    /* Slate 50 */
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 190 100% 42%;      /* Neon Cyan #06b6d4 */
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%; /* Slate 900 */
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
+    /* Classic Haxball Light Theme - Enforced Default */
+    --background: 210 40% 98%;    /* Slate 50 #f8fafc */
+    --foreground: 222.2 84% 4.9%; /* Slate 950 #020617 */
+    --card: 0 0% 100%;            /* White */
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 218 73% 62%;       /* Haxball Blue #5689e5 */
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;   /* Slate 100 */
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 190 100% 42%; /* Cyan Ring */
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 218 73% 62%;
     --radius: 0.5rem;
-    /* Chart Colors - Neon Palette */
-    --chart-1: 190 100% 42%; /* Cyan */
-    --chart-2: 330 80% 60%;  /* Pink */
-    --chart-3: 280 70% 60%;  /* Purple */
-    --chart-4: 45 90% 60%;   /* Yellow */
-    --chart-5: 150 70% 50%;  /* Green */
-    --sidebar-background: 222.2 84% 4.9%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 190 100% 42%;
-    --sidebar-primary-foreground: 222.2 47.4% 11.2%;
-    --sidebar-accent: 217.2 32.6% 17.5%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-ring: 190 100% 42%;
+    /* Chart Colors - Standard Palette */
+    --chart-1: 218 73% 62%; /* Blue */
+    --chart-2: 6 73% 62%;   /* Red */
+    --chart-3: 280 70% 60%; /* Purple */
+    --chart-4: 45 90% 60%;  /* Yellow */
+    --chart-5: 150 70% 50%; /* Green */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
   * {
     @apply border-border;
@@ -54,22 +54,22 @@
   }
 }
 @layer components {
-  /* Cyber Button System */
+  /* Classic Button System */
   .btn-kid {
-    @apply inline-flex items-center justify-center px-6 py-3 text-base font-bold transition-all duration-200 rounded-xl border border-transparent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center px-6 py-3 text-base font-bold transition-all duration-200 rounded-lg border-b-4 active:border-b-0 active:translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-kid-primary {
-    @apply btn-kid bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_15px_rgba(6,182,212,0.5)] hover:shadow-[0_0_25px_rgba(6,182,212,0.7)];
+    @apply btn-kid bg-haxball-blue text-white border-blue-700 hover:bg-blue-500;
   }
   .btn-kid-secondary {
-    @apply btn-kid bg-secondary text-secondary-foreground hover:bg-secondary/80 border-slate-700;
+    @apply btn-kid bg-white text-slate-700 border-slate-300 hover:bg-slate-50;
   }
   .btn-kid-action {
-    @apply btn-kid bg-kick-red text-white hover:bg-kick-red/90 shadow-[0_0_15px_rgba(244,63,94,0.5)] hover:shadow-[0_0_25px_rgba(244,63,94,0.7)];
+    @apply btn-kid bg-haxball-red text-white border-red-700 hover:bg-red-500;
   }
-  /* Cyber Card System */
+  /* Classic Card System */
   .card-kid {
-    @apply bg-slate-900/50 backdrop-blur-sm rounded-2xl border border-slate-800 shadow-lg p-6;
+    @apply bg-white rounded-xl border border-slate-200 shadow-sm p-6;
   }
   /* Text System */
   .text-display {
@@ -77,7 +77,7 @@
   }
   /* Game Canvas Container */
   .game-container {
-    /* Updated to 2:1 aspect ratio to match 1200x600 physics field */
-    @apply relative w-full aspect-[2/1] bg-slate-950 rounded-xl overflow-hidden border-2 border-slate-800 shadow-[0_0_30px_rgba(0,0,0,0.5)];
+    /* 2:1 aspect ratio to match 1200x600 physics field */
+    @apply relative w-full aspect-[2/1] bg-[#718c5a] rounded-lg overflow-hidden border-4 border-slate-800 shadow-xl;
   }
 }

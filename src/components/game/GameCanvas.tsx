@@ -34,7 +34,7 @@ export function GameCanvas({
       particleCount: 200,
       spread: 100,
       origin: { y: 0.6 },
-      colors: winner === 'red' ? ['#f43f5e'] : ['#06b6d4']
+      colors: winner === 'red' ? ['#e56e56'] : ['#5689e5']
     });
     if (onGameEnd) onGameEnd(winner);
   }, [onGameEnd]);
@@ -137,7 +137,7 @@ export function GameCanvas({
                     particleCount: 100,
                     spread: 70,
                     origin: { y: 0.6 },
-                    colors: currentState.score.red > score.red ? ['#f43f5e'] : ['#06b6d4']
+                    colors: currentState.score.red > score.red ? ['#e56e56'] : ['#5689e5']
                 });
             }
         }
@@ -155,96 +155,93 @@ export function GameCanvas({
     const scaleY = height / state.field.height;
     // Clear
     ctx.clearRect(0, 0, width, height);
-    // Draw Field (Cyber Dark)
-    ctx.fillStyle = '#0f291e'; // Dark Grass
-    ctx.fillRect(0, 0, width, height);
-    // Draw Grid Pattern
-    ctx.strokeStyle = 'rgba(16, 185, 129, 0.1)'; // Faint Neon Green Grid
-    ctx.lineWidth = 1;
-    const gridSize = 40 * scaleX;
-    ctx.beginPath();
-    for (let x = 0; x <= width; x += gridSize) {
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
+    // --- 1. Draw Field (Striped Turf) ---
+    const stripeCount = 7;
+    const stripeWidth = width / stripeCount;
+    for (let i = 0; i < stripeCount; i++) {
+        ctx.fillStyle = i % 2 === 0 ? '#718c5a' : '#6c8655';
+        ctx.fillRect(i * stripeWidth, 0, stripeWidth, height);
     }
-    for (let y = 0; y <= height; y += gridSize) {
-        ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
-    }
-    ctx.stroke();
-    // Draw Lines (Glowing)
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-    ctx.lineWidth = 4;
+    // --- 2. Draw Lines (White) ---
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    // Border
+    ctx.strokeRect(5, 5, width - 10, height - 10);
+    // Center Line
     ctx.beginPath();
-    ctx.moveTo(width/2, 0);
-    ctx.lineTo(width/2, height);
-    ctx.moveTo(width/2 + 50 * scaleX, height/2);
-    ctx.arc(width/2, height/2, 50 * scaleX, 0, Math.PI * 2);
+    ctx.moveTo(width / 2, 5);
+    ctx.lineTo(width / 2, height - 5);
     ctx.stroke();
-    ctx.shadowBlur = 0; // Reset shadow
-    // Draw Goals
+    // Center Circle
+    ctx.beginPath();
+    ctx.arc(width / 2, height / 2, 70 * scaleX, 0, Math.PI * 2);
+    ctx.stroke();
+    // --- 3. Draw Goals ---
     const goalH = state.field.goalHeight * scaleY;
     const goalTop = (height - goalH) / 2;
-    // Blue Goal (Left)
-    ctx.fillStyle = 'rgba(6, 182, 212, 0.2)';
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = '#06b6d4';
-    ctx.fillRect(0, goalTop, 40 * scaleX, goalH);
-    // Red Goal (Right)
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
-    ctx.shadowColor = '#f43f5e';
-    ctx.fillRect(width - 40 * scaleX, goalTop, 40 * scaleX, goalH);
-    ctx.shadowBlur = 0;
-    // Draw Players
+    // Goal Posts (Simple Black Lines)
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 4;
+    // Left Goal
+    ctx.beginPath();
+    ctx.moveTo(5, goalTop);
+    ctx.lineTo(0, goalTop);
+    ctx.lineTo(0, goalTop + goalH);
+    ctx.lineTo(5, goalTop + goalH);
+    ctx.stroke();
+    // Right Goal
+    ctx.beginPath();
+    ctx.moveTo(width - 5, goalTop);
+    ctx.lineTo(width, goalTop);
+    ctx.lineTo(width, goalTop + goalH);
+    ctx.lineTo(width - 5, goalTop + goalH);
+    ctx.stroke();
+    // --- 4. Draw Players ---
     state.players.forEach(p => {
       const x = p.pos.x * scaleX;
       const y = p.pos.y * scaleY;
       const r = p.radius * scaleX;
-      const color = p.team === 'red' ? '#f43f5e' : '#06b6d4';
-      // Kick Indicator (Visual Pulse)
+      // Classic Haxball Colors
+      const color = p.team === 'red' ? '#e56e56' : '#5689e5';
+      // Kick Indicator (White Ring)
       if (p.isKicking) {
         ctx.beginPath();
-        ctx.arc(x, y, r + 8, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255, 255, 255, 0.8)`;
-        ctx.lineWidth = 4;
+        ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
         ctx.stroke();
       }
-      // Glow
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = color;
       // Body
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
-      // Border
-      ctx.strokeStyle = 'white';
+      // Stroke (Black Border)
+      ctx.strokeStyle = '#000000';
       ctx.lineWidth = 3;
       ctx.stroke();
-      ctx.shadowBlur = 0;
-      // Draw Username
+      // Username
       ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillStyle = 'black';
-      ctx.lineWidth = 3;
-      ctx.strokeText(p.username, x, y - r - 10);
-      ctx.fillStyle = 'white';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 4;
       ctx.fillText(p.username, x, y - r - 10);
+      ctx.shadowBlur = 0; // Reset shadow
     });
-    // Draw Ball
+    // --- 5. Draw Ball ---
     const b = state.ball;
     const bx = b.pos.x * scaleX;
     const by = b.pos.y * scaleY;
     const br = b.radius * scaleX;
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = 'white';
     ctx.beginPath();
     ctx.arc(bx, by, br, 0, Math.PI * 2);
-    ctx.fillStyle = 'white';
+    ctx.fillStyle = '#ffffff';
     ctx.fill();
-    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
   };
   const handleReset = () => {
     gameStateRef.current = PhysicsEngine.createInitialState();
@@ -254,22 +251,27 @@ export function GameCanvas({
   };
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-4xl mx-auto">
-      {/* Scoreboard */}
-      <div className="flex items-center justify-between w-full px-8 py-4 bg-slate-900/80 backdrop-blur rounded-2xl shadow-lg border border-slate-700">
+      {/* Scoreboard - Classic Style */}
+      <div className="flex items-center justify-between w-full px-8 py-3 bg-slate-800 rounded-lg shadow-md border border-slate-700">
         <div className="flex items-center gap-4">
-          <div className="w-4 h-4 rounded-full bg-kick-red shadow-[0_0_10px_#f43f5e]" />
-          <span className="text-3xl font-display font-bold text-white">{score.red}</span>
+          <div className="w-6 h-6 rounded-full bg-haxball-red border-2 border-black" />
+          <span className="text-4xl font-display font-bold text-white">{score.red}</span>
         </div>
-        <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">
-            {gameOver ? 'MATCH ENDED' : `First to ${winningScore}`}
+        <div className="flex flex-col items-center">
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">
+                {gameOver ? 'MATCH ENDED' : `First to ${winningScore}`}
+            </div>
+            <div className="px-3 py-1 bg-slate-900 rounded text-white font-mono text-sm">
+                {Math.floor(gameStateRef.current.timeRemaining / 60)}:{(gameStateRef.current.timeRemaining % 60).toString().padStart(2, '0')}
+            </div>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-3xl font-display font-bold text-white">{score.blue}</span>
-          <div className="w-4 h-4 rounded-full bg-kick-blue shadow-[0_0_10px_#06b6d4]" />
+          <span className="text-4xl font-display font-bold text-white">{score.blue}</span>
+          <div className="w-6 h-6 rounded-full bg-haxball-blue border-2 border-black" />
         </div>
       </div>
       {/* Game Area */}
-      <div ref={containerRef} className="game-container relative group">
+      <div ref={containerRef} className="game-container group">
         <canvas
           ref={canvasRef}
           width={1200}
@@ -278,13 +280,13 @@ export function GameCanvas({
         />
         {/* Game Over Overlay */}
         {gameOver && (
-            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center animate-fade-in backdrop-blur-sm z-10">
-                <Trophy className={`w-16 h-16 mb-4 ${gameOver === 'red' ? 'text-kick-red drop-shadow-[0_0_15px_#f43f5e]' : 'text-kick-blue drop-shadow-[0_0_15px_#06b6d4]'}`} />
-                <h2 className="text-4xl font-display font-bold text-white mb-2 tracking-wider">
+            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center animate-fade-in z-10">
+                <Trophy className={`w-16 h-16 mb-4 ${gameOver === 'red' ? 'text-haxball-red' : 'text-haxball-blue'}`} />
+                <h2 className="text-4xl font-display font-bold text-white mb-2 tracking-wider drop-shadow-md">
                     {gameOver === 'red' ? 'RED VICTORY' : 'BLUE VICTORY'}
                 </h2>
-                <p className="text-slate-300 mb-6">Match results are being processed...</p>
-                <Button onClick={handleReset} variant="secondary" className="btn-kid-secondary">
+                <p className="text-slate-200 mb-6 font-medium">Match results are being processed...</p>
+                <Button onClick={handleReset} variant="secondary" className="btn-kid-secondary border-none shadow-lg">
                     Play Again
                 </Button>
             </div>
@@ -292,16 +294,16 @@ export function GameCanvas({
         {/* Controls Overlay (Visible on Hover/Pause) */}
         {!gameOver && !externalState && (
             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button size="icon" variant="secondary" onClick={handleReset} className="bg-slate-800 text-white hover:bg-slate-700">
+            <Button size="icon" variant="secondary" onClick={handleReset} className="bg-white text-slate-800 hover:bg-slate-100 border border-slate-300 shadow-sm">
                 <RotateCcw className="w-4 h-4" />
             </Button>
-            <Button size="icon" variant="secondary" onClick={() => setIsPaused(!isPaused)} className="bg-slate-800 text-white hover:bg-slate-700">
+            <Button size="icon" variant="secondary" onClick={() => setIsPaused(!isPaused)} className="bg-white text-slate-800 hover:bg-slate-100 border border-slate-300 shadow-sm">
                 <Play className="w-4 h-4" />
             </Button>
             </div>
         )}
       </div>
-      <div className="text-sm text-slate-500 font-medium font-mono">
+      <div className="text-sm text-slate-500 font-medium font-mono bg-slate-100 px-4 py-2 rounded-full border border-slate-200">
         Controls: WASD to Move • SPACE to Kick
       </div>
     </div>

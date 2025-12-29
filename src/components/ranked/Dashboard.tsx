@@ -44,64 +44,64 @@ export function Dashboard() {
         {/* Hero Section */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Main Rank Card */}
-          <Card className="md:col-span-2 card-kid bg-slate-900/80 border-slate-800">
+          <Card className="md:col-span-2 card-kid border-slate-200 shadow-sm">
             <CardContent className="p-6 flex items-center gap-8">
               <RankBadge tier={stats.tier} division={stats.division} size="xl" />
               <div className="flex-1 space-y-4">
                 <div>
-                  <h2 className="text-3xl font-display font-bold text-white">
+                  <h2 className="text-3xl font-display font-bold text-slate-800">
                     {stats.tier} {stats.division === 1 ? 'I' : stats.division === 2 ? 'II' : 'III'}
                   </h2>
-                  <p className="text-slate-400 font-medium">Rating: {stats.rating} MMR</p>
+                  <p className="text-slate-500 font-medium">Rating: {stats.rating} MMR</p>
                 </div>
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm font-bold text-slate-400">
+                  <div className="flex justify-between text-sm font-bold text-slate-500">
                     <span>Progress to Next Rank</span>
                     <span>{progress}%</span>
                   </div>
-                  <Progress value={progress} className="h-4 rounded-full bg-slate-800" />
-                  <p className="text-xs text-slate-500 text-right">Next Milestone: {nextMilestone} MMR</p>
+                  <Progress value={progress} className="h-4 rounded-full bg-slate-100" />
+                  <p className="text-xs text-slate-400 text-right">Next Milestone: {nextMilestone} MMR</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           {/* Quick Stats */}
           <div className="space-y-4">
-            <Card className="card-kid p-4 flex items-center gap-4 bg-slate-900/80 border-slate-800">
-              <div className="p-3 bg-green-900/30 rounded-xl text-green-400">
+            <Card className="card-kid p-4 flex items-center gap-4 border-slate-200">
+              <div className="p-3 bg-green-100 rounded-xl text-green-600">
                 <Trophy className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-sm text-slate-400 font-bold">Total Wins</p>
-                <p className="text-2xl font-display font-bold text-white">{stats.wins}</p>
+                <p className="text-sm text-slate-500 font-bold">Total Wins</p>
+                <p className="text-2xl font-display font-bold text-slate-800">{stats.wins}</p>
               </div>
             </Card>
-            <Card className="card-kid p-4 flex items-center gap-4 bg-slate-900/80 border-slate-800">
-              <div className="p-3 bg-blue-900/30 rounded-xl text-blue-400">
+            <Card className="card-kid p-4 flex items-center gap-4 border-slate-200">
+              <div className="p-3 bg-blue-100 rounded-xl text-blue-600">
                 <TrendingUp className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-sm text-slate-400 font-bold">Win Rate</p>
-                <p className="text-2xl font-display font-bold text-white">{winRate}%</p>
+                <p className="text-sm text-slate-500 font-bold">Win Rate</p>
+                <p className="text-2xl font-display font-bold text-slate-800">{winRate}%</p>
               </div>
             </Card>
           </div>
         </div>
         {/* Tier Ladder Preview */}
         <div className="space-y-4">
-          <h3 className="text-xl font-display font-bold text-white px-2">Ranked Tiers ({mode})</h3>
+          <h3 className="text-xl font-display font-bold text-slate-800 px-2">Ranked Tiers ({mode})</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
             {(['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Master'] as Tier[]).map((tier) => (
               <div
                 key={tier}
-                className={`flex flex-col items-center p-4 rounded-2xl border transition-all ${
+                className={`flex flex-col items-center p-4 rounded-xl border transition-all ${
                   tier === stats.tier
-                    ? 'bg-slate-800 border-primary shadow-[0_0_15px_rgba(6,182,212,0.3)] scale-105'
-                    : 'bg-slate-900/50 border-transparent opacity-60 hover:opacity-100'
+                    ? 'bg-white border-haxball-blue shadow-md scale-105'
+                    : 'bg-slate-50 border-transparent opacity-60 hover:opacity-100'
                 }`}
               >
                 <RankBadge tier={tier} size="sm" className="mb-2" />
-                <span className="font-bold text-slate-300">{tier}</span>
+                <span className="font-bold text-slate-600">{tier}</span>
               </div>
             ))}
           </div>
@@ -113,23 +113,23 @@ export function Dashboard() {
       // Default to showing 2v2 stats for teams for now
       const stats = team.stats['2v2'];
       return (
-          <Card key={team.id} className="card-kid bg-slate-900/80 border-slate-800 hover:border-primary transition-colors">
+          <Card key={team.id} className="card-kid border-slate-200 hover:border-haxball-blue transition-colors">
               <CardContent className="p-6 flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center border border-slate-600">
-                          <Users className="w-6 h-6 text-slate-300" />
+                      <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                          <Users className="w-6 h-6 text-slate-500" />
                       </div>
                       <div>
-                          <h3 className="text-lg font-bold text-white">{team.name}</h3>
-                          <p className="text-sm text-slate-400">Members: {team.members.length}</p>
+                          <h3 className="text-lg font-bold text-slate-800">{team.name}</h3>
+                          <p className="text-sm text-slate-500">Members: {team.members.length}</p>
                       </div>
                   </div>
                   <div className="text-right">
                       <div className="flex items-center gap-2 justify-end">
                           <RankBadge tier={stats.tier} size="sm" />
-                          <span className="font-bold text-white">{stats.rating} MMR</span>
+                          <span className="font-bold text-slate-800">{stats.rating} MMR</span>
                       </div>
-                      <p className="text-xs text-slate-500 mt-1">2v2 Rating</p>
+                      <p className="text-xs text-slate-400 mt-1">2v2 Rating</p>
                   </div>
               </CardContent>
           </Card>
@@ -137,20 +137,20 @@ export function Dashboard() {
   };
   return (
     <Tabs defaultValue="1v1" className="w-full">
-      <TabsList className="grid w-full grid-cols-5 h-14 p-1 bg-slate-900 rounded-2xl border border-slate-800">
-        <TabsTrigger value="1v1" className="rounded-xl text-base font-bold data-[state=active]:bg-slate-800 data-[state=active]:text-primary">
+      <TabsList className="grid w-full grid-cols-5 h-14 p-1 bg-slate-100 rounded-xl border border-slate-200">
+        <TabsTrigger value="1v1" className="rounded-lg text-base font-bold data-[state=active]:bg-white data-[state=active]:text-haxball-blue data-[state=active]:shadow-sm">
             <User className="w-4 h-4 mr-2" /> 1v1
         </TabsTrigger>
-        <TabsTrigger value="2v2" className="rounded-xl text-base font-bold data-[state=active]:bg-slate-800 data-[state=active]:text-primary">
+        <TabsTrigger value="2v2" className="rounded-lg text-base font-bold data-[state=active]:bg-white data-[state=active]:text-haxball-blue data-[state=active]:shadow-sm">
             <Users className="w-4 h-4 mr-2" /> 2v2
         </TabsTrigger>
-        <TabsTrigger value="3v3" className="rounded-xl text-base font-bold data-[state=active]:bg-slate-800 data-[state=active]:text-primary">
+        <TabsTrigger value="3v3" className="rounded-lg text-base font-bold data-[state=active]:bg-white data-[state=active]:text-haxball-blue data-[state=active]:shadow-sm">
             <Shield className="w-4 h-4 mr-2" /> 3v3
         </TabsTrigger>
-        <TabsTrigger value="4v4" className="rounded-xl text-base font-bold data-[state=active]:bg-slate-800 data-[state=active]:text-primary">
+        <TabsTrigger value="4v4" className="rounded-lg text-base font-bold data-[state=active]:bg-white data-[state=active]:text-haxball-blue data-[state=active]:shadow-sm">
             <Trophy className="w-4 h-4 mr-2" /> 4v4
         </TabsTrigger>
-        <TabsTrigger value="teams" className="rounded-xl text-base font-bold data-[state=active]:bg-slate-800 data-[state=active]:text-primary">
+        <TabsTrigger value="teams" className="rounded-lg text-base font-bold data-[state=active]:bg-white data-[state=active]:text-haxball-blue data-[state=active]:shadow-sm">
             <Users className="w-4 h-4 mr-2" /> Teams
         </TabsTrigger>
       </TabsList>
@@ -160,19 +160,19 @@ export function Dashboard() {
       <TabsContent value="4v4">{renderStats('4v4', profile.stats['4v4'])}</TabsContent>
       <TabsContent value="teams" className="space-y-6 mt-6 animate-fade-in">
           <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-display font-bold text-white">My Teams</h2>
+              <h2 className="text-2xl font-display font-bold text-slate-800">My Teams</h2>
           </div>
           {/* Create Team Form */}
-          <Card className="bg-slate-900/50 border-slate-800">
+          <Card className="bg-white border-slate-200 shadow-sm">
               <CardContent className="p-6">
                   <form onSubmit={handleCreateTeam} className="flex gap-4 items-end">
                       <div className="flex-1 space-y-2">
-                          <label className="text-sm font-medium text-slate-400">Create New Team</label>
-                          <Input 
-                            placeholder="Enter team name..." 
+                          <label className="text-sm font-medium text-slate-600">Create New Team</label>
+                          <Input
+                            placeholder="Enter team name..."
                             value={newTeamName}
                             onChange={(e) => setNewTeamName(e.target.value)}
-                            className="bg-slate-950 border-slate-700 text-white placeholder:text-slate-600"
+                            className="bg-slate-50 border-slate-200 text-slate-800 placeholder:text-slate-400"
                           />
                       </div>
                       <Button type="submit" disabled={!newTeamName.trim() || isLoading} className="btn-kid-primary">
@@ -184,7 +184,7 @@ export function Dashboard() {
           {/* Team List */}
           <div className="grid gap-4">
               {teams.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500">
+                  <div className="text-center py-12 text-slate-400">
                       You haven't joined any teams yet. Create one above!
                   </div>
               ) : (

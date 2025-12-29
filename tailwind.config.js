@@ -103,36 +103,21 @@ export default {
   				border: 'hsl(var(--sidebar-border))',
   				ring: 'hsl(var(--sidebar-ring))'
   			},
-            // Cyber Soccer Custom Palette
-            grass: {
-                DEFAULT: '#0f291e', // Dark Night Turf
-                light: '#1a4031',
-                dark: '#051f15',
-                accent: '#10b981'   // Neon Green Accent
-            },
-            sky: {
-                DEFAULT: '#0f172a', // Deep Night Sky
-                light: '#1e293b',
-                dark: '#020617'
-            },
-            energy: {
-                DEFAULT: '#facc15', // Neon Yellow
-                light: '#fde047',
-                dark: '#eab308'
-            },
-            kick: {
-                blue: '#06b6d4',    // Neon Cyan
-                red: '#f43f5e'      // Neon Pink
+            // Classic Haxball Palette
+            haxball: {
+                field: '#718c5a',   // Base grass
+                stripe: '#6c8655',  // Darker stripe
+                line: '#ffffff',    // Field lines
+                red: '#e56e56',     // Team Red
+                blue: '#5689e5',    // Team Blue
+                border: '#000000',  // Entity strokes
+                text: '#ffffff'     // Text on field
             }
   		},
   		boxShadow: {
   			soft: '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
-  			glow: '0 0 20px -5px rgba(6, 182, 212, 0.4)',
-  			'glow-lg': '0 0 40px -10px rgba(6, 182, 212, 0.3)',
-            'neon': '0 0 10px theme("colors.cyan.500")',
-            'neon-red': '0 0 10px theme("colors.rose.500")',
   			primary: '0 0 20px -5px hsl(var(--primary) / 0.4)',
-  			glass: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+  			glass: '0 8px 32px 0 rgba(0, 0, 0, 0.1)',
   		},
   		keyframes: {
   			'fade-in': {
@@ -150,14 +135,6 @@ export default {
   			shimmer: {
   				'0%': { transform: 'translateX(-100%)' },
   				'100%': { transform: 'translateX(100%)' }
-  			},
-  			glow: {
-  				'0%, 100%': { boxShadow: '0 0 20px -5px rgba(6, 182, 212, 0.4)' },
-  				'50%': { boxShadow: '0 0 40px -5px rgba(6, 182, 212, 0.6)' }
-  			},
-  			float: {
-  				'0%, 100%': { transform: 'translateY(0px)' },
-  				'50%': { transform: 'translateY(-10px)' }
   			},
             bounce: {
                 '0%, 100%': { transform: 'translateY(-5%)', animationTimingFunction: 'cubic-bezier(0.8,0,1,1)' },
@@ -177,18 +154,13 @@ export default {
   			'slide-up': 'slide-up 0.4s ease-out',
   			'scale-in': 'scale-in 0.3s ease-out',
   			shimmer: 'shimmer 2s infinite',
-  			glow: 'glow 2s ease-in-out infinite',
-  			float: 'float 3s ease-in-out infinite',
             bounce: 'bounce 1s infinite',
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out'
   		},
   		backgroundImage: {
   			'gradient-rainbow': 'linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #f5576c 75%, #4facfe 100%)',
-  			'gradient-primary': 'linear-gradient(135deg, #06b6d4, #3b82f6)',
-            'gradient-grass': 'linear-gradient(180deg, #0f291e 0%, #051f15 100%)',
-            'gradient-sky': 'linear-gradient(180deg, #0f172a 0%, #020617 100%)',
-  			'gradient-mesh': 'radial-gradient(at 40% 20%, hsla(28,100%,74%,0.1) 0px, transparent 50%), radial-gradient(at 80% 0%, hsla(189,100%,56%,0.1) 0px, transparent 50%), radial-gradient(at 0% 50%, hsla(355,100%,93%,0.1) 0px, transparent 50%)'
+  			'gradient-primary': 'linear-gradient(135deg, #5689e5, #3b82f6)',
   		}
   	}
   },

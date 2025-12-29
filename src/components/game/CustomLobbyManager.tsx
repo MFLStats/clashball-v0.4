@@ -8,13 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, ArrowLeft, Users, Copy, Play, Send, KeyRound, Crown, RefreshCw, LogIn, Settings, Clock, Trophy, Map as MapIcon, X, Eye } from 'lucide-react';
+import { Loader2, ArrowLeft, Users, Copy, Play, Send, KeyRound, Crown, RefreshCw, LogIn, Settings, Clock, Trophy, Map as MapIcon, X, Eye, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SoundEngine } from '@/lib/audio';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 interface CustomLobbyManagerProps {
   onExit: () => void;
+  initialCode?: string;
 }
 interface ChatMessage {
   id: string;
@@ -22,11 +23,11 @@ interface ChatMessage {
   message: string;
   team: 'red' | 'blue' | 'spectator';
 }
-export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
+export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerProps) {
   const profile = useUserStore(s => s.profile);
   const [view, setView] = useState<'menu' | 'lobby' | 'game'>('menu');
   const [lobbyState, setLobbyState] = useState<LobbyState | null>(null);
-  const [joinCode, setJoinCode] = useState('');
+  const [joinCode, setJoinCode] = useState(initialCode || '');
   const [isConnecting, setIsConnecting] = useState(false);
   const [lobbies, setLobbies] = useState<LobbyInfo[]>([]);
   const [isLoadingLobbies, setIsLoadingLobbies] = useState(false);
@@ -278,6 +279,13 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
           toast.success('Lobby code copied!');
       }
   }, [lobbyState?.code]);
+  const copyLink = useCallback(() => {
+      if (lobbyState?.code) {
+          const url = `${window.location.origin}/?lobby=${lobbyState.code}`;
+          navigator.clipboard.writeText(url);
+          toast.success('Invite link copied!');
+      }
+  }, [lobbyState?.code]);
   const handleLeaveGame = useCallback(() => {
       setView('lobby');
       setGameState(null);
@@ -430,6 +438,9 @@ export function CustomLobbyManager({ onExit }: CustomLobbyManagerProps) {
                       <span className="font-mono font-bold text-2xl text-white tracking-widest">{lobbyState.code}</span>
                       <Button size="icon" variant="ghost" className="h-8 w-8 ml-2 text-slate-400 hover:text-white hover:bg-slate-800" onClick={copyCode}>
                           <Copy className="w-4 h-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-800" onClick={copyLink}>
+                          <Share2 className="w-4 h-4" />
                       </Button>
                   </div>
                   {isHost && (

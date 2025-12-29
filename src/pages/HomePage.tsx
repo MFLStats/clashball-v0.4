@@ -26,6 +26,7 @@ export function HomePage() {
   const [view, setView] = useState<ViewState>('lobby');
   const [selectedMode, setSelectedMode] = useState<GameMode>('1v1');
   const [showAuth, setShowAuth] = useState(false);
+  const [initialLobbyCode, setInitialLobbyCode] = useState<string | undefined>(undefined);
   // STRICT ZUSTAND RULE: Select primitives individually
   const profile = useUserStore(s => s.profile);
   const isAuthenticated = useUserStore(s => s.isAuthenticated);
@@ -42,6 +43,18 @@ export function HomePage() {
   useEffect(() => {
     SoundEngine.setVolume(volume);
   }, [volume]);
+  // Deep Linking Handler
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const lobbyCode = params.get('lobby');
+    if (lobbyCode) {
+      setInitialLobbyCode(lobbyCode);
+      setView('custom_lobby');
+      // Clean URL without reload to prevent re-joining on refresh if desired, 
+      // or keep it to allow bookmarking. Cleaning it is usually cleaner UX.
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
   const handleLocalGameEnd = async (winner: 'red' | 'blue') => {
     if (!profile || isProcessing) return;
     setIsProcessing(true);
@@ -110,8 +123,8 @@ export function HomePage() {
         return (
           <div className="animate-fade-in space-y-6">
             <div className="flex items-center justify-between">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-800 text-slate-200"
                 disabled={isProcessing}
@@ -123,7 +136,7 @@ export function HomePage() {
               </h2>
               <div className="w-24" />
             </div>
-            <GameCanvas 
+            <GameCanvas
                 onGameEnd={handleLocalGameEnd}
                 winningScore={3}
                 playerNames={{ red: 'You', blue: 'Bot (1200)' }}
@@ -132,14 +145,14 @@ export function HomePage() {
         );
       case 'online_select':
         return (
-          <GameModeSelector 
+          <GameModeSelector
             onSelect={startOnlineGame}
             onBack={() => setView('lobby')}
           />
         );
       case 'online_game':
         return (
-            <OnlineGameManager 
+            <OnlineGameManager
                 mode={selectedMode}
                 onExit={async () => {
                     await refreshProfile();
@@ -149,8 +162,9 @@ export function HomePage() {
         );
       case 'custom_lobby':
         return (
-            <CustomLobbyManager 
+            <CustomLobbyManager
                 onExit={() => setView('lobby')}
+                initialCode={initialLobbyCode}
             />
         );
       case 'tournament_mode':
@@ -165,8 +179,8 @@ export function HomePage() {
         return (
           <div className="animate-fade-in space-y-6">
             <div className="flex items-center justify-between">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-800 text-slate-200"
               >
@@ -182,8 +196,8 @@ export function HomePage() {
         return (
           <div className="animate-fade-in space-y-6">
             <div className="flex items-center justify-between">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-800 text-slate-200"
               >
@@ -296,6 +310,7 @@ export function HomePage() {
                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     <span>Servers Online</span>
                 </div>
+                <div>Built with ❤️ by Aurelia</div>
             </footer>
           </div>
         );

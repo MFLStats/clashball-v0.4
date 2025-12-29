@@ -1,4 +1,4 @@
-# KickStar League: Physics Soccer
+# KickStar League: Physics Soccer 
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/MFLStats/clashball-v0.4)
 

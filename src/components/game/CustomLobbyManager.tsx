@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { SoundEngine } from '@/lib/audio';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { QuickChat } from './QuickChat';
 interface CustomLobbyManagerProps {
   onExit: () => void;
   initialCode?: string;
@@ -273,6 +274,14 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
     }));
     setChatInput('');
   }, [chatInput]);
+  // Quick Chat Handler
+  const handleQuickChat = useCallback((message: string) => {
+    if (!wsRef.current) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'chat',
+      message
+    } satisfies WSMessage));
+  }, []);
   const copyCode = useCallback(() => {
       if (lobbyState?.code) {
           navigator.clipboard.writeText(lobbyState.code);
@@ -756,17 +765,20 @@ export function CustomLobbyManager({ onExit, initialCode }: CustomLobbyManagerPr
                 ))}
                 <div ref={chatEndRef} />
             </div>
-            <form onSubmit={sendChat} className="flex gap-2">
-                <Input
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    placeholder="Type a message..."
-                    className="bg-black/60 border-white/20 text-white placeholder:text-white/50 h-9 text-sm backdrop-blur-md focus:bg-black/80 transition-colors"
-                />
-                <Button type="submit" size="sm" className="h-9 w-9 p-0 bg-white/10 hover:bg-white/20 border border-white/10">
-                    <Send className="w-4 h-4" />
-                </Button>
-            </form>
+            <div className="flex flex-col gap-2">
+                <QuickChat onSelect={handleQuickChat} />
+                <form onSubmit={sendChat} className="flex gap-2">
+                    <Input
+                        value={chatInput}
+                        onChange={e => setChatInput(e.target.value)}
+                        placeholder="Type a message..."
+                        className="bg-black/60 border-white/20 text-white placeholder:text-white/50 h-9 text-sm backdrop-blur-md focus:bg-black/80 transition-colors"
+                    />
+                    <Button type="submit" size="sm" className="h-9 w-9 p-0 bg-white/10 hover:bg-white/20 border border-white/10">
+                        <Send className="w-4 h-4" />
+                    </Button>
+                </form>
+            </div>
         </div>
       </div>
     </div>

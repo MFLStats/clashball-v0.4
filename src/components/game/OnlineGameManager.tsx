@@ -9,6 +9,7 @@ import { Loader2, ArrowLeft, Send, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { SoundEngine } from '@/lib/audio';
 import { NetworkIndicator } from '@/components/ui/network-indicator';
+import { QuickChat } from './QuickChat';
 interface OnlineGameManagerProps {
   mode: GameMode;
   onExit: () => void;
@@ -232,6 +233,14 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     } satisfies WSMessage));
     setChatInput('');
   }, [chatInput]);
+  // Quick Chat Handler
+  const handleQuickChat = useCallback((message: string) => {
+    if (!wsRef.current) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'chat',
+      message
+    } satisfies WSMessage));
+  }, []);
   // Memoized Retry Handler
   const handleRetry = useCallback(() => {
       if (wsRef.current) {
@@ -354,17 +363,20 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
                 ))}
                 <div ref={chatEndRef} />
             </div>
-            <form onSubmit={sendChat} className="flex gap-2">
-                <Input
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    placeholder="Type a message..."
-                    className="bg-black/40 border-white/20 text-white placeholder:text-white/50 h-8 text-sm"
-                />
-                <Button type="submit" size="sm" className="h-8 w-8 p-0 bg-white/20 hover:bg-white/30">
-                    <Send className="w-3 h-3" />
-                </Button>
-            </form>
+            <div className="flex flex-col gap-2">
+                <QuickChat onSelect={handleQuickChat} />
+                <form onSubmit={sendChat} className="flex gap-2">
+                    <Input
+                        value={chatInput}
+                        onChange={e => setChatInput(e.target.value)}
+                        placeholder="Type a message..."
+                        className="bg-black/40 border-white/20 text-white placeholder:text-white/50 h-8 text-sm"
+                    />
+                    <Button type="submit" size="sm" className="h-8 w-8 p-0 bg-white/20 hover:bg-white/30">
+                        <Send className="w-3 h-3" />
+                    </Button>
+                </form>
+            </div>
         </div>
       </div>
     </div>

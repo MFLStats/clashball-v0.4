@@ -12,13 +12,13 @@ interface GameCanvasProps {
   onGameEnd?: (winner: 'red' | 'blue') => void;
   winningScore?: number;
   externalState?: GameState | null;
-  externalWinner?: 'red' | 'blue' | null; // New prop
+  externalWinner?: 'red' | 'blue' | null;
   onInput?: (input: { move: { x: number; y: number }; kick: boolean }) => void;
   botDifficulty?: 'easy' | 'medium' | 'hard';
   playerNames?: { red: string; blue: string };
   currentUserId?: string;
-  finalStats?: Record<string, PlayerMatchStats>; // Stats from server
-  onLeave?: () => void; // Callback for leaving from summary
+  finalStats?: Record<string, PlayerMatchStats>;
+  onLeave?: () => void;
 }
 export function GameCanvas({
   onGameEnd,
@@ -44,6 +44,8 @@ export function GameCanvas({
   });
   const lastTimeRef = useRef<number>(0);
   const latestExternalStateRef = useRef<GameState | null>(null);
+  // Visual FX Refs
+  const ballTrailRef = useRef<{ x: number; y: number }[]>([]);
   // Local Stats Tracking
   const localStatsRef = useRef<Record<string, PlayerMatchStats>>({});
   const [score, setScore] = useState({ red: 0, blue: 0 });
@@ -263,11 +265,25 @@ export function GameCanvas({
           ctx.stroke();
       }
     });
-    // --- 5. Draw Ball ---
+    // --- 5. Draw Ball Trail (Visual FX) ---
     const b = state.ball;
     const bx = b.pos.x * scaleX;
     const by = b.pos.y * scaleY;
     const br = b.radius * scaleX;
+    if (ballTrailRef.current.length > 0) {
+        ctx.save();
+        ballTrailRef.current.forEach((pos, index) => {
+            const opacity = (index / ballTrailRef.current.length) * 0.4; // Max 0.4 opacity
+            const size = br * (0.6 + (index / ballTrailRef.current.length) * 0.4); // Scale from 0.6 to 1.0
+            ctx.globalAlpha = opacity;
+            ctx.beginPath();
+            ctx.arc(pos.x * scaleX, pos.y * scaleY, size, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+        });
+        ctx.restore();
+    }
+    // --- 6. Draw Ball ---
     ctx.beginPath();
     ctx.arc(bx, by, br, 0, Math.PI * 2);
     ctx.fillStyle = '#ffffff';
@@ -275,7 +291,7 @@ export function GameCanvas({
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 2.5;
     ctx.stroke();
-    // --- 6. Overtime Overlay ---
+    // --- 7. Overtime Overlay ---
     if (state.isOvertime && state.status !== 'goal') {
         ctx.save();
         ctx.font = 'bold 48px sans-serif';
@@ -294,7 +310,7 @@ export function GameCanvas({
         ctx.strokeText('GOLDEN GOAL', 0, 0);
         ctx.restore();
     }
-    // --- 7. Goal Celebration Overlay ---
+    // --- 8. Goal Celebration Overlay ---
     if (state.status === 'goal') {
         ctx.save();
         ctx.translate(width / 2, height / 2);
@@ -316,7 +332,7 @@ export function GameCanvas({
         ctx.fillText('GOAL!', 0, 0);
         ctx.restore();
     }
-    // --- 8. Spectator Overlay ---
+    // --- 9. Spectator Overlay ---
     // Check if we are in online mode (externalState exists) and user is NOT playing
     const isOnline = !!latestExternalStateRef.current;
     const isSpectating = isOnline && currentUserId && !state.players.some(p => p.id === currentUserId);
@@ -491,6 +507,16 @@ export function GameCanvas({
         });
       }
       const currentState = displayStateRef.current;
+      // Update Trail
+      if (currentState.status === 'playing') {
+          ballTrailRef.current.push({ ...currentState.ball.pos });
+          if (ballTrailRef.current.length > 10) {
+              ballTrailRef.current.shift();
+          }
+      } else if (currentState.status === 'goal') {
+          // Keep trail during goal celebration or clear it? Let's clear it slowly or keep it static
+          // For now, just keep it
+      }
       // Update Overtime State for UI
       setIsOvertime(currentState.isOvertime);
       // Check for score change (Visual only for online, authoritative for local)
@@ -542,6 +568,7 @@ export function GameCanvas({
   const handleReset = () => {
     gameStateRef.current = PhysicsEngine.createInitialState();
     displayStateRef.current = PhysicsEngine.createInitialState();
+    ballTrailRef.current = []; // Clear trail
     // Reset Stats
     ['p1', 'p2'].forEach(id => {
         localStatsRef.current[id] = {

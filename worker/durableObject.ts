@@ -43,63 +43,44 @@ export class GlobalDurableObject extends DurableObject {
         this.queues.set('3v3', []);
         this.queues.set('4v4', []);
     }
-    // --- WebSocket Handling ---
+    // --- WebSocket Handling (Hibernation API) ---
     async fetch(request: Request): Promise<Response> {
-        // CRITICAL FIX: Prioritize Upgrade header check over URL path
-        // This handles cases where the worker runtime might rewrite the URL path
         const upgradeHeader = request.headers.get('Upgrade');
-        if (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket') {
-            try {
-                // Create a WebSocket pair
-                // client: returned to the user
-                // server: accepted by the Durable Object
-                const webSocketPair = new WebSocketPair();
-                const [client, server] = Object.values(webSocketPair);
-                // Accept the server side of the socket
-                this.handleSession(server);
-                return new Response(null, {
-                    status: 101,
-                    webSocket: client,
-                });
-            } catch (err) {
-                // Return a 500 error with the message if handshake fails
-                const errorMessage = err instanceof Error ? err.message : String(err);
-                return new Response(`WebSocket handshake error: ${errorMessage}`, { status: 500 });
-            }
+        if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
+            return new Response('Durable Object expected Upgrade: websocket', { status: 426 });
         }
-        // Fallback for non-WebSocket requests (if any reach here)
-        return new Response('Durable Object expected Upgrade: websocket', { status: 426 });
+        const webSocketPair = new WebSocketPair();
+        const [client, server] = Object.values(webSocketPair);
+        // Use the Hibernation API: acceptWebSocket
+        // This tells the runtime to handle the WebSocket connection and call
+        // webSocketMessage/webSocketClose methods on this class.
+        this.ctx.acceptWebSocket(server);
+        return new Response(null, {
+            status: 101,
+            webSocket: client,
+        });
     }
-    handleSession(ws: WebSocket) {
-        // Wrap accept in try-catch just in case
+    async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
         try {
-            ws.accept();
-        } catch (err) {
-            console.error('[DurableObject] Failed to accept WebSocket:', err);
-            return;
-        }
-        ws.addEventListener('message', async (event) => {
+            const msg = JSON.parse(message as string) as WSMessage;
+            await this.handleMessage(ws, msg);
+        } catch (e) {
+            console.error('[DurableObject] WS Message Error:', e);
             try {
-                const msg = JSON.parse(event.data as string) as WSMessage;
-                await this.handleMessage(ws, msg);
-            } catch (e) {
-                console.error('[DurableObject] WS Message Error:', e);
-                // Optional: Send error back to client if possible
-                try {
-                    ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
-                } catch (sendErr) {
-                    // Ignore send errors on broken connection
-                }
+                ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
+            } catch (sendErr) {
+                // Ignore send errors on broken connection
             }
-        });
-        ws.addEventListener('close', () => {
-            this.handleDisconnect(ws);
-        });
-        ws.addEventListener('error', (err) => {
-            console.error('[DurableObject] WS Error Event:', err);
-            this.handleDisconnect(ws);
-        });
+        }
     }
+    async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
+        this.handleDisconnect(ws);
+    }
+    async webSocketError(ws: WebSocket, error: any) {
+        console.error('[DurableObject] WS Error:', error);
+        this.handleDisconnect(ws);
+    }
+    // --- Core Logic ---
     async handleMessage(ws: WebSocket, msg: WSMessage) {
         try {
             switch (msg.type) {
@@ -533,7 +514,7 @@ export class GlobalDurableObject extends DurableObject {
             if (profiles.length < 2) return null; // Need at least 2 players to form a "team" context for ranking usually
             const first = profiles[0].teams || [];
             // Find intersection of all players' team lists
-            const common = first.filter(teamId => 
+            const common = first.filter(teamId =>
                 profiles.every(p => (p.teams || []).includes(teamId))
             );
             return common.length > 0 ? common[0] : null; // Return first common team found

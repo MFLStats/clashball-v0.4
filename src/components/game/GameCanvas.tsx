@@ -206,7 +206,6 @@ export function GameCanvas({
       // Classic Haxball Colors
       const color = p.team === 'red' ? '#e56e56' : '#5689e5';
       // Kick Range Ring (New Feature)
-      // Visualizes the effective kick distance
       const kickRange = (p.radius + state.ball.radius + PhysicsEngine.KICK_TOLERANCE) * scaleX;
       ctx.beginPath();
       ctx.arc(x, y, kickRange, 0, Math.PI * 2);
@@ -269,7 +268,7 @@ export function GameCanvas({
     ctx.lineWidth = 2.5;
     ctx.stroke();
     // --- 6. Overtime Overlay ---
-    if (state.isOvertime) {
+    if (state.isOvertime && state.status !== 'goal') {
         ctx.save();
         ctx.font = 'bold 48px sans-serif';
         ctx.textAlign = 'center';
@@ -285,6 +284,28 @@ export function GameCanvas({
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
         ctx.strokeText('GOLDEN GOAL', 0, 0);
+        ctx.restore();
+    }
+    // --- 7. Goal Celebration Overlay ---
+    if (state.status === 'goal') {
+        ctx.save();
+        ctx.translate(width / 2, height / 2);
+        // Pulse/Scale animation
+        const scale = 1 + Math.sin(Date.now() / 150) * 0.1;
+        ctx.scale(scale, scale);
+        ctx.font = '900 120px sans-serif'; // Heavy font
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // Text Stroke
+        ctx.lineWidth = 8;
+        ctx.strokeStyle = '#ffffff';
+        ctx.strokeText('GOAL!', 0, 0);
+        // Text Fill (Gold Gradient)
+        const gradient = ctx.createLinearGradient(0, -60, 0, 60);
+        gradient.addColorStop(0, '#fbbf24'); // Amber 400
+        gradient.addColorStop(1, '#d97706'); // Amber 600
+        ctx.fillStyle = gradient;
+        ctx.fillText('GOAL!', 0, 0);
         ctx.restore();
     }
   }, [currentUserId, showNames]);
@@ -330,29 +351,50 @@ export function GameCanvas({
       } else {
         // Local Mode: Update local ref
         gameStateRef.current.players[0].input = p1Input;
-        // Bot Logic for P2 (Local only)
+        // --- Bot Logic (Predictive AI) ---
         const ball = gameStateRef.current.ball;
         const p2 = gameStateRef.current.players[1];
-        const dx = ball.pos.x - p2.pos.x;
-        const dy = ball.pos.y - p2.pos.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
         // Difficulty Settings
-        let reactionDist = 400;
+        let predictionFactor = 0.0; // Seconds ahead
         let kickChance = 0.05;
+        let reactionDist = 400;
         if (botDifficulty === 'easy') {
-            reactionDist = 200;
+            predictionFactor = 0.1;
             kickChance = 0.02;
+            reactionDist = 300;
+        } else if (botDifficulty === 'medium') {
+             predictionFactor = 0.3;
+             kickChance = 0.05;
+             reactionDist = 600;
         } else if (botDifficulty === 'hard') {
-            reactionDist = 1000; // Always tracks
+            predictionFactor = 0.5;
             kickChance = 0.15;
+            reactionDist = 2000; // Infinite
         }
+        // Calculate predicted ball position
+        let targetX = ball.pos.x + ball.vel.x * predictionFactor;
+        let targetY = ball.pos.y + ball.vel.y * predictionFactor;
+        // Simple clamp to field
+        targetX = Math.max(0, Math.min(1200, targetX));
+        targetY = Math.max(0, Math.min(600, targetY));
+        const dx = targetX - p2.pos.x;
+        const dy = targetY - p2.pos.y;
+        const distToTarget = Math.sqrt(dx*dx + dy*dy);
+        const distToBall = Math.sqrt((ball.pos.x - p2.pos.x)**2 + (ball.pos.y - p2.pos.y)**2);
         const botMove = { x: 0, y: 0 };
         // Only move if ball is within reaction distance
-        if (dist < reactionDist) {
-            if (Math.abs(dx) > 10) botMove.x = Math.sign(dx);
-            if (Math.abs(dy) > 10) botMove.y = Math.sign(dy);
+        if (distToBall < reactionDist) {
+             // Normalize movement
+             if (distToTarget > 10) {
+                 botMove.x = dx / distToTarget;
+                 botMove.y = dy / distToTarget;
+             }
         }
-        const botKick = dist < 30 && Math.random() < kickChance;
+        // Kick logic: Close to ball AND aligned with goal
+        // Blue (P2) attacks Left Goal (x=0). Ball should be to the left of bot.
+        const isClose = distToBall < (p2.radius + ball.radius + 15);
+        const aligned = (p2.team === 'blue' && ball.pos.x < p2.pos.x) || (p2.team === 'red' && ball.pos.x > p2.pos.x);
+        const botKick = isClose && aligned && Math.random() < kickChance;
         gameStateRef.current.players[1].input = { move: botMove, kick: botKick };
       }
       // 2. State Update & Interpolation
@@ -464,7 +506,7 @@ export function GameCanvas({
               handleGameOver('blue');
           } else {
               // Should not happen with Golden Goal logic, but fallback
-              handleGameOver('red'); 
+              handleGameOver('red');
           }
       }
       // 3. Render
@@ -505,8 +547,6 @@ export function GameCanvas({
     ? externalState.players.map(p => ({ id: p.id, username: p.username, team: p.team }))
     : gameStateRef.current.players.map(p => ({ id: p.id, username: p.username, team: p.team }));
   // Determine user team for victory/defeat message
-  // In local mode, user is always 'red' (p1)
-  // In online mode, we need to find the user in the players list
   const userTeam = externalState
     ? summaryPlayers.find(p => p.id === currentUserId)?.team
     : 'red';

@@ -84,6 +84,10 @@ export function TouchControls({ onUpdate }: TouchControlsProps) {
   const handleKickDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation(); // Prevent triggering joystick
+    // Haptic Feedback
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(50);
+    }
     setIsKicking(true);
     inputState.current.kick = true;
     updateParent();
@@ -102,7 +106,7 @@ export function TouchControls({ onUpdate }: TouchControlsProps) {
     };
   }, [onUpdate]);
   return (
-    <div 
+    <div
       className="absolute inset-0 z-20 touch-none select-none md:hidden"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -112,10 +116,10 @@ export function TouchControls({ onUpdate }: TouchControlsProps) {
     >
       {/* Dynamic Joystick Visual */}
       {joystickVisual && (
-        <div 
+        <div
           className="absolute pointer-events-none"
-          style={{ 
-            left: joystickVisual.x, 
+          style={{
+            left: joystickVisual.x,
             top: joystickVisual.y,
             transform: 'translate(-50%, -50%)'
           }}
@@ -123,7 +127,7 @@ export function TouchControls({ onUpdate }: TouchControlsProps) {
           {/* Base */}
           <div className="w-24 h-24 rounded-full bg-slate-900/30 border-2 border-white/10 backdrop-blur-sm" />
           {/* Knob */}
-          <div 
+          <div
             className="absolute w-10 h-10 rounded-full bg-white/90 shadow-[0_0_15px_rgba(255,255,255,0.3)]"
             style={{
               left: '50%',

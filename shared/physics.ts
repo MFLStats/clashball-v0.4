@@ -41,6 +41,7 @@ export interface GameState {
   status: 'playing' | 'goal' | 'ended';
   timeRemaining: number;
   isOvertime: boolean;
+  goalTimer?: number;
 }
 export class PhysicsEngine {
   // Arcade Physics Constants - Tuned for Timestep Independence (Units per Second)
@@ -48,18 +49,17 @@ export class PhysicsEngine {
   static readonly BALL_RADIUS = 10;
   // Kick Mechanics
   static readonly KICK_TOLERANCE = 5; // Extra range for kicking
-  static readonly KICK_STRENGTH = 550; // Increased for faster gameplay (was 450)
+  static readonly KICK_STRENGTH = 550; // Increased for faster gameplay
   // Field Dimensions
   static readonly FIELD_WIDTH = 1200;
   static readonly FIELD_HEIGHT = 600;
   static readonly GOAL_HEIGHT = 180;
   // Movement & Physics (Per Second)
-  // Tuned for faster, snappier arcade feel
-  static readonly PLAYER_MAX_SPEED = 240; // Increased from 150
-  static readonly PLAYER_ACCELERATION = 1200; // Increased from 600 for snappier movement
+  static readonly PLAYER_MAX_SPEED = 240; 
+  static readonly PLAYER_ACCELERATION = 1200; 
   // Damping Base (Applied per 1/60s)
-  static readonly PLAYER_DAMPING_BASE = 0.89; // Increased from 0.85 (Less friction)
-  static readonly BALL_DAMPING_BASE = 0.990; // Increased from 0.985 (Less friction)
+  static readonly PLAYER_DAMPING_BASE = 0.89; 
+  static readonly BALL_DAMPING_BASE = 0.990; 
   static readonly WALL_BOUNCE = 0.75;
   static readonly PLAYER_BOUNCE = 0.5;
   // Velocity threshold for stopping
@@ -105,14 +105,28 @@ export class PhysicsEngine {
       },
       status: 'playing',
       timeRemaining: 180, // 3 minutes in seconds
-      isOvertime: false
+      isOvertime: false,
+      goalTimer: 0
     };
   }
   static update(state: GameState, dt: number): { state: GameState; events: GameEvent[] } {
     const events: GameEvent[] = [];
-    if (state.status !== 'playing') return { state, events };
     // Deep copy for immutability
     const newState = JSON.parse(JSON.stringify(state)) as GameState;
+    // Handle Goal Pause State
+    if (newState.status === 'goal') {
+        if (newState.goalTimer !== undefined) {
+            newState.goalTimer -= dt;
+            if (newState.goalTimer <= 0) {
+                this.resetPositions(newState);
+            }
+        } else {
+            // Fallback if timer missing
+            this.resetPositions(newState);
+        }
+        return { state: newState, events };
+    }
+    if (newState.status !== 'playing') return { state: newState, events };
     // Update Time
     newState.timeRemaining -= dt;
     if (newState.timeRemaining <= 0) {
@@ -121,7 +135,6 @@ export class PhysicsEngine {
         if (newState.score.red === newState.score.blue) {
             if (!newState.isOvertime) {
                 newState.isOvertime = true;
-                // We could push an event here if we wanted a specific sound for OT start
             }
         } else {
             // Regulation ended with a winner
@@ -189,7 +202,7 @@ export class PhysicsEngine {
     }
     // Goal Detection & X-Axis Walls
     const checkGoal = (isLeft: boolean) => {
-        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 &&
+        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 && 
                        b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
         if (isGoal) {
             const scoringTeam = isLeft ? 'blue' : 'red';
@@ -201,15 +214,15 @@ export class PhysicsEngine {
                 if (b.lastTouch.team === scoringTeam) {
                     scorerId = b.lastTouch.id;
                     // Check Assist
-                    if (b.previousTouch &&
-                        b.previousTouch.team === scoringTeam &&
+                    if (b.previousTouch && 
+                        b.previousTouch.team === scoringTeam && 
                         b.previousTouch.id !== scorerId &&
                         Math.abs(b.lastTouch.time - b.previousTouch.time) < this.ASSIST_WINDOW) {
                         assisterId = b.previousTouch.id;
                     }
                 } else {
                     // Own Goal
-                    scorerId = b.lastTouch.id; // Still attribute to last toucher, but logic handles it as OG
+                    scorerId = b.lastTouch.id; 
                 }
             }
             events.push({ type: 'goal', team: scoringTeam, scorerId, assisterId });
@@ -218,7 +231,9 @@ export class PhysicsEngine {
                 newState.status = 'ended';
                 events.push({ type: 'whistle' });
             } else {
-                this.resetPositions(newState);
+                // Regular Goal - Pause for celebration
+                newState.status = 'goal';
+                newState.goalTimer = 3.0; // 3 seconds celebration
             }
             return true;
         }
@@ -245,10 +260,8 @@ export class PhysicsEngine {
       const distSq = dx*dx + dy*dy;
       const dist = Math.sqrt(distSq);
       // A. Kick Mechanic (Check tolerance zone)
-      // Radius + Ball Radius + Tolerance
       const kickRange = p.radius + b.radius + this.KICK_TOLERANCE;
       if (p.isKicking && dist <= kickRange) {
-        // Calculate normal from player to ball
         const nx = dx / (dist || 1);
         const ny = dy / (dist || 1);
         // Apply Kick Impulse
@@ -268,7 +281,6 @@ export class PhysicsEngine {
       // B. Collision Resolution (Standard Dribble)
       const minDist = p.radius + b.radius;
       if (dist < minDist) {
-        // Collision Normal (from player to ball)
         const nx = dx / (dist || 1);
         const ny = dy / (dist || 1);
         // 1. Resolve Overlap (Push ball out)
@@ -279,20 +291,13 @@ export class PhysicsEngine {
         const relVelX = b.vel.x - p.vel.x;
         const relVelY = b.vel.y - p.vel.y;
         const velAlongNormal = relVelX * nx + relVelY * ny;
-        // Only resolve if moving towards each other
-        // If we just kicked, velAlongNormal is likely > 0 (separating), so this is skipped
         if (velAlongNormal < 0) {
-            // Calculate impulse scalar
             const j = -(1 + this.PLAYER_BOUNCE) * velAlongNormal;
-            // Apply impulse to ball
             b.vel.x += j * nx;
             b.vel.y += j * ny;
             // Add some of player's velocity directly for "grip" feel
             b.vel.x += p.vel.x * 0.2;
             b.vel.y += p.vel.y * 0.2;
-            // Update Touch History (if not already updated by kick this frame)
-            // Note: If kicked, we updated above. If just dribbling, update here.
-            // We can check if we just kicked, but updating again with same data is fine/idempotent for this tick
             if (b.lastTouch?.id !== p.id) {
                 b.previousTouch = b.lastTouch;
             }
@@ -316,16 +321,13 @@ export class PhysicsEngine {
     const bluePlayers = state.players.filter(p => p.team === 'blue');
     const setFormation = (players: Player[], isRed: boolean) => {
         const count = players.length;
-        // Base X: Red on left (150), Blue on right (Width - 150)
         const baseX = isRed ? 150 : state.field.width - 150;
         players.forEach((p, index) => {
             p.vel = { x: 0, y: 0 };
-            p.input = { move: { x: 0, y: 0 }, kick: false }; // Reset inputs
+            p.input = { move: { x: 0, y: 0 }, kick: false }; 
             if (count === 1) {
-                // Center
                 p.pos = { x: baseX, y: state.field.height / 2 };
             } else {
-                // Distribute vertically
                 const segment = state.field.height / (count + 1);
                 p.pos = { x: baseX, y: segment * (index + 1) };
             }
@@ -334,5 +336,6 @@ export class PhysicsEngine {
     setFormation(redPlayers, true);
     setFormation(bluePlayers, false);
     state.status = 'playing';
+    state.goalTimer = 0;
   }
 }

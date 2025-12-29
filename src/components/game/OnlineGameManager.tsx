@@ -20,6 +20,11 @@ interface ChatMessage {
   message: string;
   team: 'red' | 'blue' | 'spectator';
 }
+// Helper for exponential backoff
+const calculateBackoff = (retryCount: number) => {
+  // 1s, 2s, 4s, 8s, 10s (max)
+  return Math.min(1000 * Math.pow(2, retryCount), 10000);
+};
 export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerProps) {
   const profile = useUserStore(s => s.profile);
   const userId = profile?.id;
@@ -32,6 +37,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   const statusRef = useRef(status);
   const onExitRef = useRef(onExit);
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Update refs
   useEffect(() => {
     statusRef.current = status;
@@ -150,87 +156,101 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   }, []);
   // Main WebSocket Connection Effect
   useEffect(() => {
-    // Reset status on retry
-    setStatus('connecting');
     if (!userId || !username) {
         toast.error("User profile missing. Cannot join queue.");
         onExitRef.current();
         return;
     }
-    // Connect to WebSocket
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const ws = new WebSocket(`${protocol}//${host}/api/ws`);
-    wsRef.current = ws;
-    // Connection Timeout Logic
-    const connectionTimeout = setTimeout(() => {
-        if (isMountedRef.current && ws.readyState !== WebSocket.OPEN) {
-             setStatus('error');
-             toast.error('Connection timed out.');
-             ws.close();
-        }
-    }, 15000);
-    ws.onopen = () => {
-      if (!isMountedRef.current) {
-          ws.close();
-          return;
-      }
-      setStatus('searching');
-      // Join Queue
-      ws.send(JSON.stringify({
-        type: 'join_queue',
-        mode,
-        userId,
-        username
-      } satisfies WSMessage));
-    };
-    ws.onmessage = (event) => {
-      if (!isMountedRef.current) return;
-      try {
-        const msg = JSON.parse(event.data) as WSMessage;
-        handleMessageRef.current(msg);
-      } catch (e) {
-        console.error('Failed to parse WS message', e);
-      }
-    };
-    ws.onclose = (event) => {
-      if (!isMountedRef.current) return;
-      if (!event.wasClean) {
-          console.warn('WebSocket closed unexpectedly', event.code, event.reason);
-          // Retry logic for 1006 (Abnormal Closure)
-          if (event.code === 1006 && retryCount < 1) {
-              console.log('Attempting reconnection...');
-              // Small delay to prevent tight loop
-              setTimeout(() => {
-                  if (isMountedRef.current) {
-                      setRetryCount(prev => prev + 1);
-                  }
-              }, 1000);
+    const connect = () => {
+        if (!isMountedRef.current) return;
+        // Reset status on new attempt (unless it's a retry, handled by UI)
+        if (retryCount === 0) setStatus('connecting');
+        // Connect to WebSocket
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        const ws = new WebSocket(`${protocol}//${host}/api/ws`);
+        wsRef.current = ws;
+        // Connection Timeout Logic
+        const connectionTimeout = setTimeout(() => {
+            if (isMountedRef.current && ws.readyState !== WebSocket.OPEN) {
+                 console.warn('Connection timed out, closing socket');
+                 ws.close(); // This will trigger onclose
+            }
+        }, 15000);
+        ws.onopen = () => {
+          clearTimeout(connectionTimeout);
+          if (!isMountedRef.current) {
+              ws.close();
               return;
           }
-          if (statusRef.current !== 'error') {
-             setStatus('error');
-             toast.error('Disconnected from server');
+          // Successful connection resets retry count
+          setRetryCount(0);
+          setStatus('searching');
+          // Join Queue
+          ws.send(JSON.stringify({
+            type: 'join_queue',
+            mode,
+            userId,
+            username
+          } satisfies WSMessage));
+        };
+        ws.onmessage = (event) => {
+          if (!isMountedRef.current) return;
+          try {
+            const msg = JSON.parse(event.data) as WSMessage;
+            handleMessageRef.current(msg);
+          } catch (e) {
+            console.error('Failed to parse WS message', e);
           }
-      }
+        };
+        ws.onclose = (event) => {
+          clearTimeout(connectionTimeout);
+          if (!isMountedRef.current) return;
+          if (!event.wasClean) {
+              console.warn('WebSocket closed unexpectedly', event.code, event.reason);
+              // Exponential Backoff Logic
+              if (retryCount < 5) { // Max 5 retries
+                  const delay = calculateBackoff(retryCount);
+                  console.log(`Attempting reconnection in ${delay}ms (Attempt ${retryCount + 1}/5)...`);
+                  // Schedule next attempt
+                  reconnectTimeoutRef.current = setTimeout(() => {
+                      if (isMountedRef.current) {
+                          setRetryCount(prev => prev + 1);
+                      }
+                  }, delay);
+              } else {
+                  setStatus('error');
+                  toast.error('Connection failed after multiple attempts.');
+              }
+          } else {
+              // Clean close, usually intentional
+              console.log('WebSocket closed cleanly');
+          }
+        };
+        ws.onerror = () => {
+          // Error usually precedes close, so we handle logic in onclose
+          if (!isMountedRef.current) return;
+          console.error('WebSocket connection error');
+        };
     };
-    ws.onerror = () => {
-      if (!isMountedRef.current) return;
-      console.error('WebSocket connection error');
-    };
+    // Trigger connection
+    connect();
     return () => {
-      clearTimeout(connectionTimeout);
-      // Cleanup: Leave queue if searching
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        if (ws.readyState === WebSocket.OPEN) {
+      // Cleanup
+      if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+          // Leave queue if possible
+          if (wsRef.current.readyState === WebSocket.OPEN) {
             try {
-                ws.send(JSON.stringify({ type: 'leave_queue' } satisfies WSMessage));
+                wsRef.current.send(JSON.stringify({ type: 'leave_queue' } satisfies WSMessage));
             } catch (e) { /* ignore */ }
-        }
-        ws.close();
+          }
+          wsRef.current.close();
       }
     };
-    // CRITICAL: Only depend on stable IDs/Modes and retryCount.
+    // Re-run effect when retryCount changes to trigger new connection attempt
   }, [mode, userId, username, retryCount]);
   const handleInput = (input: { move: { x: number; y: number }; kick: boolean }) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -261,7 +281,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         </div>
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-display font-bold text-slate-800">
-            {status === 'connecting' ? 'Connecting to Server...' : 'Searching for Opponent...'}
+            {status === 'connecting' ? (retryCount > 0 ? `Reconnecting (Attempt ${retryCount}/5)...` : 'Connecting to Server...') : 'Searching for Opponent...'}
           </h2>
           <p className="text-slate-500">Mode: {mode}</p>
           {queueCount > 0 && (
@@ -278,6 +298,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
         <p className="text-red-500 font-bold">Connection Failed</p>
+        <p className="text-sm text-slate-500">Could not establish connection to the game server.</p>
         <Button onClick={onExit}>Return to Lobby</Button>
       </div>
     );
@@ -313,7 +334,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-slate-500">YOU ARE</span>
             <span className={`px-3 py-1 rounded-full text-white font-bold text-sm ${
-                matchInfo?.team === 'red' ? 'bg-red-500' : 
+                matchInfo?.team === 'red' ? 'bg-red-500' :
                 matchInfo?.team === 'blue' ? 'bg-blue-500' : 'bg-slate-500'
             }`}>
                 {matchInfo?.team === 'spectator' ? 'SPECTATING' : `TEAM ${matchInfo?.team.toUpperCase()}`}
@@ -335,7 +356,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
                 {chatMessages.map(msg => (
                     <div key={msg.id} className="text-sm text-white drop-shadow-md">
                         <span className={`font-bold ${
-                            msg.team === 'red' ? 'text-red-300' : 
+                            msg.team === 'red' ? 'text-red-300' :
                             msg.team === 'blue' ? 'text-blue-300' : 'text-slate-300'
                         }`}>
                             {msg.sender}:

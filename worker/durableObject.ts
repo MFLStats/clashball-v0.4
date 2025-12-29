@@ -48,34 +48,59 @@ export class GlobalDurableObject extends DurableObject {
         const url = new URL(request.url);
         const upgradeHeader = request.headers.get('Upgrade');
         // Robust check for WebSocket upgrade:
-        // 1. Check path (standard)
-        // 2. OR check if Upgrade header is 'websocket' (case-insensitive) - handles potential routing path rewrites
-        if (url.pathname === '/api/ws' || (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket')) {
+        // 1. Check path (standard) - using endsWith to be robust against routing prefixes
+        // 2. OR check if Upgrade header is 'websocket' (case-insensitive)
+        if (url.pathname.endsWith('/api/ws') || (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket')) {
             if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
                 return new Response('Expected Upgrade: websocket', { status: 426 });
             }
-            const pair = new WebSocketPair();
-            const [client, server] = Object.values(pair);
-            this.handleSession(server);
-            return new Response(null, {
-                status: 101,
-                webSocket: client,
-            });
+            try {
+                // Explicitly access indices to ensure correct assignment
+                // pair[0] is the client socket (returned in response)
+                // pair[1] is the server socket (accepted by DO)
+                const pair = new WebSocketPair();
+                const client = pair[0];
+                const server = pair[1];
+                this.handleSession(server);
+                return new Response(null, {
+                    status: 101,
+                    webSocket: client,
+                });
+            } catch (err) {
+                console.error('[DurableObject] WebSocket handshake failed:', err);
+                return new Response('Internal Server Error during handshake', { status: 500 });
+            }
         }
         // Fallback to standard fetch for other routes (if any routed here directly)
         return new Response('Not found', { status: 404 });
     }
     handleSession(ws: WebSocket) {
-        ws.accept();
+        // Wrap accept in try-catch just in case
+        try {
+            ws.accept();
+        } catch (err) {
+            console.error('[DurableObject] Failed to accept WebSocket:', err);
+            return;
+        }
         ws.addEventListener('message', async (event) => {
             try {
                 const msg = JSON.parse(event.data as string) as WSMessage;
                 await this.handleMessage(ws, msg);
             } catch (e) {
-                console.error('WS Error:', e);
+                console.error('[DurableObject] WS Message Error:', e);
+                // Optional: Send error back to client if possible
+                try {
+                    ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
+                } catch (sendErr) {
+                    // Ignore send errors on broken connection
+                }
             }
         });
         ws.addEventListener('close', () => {
+            this.handleDisconnect(ws);
+        });
+        ws.addEventListener('error', (err) => {
+            console.error('[DurableObject] WS Error Event:', err);
             this.handleDisconnect(ws);
         });
     }
@@ -87,10 +112,15 @@ export class GlobalDurableObject extends DurableObject {
                         ws.send(JSON.stringify({ type: 'error', message: 'Invalid queue request: Missing userId or mode' }));
                         return;
                     }
-                    // Fetch user profile to get rating
-                    const profile = await this.getUserProfile(msg.userId);
-                    const rating = profile.stats[msg.mode].rating;
-                    this.addToQueue(ws, msg.userId, msg.username, msg.mode, rating);
+                    try {
+                        // Fetch user profile to get rating
+                        const profile = await this.getUserProfile(msg.userId);
+                        const rating = profile.stats[msg.mode].rating;
+                        this.addToQueue(ws, msg.userId, msg.username, msg.mode, rating);
+                    } catch (err) {
+                        console.error(`[DurableObject] Failed to get profile for queue join: ${msg.userId}`, err);
+                        ws.send(JSON.stringify({ type: 'error', message: 'Failed to retrieve user profile' }));
+                    }
                     break;
                 }
                 case 'leave_queue': {
@@ -168,34 +198,40 @@ export class GlobalDurableObject extends DurableObject {
                 }
             }
         } catch (err) {
-            console.error("Error handling message:", err);
-            ws.send(JSON.stringify({ type: 'error', message: 'Internal server error processing message' }));
+            console.error("[DurableObject] Error handling message:", err);
+            try {
+                ws.send(JSON.stringify({ type: 'error', message: 'Internal server error processing message' }));
+            } catch (e) { /* ignore */ }
         }
     }
     handleDisconnect(ws: WebSocket) {
-        this.removeFromQueue(ws);
-        const session = this.sessions.get(ws);
-        // Handle Lobby Disconnect
-        if (session && session.lobbyCode) {
-            const lobby = this.lobbies.get(session.lobbyCode);
-            if (lobby) {
-                lobby.players = lobby.players.filter(p => p.ws !== ws);
-                if (lobby.players.length === 0) {
-                    this.lobbies.delete(session.lobbyCode);
-                } else {
-                    // If host left, assign new host
-                    if (lobby.hostId === session.userId) {
-                        lobby.hostId = lobby.players[0].id;
+        try {
+            this.removeFromQueue(ws);
+            const session = this.sessions.get(ws);
+            // Handle Lobby Disconnect
+            if (session && session.lobbyCode) {
+                const lobby = this.lobbies.get(session.lobbyCode);
+                if (lobby) {
+                    lobby.players = lobby.players.filter(p => p.ws !== ws);
+                    if (lobby.players.length === 0) {
+                        this.lobbies.delete(session.lobbyCode);
+                    } else {
+                        // If host left, assign new host
+                        if (lobby.hostId === session.userId) {
+                            lobby.hostId = lobby.players[0].id;
+                        }
+                        this.broadcastLobbyUpdate(lobby);
                     }
-                    this.broadcastLobbyUpdate(lobby);
                 }
             }
+            if (session && session.matchId) {
+                // Handle player disconnect during match (pause? forfeit?)
+                // For MVP, we just let the match continue or end
+            }
+            this.sessions.delete(ws);
+        } catch (err) {
+            console.error('[DurableObject] Error handling disconnect:', err);
         }
-        if (session && session.matchId) {
-            // Handle player disconnect during match (pause? forfeit?)
-            // For MVP, we just let the match continue or end
-        }
-        this.sessions.delete(ws);
     }
     // --- Queue Logic ---
     addToQueue(ws: WebSocket, userId: string, username: string, mode: GameMode, rating: number) {

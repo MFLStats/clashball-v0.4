@@ -9,7 +9,12 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     app.get('/api/test', (c) => c.json({ success: true, data: { name: 'CF Workers Demo' }}));
     // --- WebSocket Route ---
     // Simplified: Delegate handshake entirely to Durable Object to prevent header casing issues
+    // Added explicit Upgrade header check to fail fast for non-WS requests
     app.get('/api/ws', async (c) => {
+        const upgrade = c.req.header('Upgrade');
+        if (!upgrade || upgrade.toLowerCase() !== 'websocket') {
+            return c.text('Expected Upgrade: websocket', 426);
+        }
         const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
         return stub.fetch(c.req.raw);
     });

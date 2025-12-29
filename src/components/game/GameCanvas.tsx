@@ -3,6 +3,7 @@ import { PhysicsEngine, GameState } from '@shared/physics';
 import confetti from 'canvas-confetti';
 import { Button } from '@/components/ui/button';
 import { Play, RotateCcw, Trophy } from 'lucide-react';
+import { TouchControls } from './TouchControls';
 interface GameCanvasProps {
   onGameEnd?: (winner: 'red' | 'blue') => void;
   winningScore?: number;
@@ -24,6 +25,10 @@ export function GameCanvas({
   const requestRef = useRef<number>(0);
   const gameStateRef = useRef<GameState>(PhysicsEngine.createInitialState());
   const keysRef = useRef<Record<string, boolean>>({});
+  const touchInputRef = useRef<{ move: { x: number; y: number }; kick: boolean }>({
+    move: { x: 0, y: 0 },
+    kick: false
+  });
   const lastTimeRef = useRef<number>(0);
   const [score, setScore] = useState({ red: 0, blue: 0 });
   const [isPaused, setIsPaused] = useState(false);
@@ -65,6 +70,10 @@ export function GameCanvas({
         if (p2) p2.username = playerNames.blue;
     }
   }, [playerNames, externalState]);
+  // Handle Touch Input Update
+  const handleTouchUpdate = useCallback((input: { move: { x: number; y: number }; kick: boolean }) => {
+    touchInputRef.current = input;
+  }, []);
   // Game Loop
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -88,11 +97,22 @@ export function GameCanvas({
       if (dt > 0.1) dt = 0.1;
       // 1. Process Input
       const p1Input = { move: { x: 0, y: 0 }, kick: false };
+      // Keyboard Input
       if (keysRef.current['ArrowUp'] || keysRef.current['KeyW']) p1Input.move.y -= 1;
       if (keysRef.current['ArrowDown'] || keysRef.current['KeyS']) p1Input.move.y += 1;
       if (keysRef.current['ArrowLeft'] || keysRef.current['KeyA']) p1Input.move.x -= 1;
       if (keysRef.current['ArrowRight'] || keysRef.current['KeyD']) p1Input.move.x += 1;
       if (keysRef.current['Space'] || keysRef.current['KeyX']) p1Input.kick = true;
+      // Touch Input (Merge/Override)
+      // If touch joystick is active (magnitude > 0), it overrides keyboard movement
+      // This prevents fighting inputs, but allows switching
+      if (Math.abs(touchInputRef.current.move.x) > 0 || Math.abs(touchInputRef.current.move.y) > 0) {
+        p1Input.move = touchInputRef.current.move;
+      }
+      // Kick is OR logic (Keyboard OR Touch)
+      if (touchInputRef.current.kick) {
+        p1Input.kick = true;
+      }
       if (onInput) {
         // Online Mode: Send input to server
         onInput(p1Input);
@@ -274,8 +294,8 @@ export function GameCanvas({
     lastTimeRef.current = performance.now();
   };
   // Format time remaining
-  const timeRemaining = externalState 
-    ? externalState.timeRemaining 
+  const timeRemaining = externalState
+    ? externalState.timeRemaining
     : gameStateRef.current.timeRemaining;
   const minutes = Math.floor(Math.max(0, timeRemaining) / 60);
   const seconds = Math.floor(Math.max(0, timeRemaining) % 60);
@@ -301,16 +321,18 @@ export function GameCanvas({
         </div>
       </div>
       {/* Game Area */}
-      <div ref={containerRef} className="game-container group">
+      <div ref={containerRef} className="game-container group relative">
         <canvas
           ref={canvasRef}
           width={1200}
           height={600}
           className="w-full h-full object-contain"
         />
+        {/* Touch Controls Overlay */}
+        <TouchControls onUpdate={handleTouchUpdate} />
         {/* Game Over Overlay */}
         {gameOver && (
-            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center animate-fade-in z-10">
+            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center animate-fade-in z-30">
                 <Trophy className={`w-16 h-16 mb-4 ${gameOver === 'red' ? 'text-haxball-red' : 'text-haxball-blue'}`} />
                 <h2 className="text-4xl font-display font-bold text-white mb-2 tracking-wider drop-shadow-md">
                     {gameOver === 'red' ? 'RED VICTORY' : 'BLUE VICTORY'}
@@ -323,7 +345,7 @@ export function GameCanvas({
         )}
         {/* Controls Overlay (Visible on Hover/Pause) */}
         {!gameOver && !externalState && (
-            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-30">
             <Button size="icon" variant="secondary" onClick={handleReset} className="bg-white text-slate-800 hover:bg-slate-100 border border-slate-300 shadow-sm">
                 <RotateCcw className="w-4 h-4" />
             </Button>
@@ -333,7 +355,7 @@ export function GameCanvas({
             </div>
         )}
       </div>
-      <div className="text-sm text-slate-500 font-medium font-mono bg-slate-100 px-4 py-2 rounded-full border border-slate-200">
+      <div className="text-sm text-slate-500 font-medium font-mono bg-slate-100 px-4 py-2 rounded-full border border-slate-200 hidden md:block">
         Controls: WASD to Move • SPACE to Kick
       </div>
     </div>

@@ -10,6 +10,7 @@ import { useUserStore } from '@/store/useUserStore';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { GameMode } from '@shared/types';
+import { OrientationLock } from '@/components/ui/orientation-lock';
 type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'ranked' | 'tournament';
 export function HomePage() {
   const [view, setView] = useState<ViewState>('lobby');
@@ -216,6 +217,7 @@ export function HomePage() {
   };
   return (
     <AppLayout container contentClassName="py-8">
+      <OrientationLock />
       <div className="min-h-screen bg-slate-50 -m-8 p-8">
         <div className="max-w-5xl mx-auto">
           {renderContent()}

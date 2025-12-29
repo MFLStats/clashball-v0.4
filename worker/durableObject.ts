@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import type {
     DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage,
     GameMode, ModeStats, TeamProfile, AuthPayload, AuthResponse,
-    TournamentState, TournamentParticipant, LobbyState
+    TournamentState, TournamentParticipant, LobbyState, LeaderboardEntry, MatchHistoryEntry
 } from '@shared/types';
 import { MOCK_ITEMS } from '@shared/mock-data';
 import { Match } from './match';
@@ -23,6 +23,7 @@ export class GlobalDurableObject extends DurableObject {
     matches: Map<string, Match> = new Map();
     sessions: Map<WebSocket, { userId: string; matchId?: string; lobbyCode?: string }> = new Map();
     lobbies: Map<string, Lobby> = new Map();
+    leaderboards: Map<GameMode, LeaderboardEntry[]> = new Map();
     // Tournament State (In-memory for active pool, could be persisted if needed)
     tournamentParticipants: TournamentParticipant[] = [];
     constructor(ctx: DurableObjectState, env: any) {
@@ -299,7 +300,7 @@ export class GlobalDurableObject extends DurableObject {
         });
         match.start();
     }
-    async handleMatchEnd(matchId: string, winner: 'red' | 'blue', players: { id: string, team: 'red' | 'blue' }[], mode: GameMode, playerStats?: any) {
+    async handleMatchEnd(matchId: string, winner: 'red' | 'blue', players: { id: string, team: 'red' | 'blue', username: string }[], mode: GameMode, playerStats?: any) {
         // 1. Get all user profiles to calculate team averages
         const playerProfiles = await Promise.all(players.map(p => this.getUserProfile(p.id)));
         const redPlayers = players.filter(p => p.team === 'red');
@@ -319,9 +320,19 @@ export class GlobalDurableObject extends DurableObject {
             const isRed = p.team === 'red';
             const opponentRating = isRed ? blueAvg : redAvg;
             const result = (winner === 'red' && isRed) || (winner === 'blue' && !isRed) ? 'win' : 'loss';
+            // Determine Opponent Name
+            let opponentName = 'Opponent';
+            if (mode === '1v1') {
+                const opponent = players.find(op => op.team !== p.team);
+                opponentName = opponent ? opponent.username : 'Opponent';
+            } else {
+                opponentName = isRed ? 'Team Blue' : 'Team Red';
+            }
             await this.processMatch({
+                matchId,
                 userId: p.id,
                 opponentRating,
+                opponentName,
                 result,
                 timestamp: Date.now(),
                 mode,
@@ -435,7 +446,8 @@ export class GlobalDurableObject extends DurableObject {
                 '4v4': { ...defaultStats }
             },
             teams: [],
-            lastMatchTime: Date.now()
+            lastMatchTime: Date.now(),
+            recentMatches: []
         };
         await this.ctx.storage.put(key, newProfile);
         return newProfile;
@@ -467,13 +479,19 @@ export class GlobalDurableObject extends DurableObject {
                 '4v4': { ...defaultStats }
             },
             teams: profile.teams || [],
-            lastMatchTime: profile.lastMatchTime || Date.now()
+            lastMatchTime: profile.lastMatchTime || Date.now(),
+            recentMatches: profile.recentMatches || []
         };
         await this.ctx.storage.put(key, profile);
       }
       // Migration: Ensure teams array exists
       if (!profile.teams) {
           profile.teams = [];
+          await this.ctx.storage.put(key, profile);
+      }
+      // Migration: Ensure recentMatches exists
+      if (!profile.recentMatches) {
+          profile.recentMatches = [];
           await this.ctx.storage.put(key, profile);
       }
       // Migration: Ensure new stats fields exist
@@ -516,7 +534,8 @@ export class GlobalDurableObject extends DurableObject {
                 '4v4': { ...defaultStats }
             },
             createdAt: Date.now(),
-            creatorId
+            creatorId,
+            recentMatches: []
         };
         // Save Team
         await this.ctx.storage.put(`team_${teamId}`, newTeam);
@@ -586,8 +605,26 @@ export class GlobalDurableObject extends DurableObject {
       const { tier, division } = this.calculateTier(stats.rating);
       stats.tier = tier;
       stats.division = division;
+      // Add to Match History
+      const historyEntry: MatchHistoryEntry = {
+          matchId: match.matchId || crypto.randomUUID(),
+          opponentName: match.opponentName || 'Opponent',
+          result: match.result,
+          ratingChange: Math.round(ratingChange),
+          timestamp: match.timestamp,
+          mode
+      };
+      if (!entity.recentMatches) entity.recentMatches = [];
+      entity.recentMatches.unshift(historyEntry);
+      if (entity.recentMatches.length > 10) entity.recentMatches.pop();
       // Save Entity
       await this.ctx.storage.put(entityKey, entity);
+      // Update Leaderboard (Only for Users for now, or Teams if we had Team Leaderboards)
+      // Since we are tracking Individual MMR even in team modes (unless playing as a registered Team),
+      // we update the leaderboard if it's a UserProfile.
+      if (!match.teamId) {
+          await this.updateLeaderboard(mode, entity as UserProfile);
+      }
       return {
         newRating: stats.rating,
         ratingChange: Math.round(ratingChange),
@@ -604,6 +641,43 @@ export class GlobalDurableObject extends DurableObject {
       if (rating < 1800) return { tier: 'Platinum', division: rating < 1600 ? 3 : rating < 1700 ? 2 : 1 };
       if (rating < 2100) return { tier: 'Diamond', division: rating < 1900 ? 3 : rating < 2000 ? 2 : 1 };
       return { tier: 'Master', division: 1 };
+    }
+    // --- Leaderboard Methods ---
+    async getLeaderboard(mode: GameMode): Promise<LeaderboardEntry[]> {
+        if (!this.leaderboards.has(mode)) {
+            const stored = await this.ctx.storage.get<LeaderboardEntry[]>(`leaderboard_${mode}`);
+            this.leaderboards.set(mode, stored || []);
+        }
+        return this.leaderboards.get(mode)!;
+    }
+    async updateLeaderboard(mode: GameMode, profile: UserProfile) {
+        const lb = await this.getLeaderboard(mode);
+        const stats = profile.stats[mode];
+        // Create Entry
+        const entry: LeaderboardEntry = {
+            userId: profile.id,
+            username: profile.username,
+            rating: stats.rating,
+            tier: stats.tier,
+            division: stats.division,
+            country: profile.country
+        };
+        // Find existing
+        const idx = lb.findIndex(e => e.userId === profile.id);
+        if (idx !== -1) {
+            lb[idx] = entry;
+        } else {
+            lb.push(entry);
+        }
+        // Sort Descending
+        lb.sort((a, b) => b.rating - a.rating);
+        // Slice Top 50
+        if (lb.length > 50) {
+            lb.length = 50;
+        }
+        // Save
+        this.leaderboards.set(mode, lb);
+        await this.ctx.storage.put(`leaderboard_${mode}`, lb);
     }
     // --- Tournament Methods ---
     async getTournamentState(): Promise<TournamentState> {

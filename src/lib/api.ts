@@ -1,6 +1,6 @@
-import type { 
-  ApiResponse, UserProfile, MatchResult, MatchResponse, 
-  TeamProfile, AuthPayload, AuthResponse, TournamentState 
+import type {
+  ApiResponse, UserProfile, MatchResult, MatchResponse,
+  TeamProfile, AuthPayload, AuthResponse, TournamentState, LeaderboardEntry, GameMode
 } from '@shared/types';
 const API_BASE = '/api';
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -17,12 +17,12 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
 export const api = {
   // Auth
   auth: {
-    signup: (payload: AuthPayload) => 
+    signup: (payload: AuthPayload) =>
       fetchApi<AuthResponse>('/auth/signup', {
         method: 'POST',
         body: JSON.stringify(payload)
       }),
-    login: (payload: AuthPayload) => 
+    login: (payload: AuthPayload) =>
       fetchApi<AuthResponse>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(payload)
@@ -50,10 +50,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     }),
+  // Leaderboard
+  getLeaderboard: (mode: GameMode) =>
+    fetchApi<LeaderboardEntry[]>(`/leaderboard/${mode}`),
   // Tournament
   tournament: {
     getState: () => fetchApi<TournamentState>('/tournament'),
-    join: (userId: string) => 
+    join: (userId: string) =>
       fetchApi<TournamentState>('/tournament/join', {
         method: 'POST',
         body: JSON.stringify({ userId })

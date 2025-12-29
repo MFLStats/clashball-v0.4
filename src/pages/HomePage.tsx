@@ -8,7 +8,7 @@ import { TournamentManager } from '@/components/tournament/TournamentManager';
 import { TournamentBanner } from '@/components/tournament/TournamentBanner';
 import { AuthDialog } from '@/components/auth/AuthDialog';
 import { Button } from '@/components/ui/button';
-import { Trophy, ArrowLeft, Globe, Monitor, Crown, LogOut, Users, Info } from 'lucide-react';
+import { Trophy, ArrowLeft, Globe, Monitor, Crown, LogOut, Users, Info, BarChart2 } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -16,7 +16,8 @@ import { GameMode } from '@shared/types';
 import { OrientationLock } from '@/components/ui/orientation-lock';
 import { TournamentPage } from '@/pages/TournamentPage';
 import { TechInfoModal } from '@/components/help/TechInfoModal';
-type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'custom_lobby' | 'ranked' | 'tournament_mode' | 'tournament_lobby';
+import { Leaderboard } from '@/components/ranked/Leaderboard';
+type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'custom_lobby' | 'ranked' | 'tournament_mode' | 'tournament_lobby' | 'leaderboard';
 export function HomePage() {
   const [view, setView] = useState<ViewState>('lobby');
   const [selectedMode, setSelectedMode] = useState<GameMode>('1v1');
@@ -40,6 +41,7 @@ export function HomePage() {
       const response = await api.reportMatch({
         userId: profile.id,
         opponentRating,
+        opponentName: 'Bot (1200)',
         result,
         timestamp: Date.now(),
         mode: '1v1' // Default to 1v1 for local practice
@@ -160,6 +162,22 @@ export function HomePage() {
             <Dashboard />
           </div>
         );
+      case 'leaderboard':
+        return (
+          <div className="animate-fade-in space-y-6">
+            <div className="flex items-center justify-between">
+              <Button
+                variant="ghost"
+                onClick={() => setView('lobby')}
+                className="hover:bg-slate-800 text-slate-200"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Lobby
+              </Button>
+              <div className="w-24" />
+            </div>
+            <Leaderboard />
+          </div>
+        );
       case 'lobby':
       default: {
         // Get 1v1 stats for display
@@ -248,6 +266,13 @@ export function HomePage() {
                     Stats
                 </button>
               </div>
+              <button
+                  onClick={() => setView('leaderboard')}
+                  className="btn-kid-secondary w-full flex items-center justify-center gap-3 text-lg"
+              >
+                  <BarChart2 className="w-6 h-6" />
+                  Leaderboard
+              </button>
             </div>
             {/* Footer Info */}
             <div className="flex gap-8 text-sm font-bold text-slate-600 items-center">

@@ -33,6 +33,15 @@ export interface TeamProfile {
   stats: Record<GameMode, ModeStats>;
   createdAt: number;
   creatorId: string;
+  recentMatches?: MatchHistoryEntry[];
+}
+export interface MatchHistoryEntry {
+  matchId: string;
+  opponentName: string;
+  result: 'win' | 'loss' | 'draw';
+  ratingChange: number;
+  timestamp: number;
+  mode: GameMode;
 }
 export interface UserProfile {
   id: string;
@@ -42,6 +51,7 @@ export interface UserProfile {
   stats: Record<GameMode, ModeStats>;
   teams: string[]; // List of Team IDs
   lastMatchTime: number;
+  recentMatches: MatchHistoryEntry[];
 }
 export interface Team {
   id: string;
@@ -57,9 +67,11 @@ export interface PlayerMatchStats {
   cleanSheet: boolean;
 }
 export interface MatchResult {
+  matchId?: string;
   userId: string;
   teamId?: string; // Optional: If playing as a team
   opponentRating: number; // For bot matches, this is the bot's rating
+  opponentName?: string;
   result: 'win' | 'loss' | 'draw';
   timestamp: number;
   mode: GameMode;
@@ -72,6 +84,14 @@ export interface MatchResponse {
   newDivision: 1 | 2 | 3;
   mode: GameMode;
   teamId?: string;
+}
+export interface LeaderboardEntry {
+  userId: string;
+  username: string;
+  rating: number;
+  tier: Tier;
+  division: 1 | 2 | 3;
+  country?: string;
 }
 // --- Auth Types ---
 export interface AuthPayload {

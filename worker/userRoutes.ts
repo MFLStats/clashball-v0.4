@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { Env } from './core-utils';
-import type { 
-    DemoItem, ApiResponse, UserProfile, MatchResult, MatchResponse, 
-    TeamProfile, AuthPayload, AuthResponse, TournamentState 
+import type {
+    DemoItem, ApiResponse, UserProfile, MatchResult, MatchResponse,
+    TeamProfile, AuthPayload, AuthResponse, TournamentState, LeaderboardEntry, GameMode
 } from '@shared/types';
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
     app.get('/api/test', (c) => c.json({ success: true, data: { name: 'CF Workers Demo' }}));
@@ -87,6 +87,13 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
         const data = await stub.processMatch(body);
         return c.json({ success: true, data } satisfies ApiResponse<MatchResponse>);
+    });
+    // Get Leaderboard
+    app.get('/api/leaderboard/:mode', async (c) => {
+        const mode = c.req.param('mode') as GameMode;
+        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+        const data = await stub.getLeaderboard(mode);
+        return c.json({ success: true, data } satisfies ApiResponse<LeaderboardEntry[]>);
     });
     // --- Team Routes ---
     app.post('/api/teams', async (c) => {

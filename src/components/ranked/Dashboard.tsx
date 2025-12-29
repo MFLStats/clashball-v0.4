@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { RankBadge } from './RankBadge';
+import { MatchHistory } from './MatchHistory';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -83,8 +84,8 @@ export function Dashboard() {
                 </div>
                 {profile.country && (
                     <div className="absolute -bottom-2 -right-2 bg-slate-900 p-1 rounded-full border border-slate-700">
-                        <img 
-                            src={`https://flagcdn.com/w40/${profile.country.toLowerCase()}.png`} 
+                        <img
+                            src={`https://flagcdn.com/w40/${profile.country.toLowerCase()}.png`}
                             alt={profile.country}
                             className="w-8 h-auto rounded-full shadow-sm"
                         />
@@ -136,46 +137,52 @@ export function Dashboard() {
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Own Goals</p>
             </Card>
         </div>
-        {/* 3. Ranked Ratings List */}
-        <Card className="card-kid">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <Trophy className="w-5 h-5 text-yellow-500" />
-                    Ranked Performance
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-                <div className="divide-y divide-slate-800">
-                    {(['1v1', '2v2', '3v3', '4v4'] as GameMode[]).map((mode) => {
-                        const stats = profile.stats[mode];
-                        return (
-                            <div key={mode} className="flex items-center justify-between p-4 hover:bg-slate-800/30 transition-colors">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 flex justify-center">
-                                        <span className="font-display font-bold text-lg text-slate-300">{mode}</span>
-                                    </div>
-                                    <div className="h-8 w-px bg-slate-800" />
-                                    <div className="flex flex-col">
-                                        <span className="text-2xl font-mono font-bold text-white">{stats.rating}</span>
-                                        <span className="text-xs text-slate-500 font-bold uppercase">MMR</span>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="text-right hidden sm:block">
-                                        <div className="font-bold text-slate-200">{stats.tier} {stats.division === 1 ? 'I' : stats.division === 2 ? 'II' : 'III'}</div>
-                                        <div className="text-xs text-slate-500">
-                                            {stats.wins}W - {stats.losses}L
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* 3. Ranked Ratings List */}
+            <Card className="card-kid h-full">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Trophy className="w-5 h-5 text-yellow-500" />
+                        Ranked Performance
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <div className="divide-y divide-slate-800">
+                        {(['1v1', '2v2', '3v3', '4v4'] as GameMode[]).map((mode) => {
+                            const stats = profile.stats[mode];
+                            return (
+                                <div key={mode} className="flex items-center justify-between p-4 hover:bg-slate-800/30 transition-colors">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 flex justify-center">
+                                            <span className="font-display font-bold text-lg text-slate-300">{mode}</span>
+                                        </div>
+                                        <div className="h-8 w-px bg-slate-800" />
+                                        <div className="flex flex-col">
+                                            <span className="text-2xl font-mono font-bold text-white">{stats.rating}</span>
+                                            <span className="text-xs text-slate-500 font-bold uppercase">MMR</span>
                                         </div>
                                     </div>
-                                    <RankBadge tier={stats.tier} division={stats.division} size="md" />
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-right hidden sm:block">
+                                            <div className="font-bold text-slate-200">{stats.tier} {stats.division === 1 ? 'I' : stats.division === 2 ? 'II' : 'III'}</div>
+                                            <div className="text-xs text-slate-500">
+                                                {stats.wins}W - {stats.losses}L
+                                            </div>
+                                        </div>
+                                        <RankBadge tier={stats.tier} division={stats.division} size="md" />
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </CardContent>
-        </Card>
-        {/* 4. Teams Section */}
+                            );
+                        })}
+                    </div>
+                </CardContent>
+            </Card>
+            {/* 4. Match History */}
+            <div className="h-full">
+                <MatchHistory matches={profile.recentMatches} />
+            </div>
+        </div>
+        {/* 5. Teams Section */}
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <h3 className="text-xl font-display font-bold text-white">My Teams</h3>

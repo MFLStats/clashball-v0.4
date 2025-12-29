@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Loader2, ArrowLeft, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { SoundEngine } from '@/lib/audio';
+import { NetworkIndicator } from '@/components/ui/network-indicator';
 interface OnlineGameManagerProps {
   mode: GameMode;
   onExit: () => void;
@@ -26,8 +27,10 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [ping, setPing] = useState<number | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const lastPingTimeRef = useRef<number>(0);
   // Use refs to access latest state in callbacks without triggering re-renders or effect re-runs
   const matchInfoRef = useRef<{ matchId: string; team: 'red' | 'blue' } | null>(null);
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; team: 'red' | 'blue' } | null>(null);
@@ -97,11 +100,28 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         break;
       }
       case 'ping': {
+        // Server pinging client
         wsRef.current?.send(JSON.stringify({ type: 'pong' }));
+        break;
+      }
+      case 'pong': {
+        // Client received pong from server
+        const rtt = Date.now() - lastPingTimeRef.current;
+        setPing(rtt);
         break;
       }
     }
   }, [onExit]);
+  // Ping Loop
+  useEffect(() => {
+    const interval = setInterval(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            lastPingTimeRef.current = Date.now();
+            wsRef.current.send(JSON.stringify({ type: 'ping' }));
+        }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
   useEffect(() => {
     if (!profile) return;
     // Connect to WebSocket
@@ -196,9 +216,12 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   return (
     <div className="space-y-4 animate-fade-in relative">
       <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={onExit}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Leave Match
-        </Button>
+        <div className="flex items-center gap-4">
+            <Button variant="ghost" onClick={onExit}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Leave Match
+            </Button>
+            <NetworkIndicator ping={ping} />
+        </div>
         <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-slate-500">YOU ARE</span>
             <span className={`px-3 py-1 rounded-full text-white font-bold text-sm ${matchInfo?.team === 'red' ? 'bg-red-500' : 'bg-blue-500'}`}>

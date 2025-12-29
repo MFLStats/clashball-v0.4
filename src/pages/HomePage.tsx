@@ -8,13 +8,14 @@ import { TournamentManager } from '@/components/tournament/TournamentManager';
 import { TournamentBanner } from '@/components/tournament/TournamentBanner';
 import { AuthDialog } from '@/components/auth/AuthDialog';
 import { Button } from '@/components/ui/button';
-import { Trophy, ArrowLeft, Globe, Monitor, Crown, LogOut, Users } from 'lucide-react';
+import { Trophy, ArrowLeft, Globe, Monitor, Crown, LogOut, Users, Info } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { GameMode } from '@shared/types';
 import { OrientationLock } from '@/components/ui/orientation-lock';
 import { TournamentPage } from '@/pages/TournamentPage';
+import { TechInfoModal } from '@/components/help/TechInfoModal';
 type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'custom_lobby' | 'ranked' | 'tournament_mode' | 'tournament_lobby';
 export function HomePage() {
   const [view, setView] = useState<ViewState>('lobby');
@@ -249,12 +250,17 @@ export function HomePage() {
               </div>
             </div>
             {/* Footer Info */}
-            <div className="flex gap-8 text-sm font-bold text-slate-600">
+            <div className="flex gap-8 text-sm font-bold text-slate-600 items-center">
               <span className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
                 Online
               </span>
               <span>v1.2.1 ClashBall</span>
+              <TechInfoModal trigger={
+                <button className="hover:text-slate-400 transition-colors flex items-center gap-1">
+                    <Info className="w-4 h-4" /> Tech Specs
+                </button>
+              } />
             </div>
           </div>
         );

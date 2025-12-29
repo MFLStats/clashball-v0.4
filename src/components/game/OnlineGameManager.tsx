@@ -73,11 +73,13 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   useEffect(() => {
     handleMessageRef.current = (msg: WSMessage) => {
       switch (msg.type) {
+        case 'match_started':
         case 'match_found': {
           const info = { matchId: msg.matchId, team: msg.team };
           setMatchInfo(info);
           setStatus('playing');
-          toast.success(`Match Found! You are Team ${msg.team.toUpperCase()}`);
+          const opponents = msg.opponents?.length ? msg.opponents.join(', ') : msg.opponent;
+          toast.success(`Match Found! You are Team ${msg.team.toUpperCase()}${opponents ? ` vs ${opponents}` : ''}`);
           break;
         }
         case 'queue_update': {
@@ -244,6 +246,25 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
         <p className="text-red-500 font-bold">Connection Failed</p>
         <Button onClick={onExit}>Return to Lobby</Button>
+      </div>
+    );
+  }
+  // Loading state for match initialization (prevents race condition)
+  if (status === 'playing' && !gameState) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-6 animate-fade-in">
+        <div className="relative">
+          <div className="absolute inset-0 bg-emerald-500/20 rounded-full animate-ping" />
+          <div className="relative bg-white p-4 rounded-full shadow-lg border-4 border-emerald-100">
+            <Loader2 className="w-12 h-12 animate-spin text-emerald-500" />
+          </div>
+        </div>
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-display font-bold text-slate-800">
+            Preparing Match...
+          </h2>
+          <p className="text-slate-500">Synchronizing with server</p>
+        </div>
       </div>
     );
   }

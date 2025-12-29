@@ -161,7 +161,8 @@ export type WSMessage =
   | { type: 'lobby_update'; state: LobbyState }
   | { type: 'start_lobby_match' }
   | { type: 'input'; move: { x: number; y: number }; kick: boolean }
-  | { type: 'match_found'; matchId: string; team: 'red' | 'blue'; opponent?: string }
+  | { type: 'match_found'; matchId: string; team: 'red' | 'blue'; opponent?: string; opponents?: string[] }
+  | { type: 'match_started'; matchId: string; team: 'red' | 'blue'; opponent?: string; opponents?: string[] }
   | { type: 'game_state'; state: any } // Typed as 'any' here to avoid circular dependency, but effectively GameState
   | { type: 'game_events'; events: GameEvent[] }
   | { type: 'game_over'; winner: 'red' | 'blue'; stats?: Record<string, PlayerMatchStats> }

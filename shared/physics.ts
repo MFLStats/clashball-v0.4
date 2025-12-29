@@ -47,17 +47,18 @@ export class PhysicsEngine {
   static readonly BALL_RADIUS = 10;
   // Kick Mechanics
   static readonly KICK_TOLERANCE = 5; // Extra range for kicking
-  static readonly KICK_STRENGTH = 360;
+  static readonly KICK_STRENGTH = 450; // Increased from 360 for heavier friction
   // Field Dimensions
   static readonly FIELD_WIDTH = 1200;
   static readonly FIELD_HEIGHT = 600;
   static readonly GOAL_HEIGHT = 180;
   // Movement & Physics (Per Second)
-  static readonly PLAYER_MAX_SPEED = 210;
-  static readonly PLAYER_ACCELERATION = 2880;
+  // "Ice Hockey" Feel: Slower top speed, slower acceleration, higher drag
+  static readonly PLAYER_MAX_SPEED = 150; // Reduced from 210
+  static readonly PLAYER_ACCELERATION = 600; // Reduced from 2880
   // Damping Base (Applied per 1/60s)
-  static readonly PLAYER_DAMPING_BASE = 0.90;
-  static readonly BALL_DAMPING_BASE = 0.990;
+  static readonly PLAYER_DAMPING_BASE = 0.85; // Reduced from 0.90 (More friction)
+  static readonly BALL_DAMPING_BASE = 0.985; // Reduced from 0.990 (More friction)
   static readonly WALL_BOUNCE = 0.75;
   static readonly PLAYER_BOUNCE = 0.5;
   // Velocity threshold for stopping
@@ -177,7 +178,7 @@ export class PhysicsEngine {
     }
     // Goal Detection & X-Axis Walls
     const checkGoal = (isLeft: boolean) => {
-        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 && 
+        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 &&
                        b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
         if (isGoal) {
             const scoringTeam = isLeft ? 'blue' : 'red';
@@ -189,8 +190,8 @@ export class PhysicsEngine {
                 if (b.lastTouch.team === scoringTeam) {
                     scorerId = b.lastTouch.id;
                     // Check Assist
-                    if (b.previousTouch && 
-                        b.previousTouch.team === scoringTeam && 
+                    if (b.previousTouch &&
+                        b.previousTouch.team === scoringTeam &&
                         b.previousTouch.id !== scorerId &&
                         Math.abs(b.lastTouch.time - b.previousTouch.time) < this.ASSIST_WINDOW) {
                         assisterId = b.previousTouch.id;

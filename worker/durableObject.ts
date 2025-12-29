@@ -201,7 +201,8 @@ export class GlobalDurableObject extends DurableObject {
             const players = queue.splice(0, requiredPlayers);
             // Update queue status for remaining players
             this.broadcastQueueStatus(mode);
-            this.startMatch(players, mode);
+            const matchPlayers = players.map(p => ({ userId: p.userId, ws: p.ws, username: p.username }));
+            this.startMatch(matchPlayers, mode);
         }
     }
     // --- Lobby Logic ---
@@ -319,14 +320,23 @@ export class GlobalDurableObject extends DurableObject {
         this.matches.set(matchId, match);
         // Notify players
         matchPlayers.forEach(p => {
-            const session = this.sessions.get(p.ws);
-            if (session) session.matchId = matchId;
-            p.ws.send(JSON.stringify({
-                type: 'match_found',
-                matchId,
-                team: p.team,
-                opponent: matchPlayers.find(op => op.team !== p.team)?.username // Simplified for 1v1
-            }));
+            try {
+                const session = this.sessions.get(p.ws);
+                if (session) session.matchId = matchId;
+                const opponents = matchPlayers.filter(op => op.team !== p.team).map(op => op.username);
+                // Use match_started for lobby players so they transition correctly
+                const type = session?.lobbyCode ? 'match_started' : 'match_found';
+                p.ws.send(JSON.stringify({
+                    type,
+                    matchId,
+                    team: p.team,
+                    opponent: opponents.join(', '),
+                    opponents
+                }));
+            } catch (err) {
+                console.error(`Failed to notify player ${p.username} of match start:`, err);
+                // Continue loop to notify others
+            }
         });
         match.start();
     }
@@ -346,7 +356,7 @@ export class GlobalDurableObject extends DurableObject {
             if (profiles.length < 2) return null; // Need at least 2 players to form a "team" context for ranking usually
             const first = profiles[0].teams || [];
             // Find intersection of all players' team lists
-            const common = first.filter(teamId => 
+            const common = first.filter(teamId =>
                 profiles.every(p => (p.teams || []).includes(teamId))
             );
             return common.length > 0 ? common[0] : null; // Return first common team found
@@ -398,35 +408,38 @@ export class GlobalDurableObject extends DurableObject {
             });
         });
         // Helper to aggregate stats for a team
-        const getAggregatedStats = (teamPlayers: typeof players): PlayerMatchStats | undefined => {
-            if (!playerStats) return undefined;
+        const getAggregatedStats = (teamPlayers: typeof players, opponentPlayers: typeof players): PlayerMatchStats | undefined => {
+            if (!playerStats || teamPlayers.length === 0) return undefined;
+            // Calculate Opponent Goals for Clean Sheet
+            let opponentGoals = 0;
+            opponentPlayers.forEach(p => {
+                if (playerStats[p.id]) opponentGoals += playerStats[p.id].goals;
+            });
             const agg: PlayerMatchStats = {
                 goals: 0,
                 assists: 0,
                 ownGoals: 0,
                 isMvp: false,
-                cleanSheet: false
+                cleanSheet: opponentGoals === 0
             };
-            // Check clean sheet from first player (same for all in team)
-            if (teamPlayers.length > 0 && playerStats[teamPlayers[0].id]?.cleanSheet) {
-                agg.cleanSheet = true;
-            }
+            let hasStats = false;
             teamPlayers.forEach(p => {
                 const s = playerStats[p.id];
                 if (s) {
+                    hasStats = true;
                     agg.goals += s.goals;
                     agg.assists += s.assists;
                     agg.ownGoals += s.ownGoals;
-                    if (s.isMvp) agg.isMvp = true;
                 }
             });
+            if (!hasStats) return undefined;
             return agg;
         };
         // 3. Process updates for Teams (if detected)
         const teamUpdates: Promise<any>[] = [];
         if (redTeamId) {
             const result = winner === 'red' ? 'win' : 'loss';
-            const aggStats = getAggregatedStats(redPlayers);
+            const aggStats = getAggregatedStats(redPlayers, bluePlayers);
             const representativeId = redPlayers[0].id;
             teamUpdates.push(this.processMatch({
                 matchId,
@@ -437,12 +450,12 @@ export class GlobalDurableObject extends DurableObject {
                 result,
                 timestamp: Date.now(),
                 mode,
-                playerStats: aggStats ? { [representativeId]: aggStats } : undefined
+                playerStats: aggStats ? { [redTeamId]: aggStats } : undefined
             }));
         }
         if (blueTeamId) {
             const result = winner === 'blue' ? 'win' : 'loss';
-            const aggStats = getAggregatedStats(bluePlayers);
+            const aggStats = getAggregatedStats(bluePlayers, redPlayers);
             const representativeId = bluePlayers[0].id;
             teamUpdates.push(this.processMatch({
                 matchId,
@@ -453,7 +466,7 @@ export class GlobalDurableObject extends DurableObject {
                 result,
                 timestamp: Date.now(),
                 mode,
-                playerStats: aggStats ? { [representativeId]: aggStats } : undefined
+                playerStats: aggStats ? { [blueTeamId]: aggStats } : undefined
             }));
         }
         await Promise.all([...updates, ...teamUpdates]);
@@ -775,8 +788,9 @@ export class GlobalDurableObject extends DurableObject {
       if (match.result === 'win') stats.wins++;
       if (match.result === 'loss') stats.losses++;
       // Update Advanced Stats
-      if (match.playerStats && match.playerStats[match.userId]) {
-          const pStats = match.playerStats[match.userId];
+      const statsKey = match.teamId || match.userId;
+      if (match.playerStats && match.playerStats[statsKey]) {
+          const pStats = match.playerStats[statsKey];
           stats.goals = (stats.goals || 0) + pStats.goals;
           stats.assists = (stats.assists || 0) + pStats.assists;
           stats.ownGoals = (stats.ownGoals || 0) + pStats.ownGoals;

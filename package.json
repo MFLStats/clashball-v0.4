@@ -1,5 +1,5 @@
 {
-  "name": "kickstar-league-pf7e19bc",
+  "name": "vite-cf-do-runner",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,8 +9,7 @@
     "lint": "eslint --cache -f json --quiet .",
     "preview": "bun run build && vite preview --host 0.0.0.0 --port ${PORT:-4173}",
     "deploy": "bun run build && wrangler deploy",
-    "cf-typegen": "wrangler types",
-    "prepare": "bun .bootstrap.js || true"
+    "cf-typegen": "wrangler types"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -45,6 +44,7 @@
     "@radix-ui/react-toggle-group": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.7",
     "@tanstack/react-query": "^5.83.0",
+    "@types/canvas-confetti": "^1.9.0",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
     "canvas-confetti": "^1.9.4",
@@ -87,11 +87,9 @@
     "@cloudflare/vite-plugin": "^1.9.4",
     "@cloudflare/workers-types": "^4.20250807.0",
     "@eslint/js": "^9.22.0",
-    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22.15.3",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
-    "@types/uuid": "^11.0.0",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.21",

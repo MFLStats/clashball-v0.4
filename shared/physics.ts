@@ -5,6 +5,7 @@ export interface Vector {
 export interface Player {
   id: string;
   team: 'red' | 'blue';
+  username: string;
   pos: Vector;
   vel: Vector;
   radius: number;
@@ -54,6 +55,7 @@ export class PhysicsEngine {
         {
           id: 'p1',
           team: 'red',
+          username: 'Player 1',
           pos: { x: 100, y: 200 },
           vel: { x: 0, y: 0 },
           radius: this.PLAYER_RADIUS,
@@ -63,6 +65,7 @@ export class PhysicsEngine {
         {
           id: 'p2',
           team: 'blue',
+          username: 'Player 2',
           pos: { x: 700, y: 200 },
           vel: { x: 0, y: 0 },
           radius: this.PLAYER_RADIUS,
@@ -133,38 +136,38 @@ export class PhysicsEngine {
     if (Math.abs(b.vel.x) < 0.01) b.vel.x = 0;
     if (Math.abs(b.vel.y) < 0.01) b.vel.y = 0;
     // Ball Wall Collisions
-    if (b.pos.y < b.radius) { 
-        b.pos.y = b.radius; 
-        b.vel.y *= -this.WALL_BOUNCE; 
+    if (b.pos.y < b.radius) {
+        b.pos.y = b.radius;
+        b.vel.y *= -this.WALL_BOUNCE;
     }
-    if (b.pos.y > newState.field.height - b.radius) { 
-        b.pos.y = newState.field.height - b.radius; 
-        b.vel.y *= -this.WALL_BOUNCE; 
+    if (b.pos.y > newState.field.height - b.radius) {
+        b.pos.y = newState.field.height - b.radius;
+        b.vel.y *= -this.WALL_BOUNCE;
     }
     // Goal Detection & X-Axis Walls
     // Left Side
     if (b.pos.x < 0) {
-        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 && 
+        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 &&
                        b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
         if (isGoal) {
             newState.score.blue++;
             this.resetPositions(newState);
             return newState;
         } else {
-            b.pos.x = b.radius; 
+            b.pos.x = b.radius;
             b.vel.x *= -this.WALL_BOUNCE;
         }
     }
     // Right Side
     if (b.pos.x > newState.field.width) {
-        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 && 
+        const isGoal = b.pos.y > (newState.field.height - newState.field.goalHeight)/2 &&
                        b.pos.y < (newState.field.height + newState.field.goalHeight)/2;
         if (isGoal) {
             newState.score.red++;
             this.resetPositions(newState);
             return newState;
         } else {
-            b.pos.x = newState.field.width - b.radius; 
+            b.pos.x = newState.field.width - b.radius;
             b.vel.x *= -this.WALL_BOUNCE;
         }
     }

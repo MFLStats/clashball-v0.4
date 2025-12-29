@@ -1,4 +1,4 @@
-import { PhysicsEngine, GameState, Player } from '@shared/physics';
+import { PhysicsEngine, GameState } from '@shared/physics';
 import { WSMessage } from '@shared/types';
 export class Match {
   id: string;
@@ -16,6 +16,7 @@ export class Match {
     this.gameState.players = players.map(p => ({
       id: p.id,
       team: p.team,
+      username: p.username,
       pos: p.team === 'red' ? { x: 100, y: 200 } : { x: 700, y: 200 },
       vel: { x: 0, y: 0 },
       radius: PhysicsEngine.PLAYER_RADIUS,

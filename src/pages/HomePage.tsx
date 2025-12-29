@@ -61,8 +61,8 @@ export function HomePage() {
         return (
           <div className="animate-fade-in space-y-6">
             <div className="flex items-center justify-between">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-100 rounded-xl"
                 disabled={isProcessing}
@@ -74,15 +74,19 @@ export function HomePage() {
               </h2>
               <div className="w-24" />
             </div>
-            <GameCanvas onGameEnd={handleLocalGameEnd} winningScore={3} />
+            <GameCanvas 
+                onGameEnd={handleLocalGameEnd} 
+                winningScore={3} 
+                playerNames={{ red: 'You', blue: 'Bot (1200)' }}
+            />
           </div>
         );
       case 'online_select':
         return (
           <div className="animate-fade-in space-y-8">
              <div className="flex items-center justify-between">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-100 rounded-xl"
               >
@@ -120,8 +124,8 @@ export function HomePage() {
         return (
           <div className="animate-fade-in space-y-6">
             <div className="flex items-center justify-between">
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => setView('lobby')}
                 className="hover:bg-slate-100 rounded-xl"
               >
@@ -134,7 +138,7 @@ export function HomePage() {
           </div>
         );
       case 'lobby':
-      default:
+      default: {
         // Get 1v1 stats for display
         const stats = profile?.stats['1v1'];
         return (
@@ -161,14 +165,14 @@ export function HomePage() {
             </div>
             {/* Action Buttons */}
             <div className="flex flex-col gap-4 w-full max-w-md">
-              <button 
+              <button
                 onClick={() => setView('online_select')}
                 className="btn-kid-primary flex items-center justify-center gap-3 text-lg group w-full"
               >
                 <Globe className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
                 Play Online
               </button>
-              <button 
+              <button
                 onClick={() => setView('tournament')}
                 className="btn-kid-action flex items-center justify-center gap-3 text-lg group w-full"
               >
@@ -176,14 +180,14 @@ export function HomePage() {
                 Tournament Mode
               </button>
               <div className="flex gap-4">
-                <button 
+                <button
                     onClick={() => setView('local_game')}
                     className="btn-kid-secondary flex-1 flex items-center justify-center gap-3 text-lg"
                 >
                     <Monitor className="w-6 h-6" />
                     Practice
                 </button>
-                <button 
+                <button
                     onClick={() => setView('ranked')}
                     className="btn-kid-secondary flex-1 flex items-center justify-center gap-3 text-lg"
                 >
@@ -202,6 +206,7 @@ export function HomePage() {
             </div>
           </div>
         );
+      }
     }
   };
   return (

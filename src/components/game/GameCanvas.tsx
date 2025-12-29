@@ -9,13 +9,15 @@ interface GameCanvasProps {
   externalState?: GameState | null;
   onInput?: (input: { move: { x: number; y: number }; kick: boolean }) => void;
   botDifficulty?: 'easy' | 'medium' | 'hard';
+  playerNames?: { red: string; blue: string };
 }
-export function GameCanvas({ 
-  onGameEnd, 
-  winningScore = 3, 
-  externalState, 
+export function GameCanvas({
+  onGameEnd,
+  winningScore = 3,
+  externalState,
   onInput,
-  botDifficulty = 'medium'
+  botDifficulty = 'medium',
+  playerNames
 }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -52,6 +54,16 @@ export function GameCanvas({
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, [gameOver]);
+  // Update local names if provided
+  useEffect(() => {
+    if (!externalState && playerNames) {
+        const state = gameStateRef.current;
+        const p1 = state.players.find(p => p.team === 'red');
+        const p2 = state.players.find(p => p.team === 'blue');
+        if (p1) p1.username = playerNames.red;
+        if (p2) p2.username = playerNames.blue;
+    }
+  }, [playerNames, externalState]);
   // Game Loop
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -189,6 +201,13 @@ export function GameCanvas({
         ctx.lineWidth = 2;
         ctx.stroke();
       }
+      // Draw Username
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillText(p.username, x + 1, y - r - 8);
+      ctx.fillStyle = 'white';
+      ctx.fillText(p.username, x, y - r - 9);
     });
     // Draw Ball
     const b = state.ball;

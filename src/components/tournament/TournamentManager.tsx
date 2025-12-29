@@ -10,7 +10,7 @@ interface TournamentManagerProps {
   onExit: () => void;
 }
 const BOT_NAMES = [
-  "RoboKicker", "CircuitBreaker", "BinaryBoot", "PixelStriker", 
+  "RoboKicker", "CircuitBreaker", "BinaryBoot", "PixelStriker",
   "CyberGoalie", "NanoNet", "MechaMessi", "DroidBeckham"
 ];
 export function TournamentManager({ onExit }: TournamentManagerProps) {
@@ -63,7 +63,7 @@ export function TournamentManager({ onExit }: TournamentManagerProps) {
       if (match.isUserMatch) return; // Skip user match
       // Simulate random winner
       const winner = Math.random() > 0.5 ? match.player1 : match.player2;
-      const score = { 
+      const score = {
         p1: winner === match.player1 ? 3 : Math.floor(Math.random() * 3),
         p2: winner === match.player2 ? 3 : Math.floor(Math.random() * 3)
       };
@@ -105,17 +105,17 @@ export function TournamentManager({ onExit }: TournamentManagerProps) {
   const handleUserMatchEnd = (winner: 'red' | 'blue') => {
     const userMatch = matches.find(m => m.round === currentRound && m.isUserMatch);
     if (!userMatch) return;
-    const userIsP1 = userMatch.player1 === userTeamName;
-    const userWon = (userIsP1 && winner === 'red') || (!userIsP1 && winner === 'blue');
-    const winnerName = userWon ? userTeamName : (userIsP1 ? userMatch.player2 : userMatch.player1);
+    // In local GameCanvas, User is ALWAYS Red.
+    const userWon = winner === 'red';
+    const winnerName = userWon ? userTeamName : (userMatch.player1 === userTeamName ? userMatch.player2 : userMatch.player1);
     const updatedMatches = matches.map(m => {
       if (m.id === userMatch.id) {
         return {
           ...m,
           winner: winnerName,
           score: {
-            p1: winner === 'red' ? 3 : Math.floor(Math.random() * 3),
-            p2: winner === 'blue' ? 3 : Math.floor(Math.random() * 3)
+            p1: winnerName === m.player1 ? 3 : Math.floor(Math.random() * 3),
+            p2: winnerName === m.player2 ? 3 : Math.floor(Math.random() * 3)
           }
         };
       }
@@ -147,6 +147,8 @@ export function TournamentManager({ onExit }: TournamentManagerProps) {
   }, [currentRound, matches, tournamentState, simulateRoundMatches]);
   if (tournamentState === 'playing') {
     const difficulty = currentRound === 0 ? 'easy' : currentRound === 1 ? 'medium' : 'hard';
+    const currentMatch = matches.find(m => m.round === currentRound && m.isUserMatch);
+    const opponentName = currentMatch ? (currentMatch.player1 === userTeamName ? currentMatch.player2 : currentMatch.player1) : 'Bot';
     return (
       <div className="space-y-4 animate-fade-in">
         <div className="flex items-center justify-between">
@@ -154,13 +156,14 @@ export function TournamentManager({ onExit }: TournamentManagerProps) {
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Bracket
           </Button>
           <div className="text-xl font-display font-bold text-slate-800">
-            Round {currentRound + 1} vs Bot ({difficulty.toUpperCase()})
+            Round {currentRound + 1} vs {opponentName} ({difficulty.toUpperCase()})
           </div>
         </div>
-        <GameCanvas 
-            onGameEnd={handleUserMatchEnd} 
-            winningScore={3} 
+        <GameCanvas
+            onGameEnd={handleUserMatchEnd}
+            winningScore={3}
             botDifficulty={difficulty}
+            playerNames={{ red: userTeamName, blue: opponentName }}
         />
       </div>
     );
@@ -204,8 +207,8 @@ export function TournamentManager({ onExit }: TournamentManagerProps) {
         <Bracket matches={matches} currentRound={currentRound} />
       </div>
       <div className="flex justify-center">
-        <Button 
-            size="lg" 
+        <Button
+            size="lg"
             className="btn-kid-primary text-xl px-12 py-6 h-auto"
             onClick={startUserMatch}
         >

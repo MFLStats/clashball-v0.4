@@ -182,7 +182,8 @@ export class PhysicsEngine {
     // Calculate time-adjusted damping
     const playerDamping = Math.pow(this.PLAYER_DAMPING_BASE, dt * 60);
     const ballDamping = Math.pow(this.BALL_DAMPING_BASE, dt * 60);
-    // --- 1. Update Players ---
+    // --- 1. Update Players (Refactored for Collision) ---
+    // Phase 1: Movement & Input
     newState.players.forEach(p => {
       // Acceleration
       if (p.input.move.x !== 0 || p.input.move.y !== 0) {
@@ -210,12 +211,67 @@ export class PhysicsEngine {
       // Stop completely if very slow
       if (Math.abs(p.vel.x) < this.STOP_THRESHOLD) p.vel.x = 0;
       if (Math.abs(p.vel.y) < this.STOP_THRESHOLD) p.vel.y = 0;
-      // Wall Collisions (Players)
+      // Update Kick State
+      p.isKicking = p.input.kick;
+    });
+    // Phase 2: Player-Player Collisions
+    const players = newState.players;
+    for (let i = 0; i < players.length; i++) {
+      for (let j = i + 1; j < players.length; j++) {
+        const p1 = players[i];
+        const p2 = players[j];
+        const dx = p2.pos.x - p1.pos.x;
+        const dy = p2.pos.y - p1.pos.y;
+        const distSq = dx * dx + dy * dy;
+        const minDist = p1.radius + p2.radius;
+        if (distSq < minDist * minDist) {
+          const dist = Math.sqrt(distSq);
+          // Handle exact overlap (rare but possible)
+          let nx = 0, ny = 0;
+          if (dist === 0) {
+             nx = 1; 
+             ny = 0;
+          } else {
+             nx = dx / dist;
+             ny = dy / dist;
+          }
+          // 1. Position Correction (Separation)
+          const overlap = minDist - dist;
+          // Move each player apart by half the overlap
+          const separationX = nx * overlap * 0.5;
+          const separationY = ny * overlap * 0.5;
+          p1.pos.x -= separationX;
+          p1.pos.y -= separationY;
+          p2.pos.x += separationX;
+          p2.pos.y += separationY;
+          // 2. Velocity Resolution (Impulse)
+          const rvx = p2.vel.x - p1.vel.x;
+          const rvy = p2.vel.y - p1.vel.y;
+          const velAlongNormal = rvx * nx + rvy * ny;
+          // Only resolve if moving towards each other
+          if (velAlongNormal < 0) {
+             // Restitution (0.1 for low bounce/inelastic)
+             const e = 0.1;
+             // Impulse scalar (assuming equal mass m=1)
+             // j = -(1 + e) * velAlongNormal / (1/m1 + 1/m2)
+             let j = -(1 + e) * velAlongNormal;
+             j /= 2; 
+             const impulseX = j * nx;
+             const impulseY = j * ny;
+             p1.vel.x -= impulseX;
+             p1.vel.y -= impulseY;
+             p2.vel.x += impulseX;
+             p2.vel.y += impulseY;
+          }
+        }
+      }
+    }
+    // Phase 3: Wall Constraints
+    newState.players.forEach(p => {
       if (p.pos.x < p.radius) { p.pos.x = p.radius; p.vel.x = 0; }
       if (p.pos.x > newState.field.width - p.radius) { p.pos.x = newState.field.width - p.radius; p.vel.x = 0; }
       if (p.pos.y < p.radius) { p.pos.y = p.radius; p.vel.y = 0; }
       if (p.pos.y > newState.field.height - p.radius) { p.pos.y = newState.field.height - p.radius; p.vel.y = 0; }
-      p.isKicking = p.input.kick;
     });
     // --- 2. Update Ball ---
     const b = newState.ball;

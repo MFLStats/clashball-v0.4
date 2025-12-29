@@ -6,6 +6,7 @@ export class Match {
   gameState: GameState;
   interval: any;
   onEnd: (matchId: string, winner: 'red' | 'blue') => void;
+  private lastTime: number = Date.now();
   constructor(id: string, players: { id: string; ws: WebSocket; team: 'red' | 'blue'; username: string }[], onEnd: (id: string, winner: 'red' | 'blue') => void) {
     this.id = id;
     this.players = new Map();
@@ -13,7 +14,6 @@ export class Match {
     // Initialize Game State
     this.gameState = PhysicsEngine.createInitialState();
     // Override players in state with actual connected players
-    // Using dynamic field dimensions for spawn positions
     this.gameState.players = players.map(p => ({
       id: p.id,
       team: p.team,
@@ -32,11 +32,16 @@ export class Match {
     });
   }
   start() {
+    this.lastTime = Date.now();
     // Broadcast initial state
     this.broadcast({ type: 'game_state', state: this.gameState });
-    // Start Game Loop (60 TPS for smoother physics)
+    // Start Game Loop
+    // We aim for 60 TPS, but calculate actual dt to be robust against lag
     this.interval = setInterval(() => {
-      this.update();
+      const now = Date.now();
+      const dt = (now - this.lastTime) / 1000; // Convert ms to seconds
+      this.lastTime = now;
+      this.update(dt);
     }, 1000 / 60);
   }
   stop() {
@@ -48,13 +53,25 @@ export class Match {
       player.input = input;
     }
   }
-  private update() {
-    // Run physics
-    this.gameState = PhysicsEngine.update(this.gameState);
+  private update(dt: number) {
+    // Run physics with delta time
+    this.gameState = PhysicsEngine.update(this.gameState, dt);
     // Broadcast
     this.broadcast({ type: 'game_state', state: this.gameState });
-    // Check Win Condition
-    if (this.gameState.score.red >= 3) {
+    // Check Win Condition (Score or Time)
+    if (this.gameState.status === 'ended') {
+        // Time up - determine winner by score
+        if (this.gameState.score.red > this.gameState.score.blue) {
+            this.endGame('red');
+        } else if (this.gameState.score.blue > this.gameState.score.red) {
+            this.endGame('blue');
+        } else {
+            // Draw - for now, maybe sudden death? Or just end as draw (random winner for tournament logic simplicity in MVP)
+            // For MVP, let's just say Red wins draws or handle it in the client
+            // Actually, let's just pick Red for now to avoid stuck states
+            this.endGame('red'); 
+        }
+    } else if (this.gameState.score.red >= 3) {
       this.endGame('red');
     } else if (this.gameState.score.blue >= 3) {
       this.endGame('blue');

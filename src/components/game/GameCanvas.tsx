@@ -24,6 +24,7 @@ export function GameCanvas({
   const requestRef = useRef<number>(0);
   const gameStateRef = useRef<GameState>(PhysicsEngine.createInitialState());
   const keysRef = useRef<Record<string, boolean>>({});
+  const lastTimeRef = useRef<number>(0);
   const [score, setScore] = useState({ red: 0, blue: 0 });
   const [isPaused, setIsPaused] = useState(false);
   const [gameOver, setGameOver] = useState<'red' | 'blue' | null>(null);
@@ -69,11 +70,22 @@ export function GameCanvas({
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
+    // Initialize time
+    lastTimeRef.current = performance.now();
     const loop = () => {
       if (isPaused || gameOver) {
-        if (!gameOver) requestRef.current = requestAnimationFrame(loop);
+        if (!gameOver) {
+            lastTimeRef.current = performance.now(); // Reset time to avoid huge dt jump on resume
+            requestRef.current = requestAnimationFrame(loop);
+        }
         return;
       }
+      // Calculate Delta Time
+      const now = performance.now();
+      let dt = (now - lastTimeRef.current) / 1000; // Seconds
+      lastTimeRef.current = now;
+      // Cap dt to prevent physics explosions (e.g. tab backgrounded)
+      if (dt > 0.1) dt = 0.1;
       // 1. Process Input
       const p1Input = { move: { x: 0, y: 0 }, kick: false };
       if (keysRef.current['ArrowUp'] || keysRef.current['KeyW']) p1Input.move.y -= 1;
@@ -118,8 +130,8 @@ export function GameCanvas({
         // Online Mode: Use server state
         currentState = externalState;
       } else {
-        // Local Mode: Run physics
-        const newState = PhysicsEngine.update(gameStateRef.current);
+        // Local Mode: Run physics with dt
+        const newState = PhysicsEngine.update(gameStateRef.current, dt);
         gameStateRef.current = newState;
         currentState = newState;
       }
@@ -141,6 +153,17 @@ export function GameCanvas({
                 });
             }
         }
+      }
+      // Check for Time Limit (Local Mode)
+      if (!externalState && currentState.status === 'ended' && !gameOver) {
+          if (currentState.score.red > currentState.score.blue) {
+              handleGameOver('red');
+          } else if (currentState.score.blue > currentState.score.red) {
+              handleGameOver('blue');
+          } else {
+              // Draw - Default to Red for local practice/tournament
+              handleGameOver('red');
+          }
       }
       // 3. Render
       render(ctx, currentState);
@@ -248,7 +271,14 @@ export function GameCanvas({
     setScore({ red: 0, blue: 0 });
     setGameOver(null);
     setIsPaused(false);
+    lastTimeRef.current = performance.now();
   };
+  // Format time remaining
+  const timeRemaining = externalState 
+    ? externalState.timeRemaining 
+    : gameStateRef.current.timeRemaining;
+  const minutes = Math.floor(Math.max(0, timeRemaining) / 60);
+  const seconds = Math.floor(Math.max(0, timeRemaining) % 60);
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-4xl mx-auto">
       {/* Scoreboard - Classic Style */}
@@ -262,7 +292,7 @@ export function GameCanvas({
                 {gameOver ? 'MATCH ENDED' : `First to ${winningScore}`}
             </div>
             <div className="px-3 py-1 bg-slate-900 rounded text-white font-mono text-sm">
-                {Math.floor(gameStateRef.current.timeRemaining / 60)}:{(gameStateRef.current.timeRemaining % 60).toString().padStart(2, '0')}
+                {minutes}:{seconds.toString().padStart(2, '0')}
             </div>
         </div>
         <div className="flex items-center gap-4">

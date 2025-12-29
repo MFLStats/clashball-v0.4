@@ -34,22 +34,29 @@ export interface GameState {
   timeRemaining: number;
 }
 export class PhysicsEngine {
-  // Arcade Physics Constants - Tuned for "Tactical" feel (Phase 2 Update)
+  // Arcade Physics Constants - Tuned for Timestep Independence (Units per Second)
   static readonly PLAYER_RADIUS = 15;
   static readonly BALL_RADIUS = 10;
-  // Field Expansion
+  // Field Dimensions
   static readonly FIELD_WIDTH = 1200;
   static readonly FIELD_HEIGHT = 600;
-  static readonly GOAL_HEIGHT = 180; // Proportional increase
-  // Movement & Feel - Slowed down significantly
-  static readonly PLAYER_ACCELERATION = 0.8; // Was 3.0 - Heavy feel
-  static readonly PLAYER_MAX_SPEED = 3.5;    // Was 6.0 - Slower pace
-  static readonly PLAYER_DAMPING = 0.90;     // Was 0.88 - Smoother drift
-  // Ball Physics
-  static readonly BALL_DAMPING = 0.990;      // Was 0.992 - Slightly more friction over distance
-  static readonly KICK_STRENGTH = 6.0;       // Was 9.0 - Weaker kick for control
+  static readonly GOAL_HEIGHT = 180;
+  // Movement & Physics (Per Second)
+  // Previous: 3.5 units/frame * 60 = 210 units/sec
+  static readonly PLAYER_MAX_SPEED = 210;
+  // Previous: 0.8 units/frame^2 * 60 * 60 = 2880 units/sec^2
+  static readonly PLAYER_ACCELERATION = 2880;
+  // Damping Base (Applied per 1/60s)
+  // We use Math.pow(BASE, dt * 60) to apply it correctly for any dt
+  static readonly PLAYER_DAMPING_BASE = 0.90;
+  static readonly BALL_DAMPING_BASE = 0.990;
+  // Kick Strength (Instantaneous Velocity Change)
+  // Previous: 6.0 units/frame -> 360 units/sec
+  static readonly KICK_STRENGTH = 360;
   static readonly WALL_BOUNCE = 0.75;
   static readonly PLAYER_BOUNCE = 0.5;
+  // Velocity threshold for stopping (approx 0.01 units/frame -> 0.6 units/sec)
+  static readonly STOP_THRESHOLD = 0.6;
   static createInitialState(): GameState {
     return {
       players: [
@@ -57,7 +64,7 @@ export class PhysicsEngine {
           id: 'p1',
           team: 'red',
           username: 'Player 1',
-          pos: { x: 150, y: 300 }, // Updated for 1200x600
+          pos: { x: 150, y: 300 },
           vel: { x: 0, y: 0 },
           radius: this.PLAYER_RADIUS,
           isKicking: false,
@@ -67,7 +74,7 @@ export class PhysicsEngine {
           id: 'p2',
           team: 'blue',
           username: 'Player 2',
-          pos: { x: 1050, y: 300 }, // Updated for 1200x600
+          pos: { x: 1050, y: 300 },
           vel: { x: 0, y: 0 },
           radius: this.PLAYER_RADIUS,
           isKicking: false,
@@ -75,7 +82,7 @@ export class PhysicsEngine {
         }
       ],
       ball: {
-        pos: { x: 600, y: 300 }, // Center of 1200x600
+        pos: { x: 600, y: 300 },
         vel: { x: 0, y: 0 },
         radius: this.BALL_RADIUS
       },
@@ -86,23 +93,34 @@ export class PhysicsEngine {
         goalHeight: this.GOAL_HEIGHT
       },
       status: 'playing',
-      timeRemaining: 180 // 3 minutes
+      timeRemaining: 180 // 3 minutes in seconds
     };
   }
-  static update(state: GameState): GameState {
+  static update(state: GameState, dt: number): GameState {
     if (state.status !== 'playing') return state;
     // Deep copy for immutability
     const newState = JSON.parse(JSON.stringify(state)) as GameState;
+    // Update Time
+    newState.timeRemaining -= dt;
+    if (newState.timeRemaining <= 0) {
+        newState.timeRemaining = 0;
+        newState.status = 'ended';
+    }
+    // Calculate time-adjusted damping
+    // If dt is 1/60 (0.016s), exponent is 1.
+    const playerDamping = Math.pow(this.PLAYER_DAMPING_BASE, dt * 60);
+    const ballDamping = Math.pow(this.BALL_DAMPING_BASE, dt * 60);
     // --- 1. Update Players ---
     newState.players.forEach(p => {
-      // Acceleration Logic
+      // Acceleration
       if (p.input.move.x !== 0 || p.input.move.y !== 0) {
         // Normalize input
         const len = Math.sqrt(p.input.move.x ** 2 + p.input.move.y ** 2);
         const nx = p.input.move.x / (len || 1);
         const ny = p.input.move.y / (len || 1);
-        p.vel.x += nx * this.PLAYER_ACCELERATION;
-        p.vel.y += ny * this.PLAYER_ACCELERATION;
+        // Apply acceleration scaled by dt
+        p.vel.x += nx * this.PLAYER_ACCELERATION * dt;
+        p.vel.y += ny * this.PLAYER_ACCELERATION * dt;
       }
       // Cap Speed
       const speed = Math.sqrt(p.vel.x ** 2 + p.vel.y ** 2);
@@ -111,15 +129,15 @@ export class PhysicsEngine {
         p.vel.x *= scale;
         p.vel.y *= scale;
       }
-      // Apply Velocity
-      p.pos.x += p.vel.x;
-      p.pos.y += p.vel.y;
-      // Apply Damping (Friction)
-      p.vel.x *= this.PLAYER_DAMPING;
-      p.vel.y *= this.PLAYER_DAMPING;
+      // Apply Velocity to Position
+      p.pos.x += p.vel.x * dt;
+      p.pos.y += p.vel.y * dt;
+      // Apply Damping
+      p.vel.x *= playerDamping;
+      p.vel.y *= playerDamping;
       // Stop completely if very slow
-      if (Math.abs(p.vel.x) < 0.01) p.vel.x = 0;
-      if (Math.abs(p.vel.y) < 0.01) p.vel.y = 0;
+      if (Math.abs(p.vel.x) < this.STOP_THRESHOLD) p.vel.x = 0;
+      if (Math.abs(p.vel.y) < this.STOP_THRESHOLD) p.vel.y = 0;
       // Wall Collisions (Players)
       if (p.pos.x < p.radius) { p.pos.x = p.radius; p.vel.x = 0; }
       if (p.pos.x > newState.field.width - p.radius) { p.pos.x = newState.field.width - p.radius; p.vel.x = 0; }
@@ -129,14 +147,14 @@ export class PhysicsEngine {
     });
     // --- 2. Update Ball ---
     const b = newState.ball;
-    b.pos.x += b.vel.x;
-    b.pos.y += b.vel.y;
+    b.pos.x += b.vel.x * dt;
+    b.pos.y += b.vel.y * dt;
     // Ball Damping
-    b.vel.x *= this.BALL_DAMPING;
-    b.vel.y *= this.BALL_DAMPING;
-    if (Math.abs(b.vel.x) < 0.01) b.vel.x = 0;
-    if (Math.abs(b.vel.y) < 0.01) b.vel.y = 0;
-    // Ball Wall Collisions
+    b.vel.x *= ballDamping;
+    b.vel.y *= ballDamping;
+    if (Math.abs(b.vel.x) < this.STOP_THRESHOLD) b.vel.x = 0;
+    if (Math.abs(b.vel.y) < this.STOP_THRESHOLD) b.vel.y = 0;
+    // Ball Wall Collisions (Top/Bottom)
     if (b.pos.y < b.radius) {
         b.pos.y = b.radius;
         b.vel.y *= -this.WALL_BOUNCE;
@@ -196,7 +214,7 @@ export class PhysicsEngine {
             // Calculate impulse scalar
             // j = -(1 + e) * v_rel_norm
             const j = -(1 + this.PLAYER_BOUNCE) * velAlongNormal;
-            // Apply impulse to ball (assuming infinite mass player for arcade feel)
+            // Apply impulse to ball
             b.vel.x += j * nx;
             b.vel.y += j * ny;
             // Add some of player's velocity directly for "grip" feel
@@ -218,11 +236,12 @@ export class PhysicsEngine {
     state.ball.vel = { x: 0, y: 0 };
     state.players.forEach(p => {
       if (p.team === 'red') {
-        p.pos = { x: 150, y: state.field.height / 2 }; // Updated spawn
+        p.pos = { x: 150, y: state.field.height / 2 };
       } else {
-        p.pos = { x: state.field.width - 150, y: state.field.height / 2 }; // Updated spawn
+        p.pos = { x: state.field.width - 150, y: state.field.height / 2 };
       }
       p.vel = { x: 0, y: 0 };
     });
+    state.status = 'playing';
   }
 }

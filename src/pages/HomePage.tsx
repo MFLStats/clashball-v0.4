@@ -9,7 +9,7 @@ import { TournamentBanner } from '@/components/tournament/TournamentBanner';
 import { AuthDialog } from '@/components/auth/AuthDialog';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
 import { Button } from '@/components/ui/button';
-import { Trophy, ArrowLeft, Globe, Crown, LogOut, Users, BarChart2 } from 'lucide-react';
+import { Trophy, ArrowLeft, Globe, Crown, LogOut, Users, BarChart2, Zap, Target, Shield, Swords } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { api } from '@/lib/api';
@@ -19,6 +19,7 @@ import { OrientationLock } from '@/components/ui/orientation-lock';
 import { TournamentPage } from '@/pages/TournamentPage';
 import { Leaderboard } from '@/components/ranked/Leaderboard';
 import { SoundEngine } from '@/lib/audio';
+import { cn } from '@/lib/utils';
 type ViewState = 'lobby' | 'local_game' | 'online_select' | 'online_game' | 'custom_lobby' | 'ranked' | 'tournament_mode' | 'tournament_lobby' | 'leaderboard';
 export function HomePage() {
   const [view, setView] = useState<ViewState>('lobby');
@@ -100,8 +101,8 @@ export function HomePage() {
         );
       case 'online_select':
         return (
-          <div className="animate-fade-in space-y-8">
-             <div className="flex items-center justify-between">
+          <div className="animate-fade-in space-y-8 max-w-6xl mx-auto">
+             <div className="flex items-center justify-between mb-8">
               <Button
                 variant="ghost"
                 onClick={() => setView('lobby')}
@@ -109,21 +110,32 @@ export function HomePage() {
               >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Lobby
               </Button>
-              <h2 className="text-xl font-display font-bold text-white">Select Game Mode</h2>
+              <h2 className="text-3xl font-display font-bold text-white">Select Game Mode</h2>
               <div className="w-24" />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
-                {(['1v1', '2v2', '3v3', '4v4'] as GameMode[]).map((mode) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[
+                    { mode: '1v1', icon: Swords, color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'hover:border-yellow-400/50', desc: 'Pure Skill Duel' },
+                    { mode: '2v2', icon: Users, color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'hover:border-blue-400/50', desc: 'Team Strategy' },
+                    { mode: '3v3', icon: Shield, color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'hover:border-emerald-400/50', desc: 'Tactical Chaos' },
+                    { mode: '4v4', icon: Crown, color: 'text-purple-400', bg: 'bg-purple-400/10', border: 'hover:border-purple-400/50', desc: 'Full Scale War' }
+                ].map((item) => (
                     <button
-                        key={mode}
-                        onClick={() => startOnlineGame(mode)}
-                        className="group relative overflow-hidden p-8 rounded-xl bg-slate-900 border border-slate-800 hover:border-primary/50 hover:shadow-md transition-all duration-200 text-left"
+                        key={item.mode}
+                        onClick={() => startOnlineGame(item.mode as GameMode)}
+                        className={cn(
+                            "group relative overflow-hidden p-8 rounded-2xl bg-slate-900 border border-slate-800 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl flex flex-col items-center text-center gap-4",
+                            item.border
+                        )}
                     >
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Globe className="w-24 h-24 text-white" />
+                        <div className={cn("p-4 rounded-full transition-transform group-hover:scale-110 duration-300", item.bg)}>
+                            <item.icon className={cn("w-10 h-10", item.color)} />
                         </div>
-                        <h3 className="text-3xl font-display font-bold text-white mb-2 group-hover:text-primary transition-colors">{mode}</h3>
-                        <p className="text-slate-400 font-medium">Ranked Competitive</p>
+                        <div>
+                            <h3 className="text-4xl font-display font-bold text-white mb-1">{item.mode}</h3>
+                            <p className="text-slate-400 font-medium text-sm">{item.desc}</p>
+                        </div>
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/20 pointer-events-none" />
                     </button>
                 ))}
             </div>
@@ -191,102 +203,139 @@ export function HomePage() {
         // Get 1v1 stats for display
         const stats = profile?.stats['1v1'];
         return (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-12 animate-slide-up relative">
-            {/* Settings Button (Top Right) */}
-            <div className="absolute top-0 right-0">
-              <SettingsDialog />
-            </div>
-            {/* Logo Area */}
-            <div className="text-center space-y-4">
-              <div className="inline-block p-6 rounded-full bg-slate-900 border border-slate-800 shadow-lg relative group">
-                <Trophy className="w-16 h-16 text-primary relative z-10" />
-              </div>
-              <h1 className="text-5xl md:text-7xl font-display font-bold text-white tracking-tight">
-                Clash<span className="text-primary">Ball</span>
-              </h1>
-              <p className="text-xl text-slate-400 font-medium max-w-md mx-auto">
-                Classic physics-based soccer. Pure skill, no gimmicks.
-              </p>
-              {/* Profile / Auth Pill */}
-              {profile && stats && (
-                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 rounded-full shadow-sm border border-slate-800 animate-fade-in">
-                    <div className={`w-3 h-3 rounded-full ${stats.tier === 'Bronze' ? 'bg-amber-600' : 'bg-primary'}`} />
-                    {profile.country && (
-                      <img
-                        src={`https://flagcdn.com/w20/${profile.country.toLowerCase()}.png`}
-                        alt={profile.country}
-                        className="w-5 h-auto rounded-sm opacity-90"
-                      />
-                    )}
-                    <span className="font-bold text-slate-200">{profile.username}</span>
-                    <span className="text-slate-600">|</span>
-                    <span className="text-slate-400 font-medium">{stats.rating} MMR</span>
-                    {isAuthenticated ? (
-                      <Button variant="ghost" size="icon" className="h-6 w-6 ml-2 text-slate-400 hover:text-red-400 hover:bg-slate-800" onClick={logout}>
-                        <LogOut className="w-3 h-3" />
-                      </Button>
+          <div className="flex flex-col min-h-[80vh] animate-slide-up relative max-w-6xl mx-auto">
+            {/* Header Section */}
+            <header className="flex justify-between items-center mb-12">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary rounded-lg shadow-lg shadow-primary/20">
+                        <Trophy className="w-6 h-6 text-white" />
+                    </div>
+                    <h1 className="text-2xl font-display font-bold text-white tracking-tight">
+                        Clash<span className="text-primary">Ball</span>
+                    </h1>
+                </div>
+                <div className="flex items-center gap-4">
+                    {profile && stats ? (
+                        <div className="flex items-center gap-3 bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-slate-800 shadow-sm">
+                            <div className={`w-2 h-2 rounded-full ${stats.tier === 'Bronze' ? 'bg-amber-600' : 'bg-primary'} animate-pulse`} />
+                            <span className="font-bold text-slate-200 text-sm">{profile.username}</span>
+                            <div className="h-4 w-px bg-slate-700" />
+                            <span className="text-slate-400 font-mono text-xs">{stats.rating} MMR</span>
+                            {isAuthenticated ? (
+                                <Button variant="ghost" size="icon" className="h-6 w-6 ml-1 text-slate-500 hover:text-red-400 hover:bg-slate-800/50 rounded-full" onClick={logout}>
+                                    <LogOut className="w-3 h-3" />
+                                </Button>
+                            ) : (
+                                <AuthDialog trigger={
+                                    <Button variant="link" size="sm" className="h-6 px-2 text-primary font-bold hover:text-primary/80 text-xs">
+                                    Sign In
+                                    </Button>
+                                } />
+                            )}
+                        </div>
                     ) : (
-                      <AuthDialog trigger={
-                        <Button variant="link" size="sm" className="h-6 px-2 ml-2 text-primary font-bold hover:text-primary/80">
-                          Sign In
-                        </Button>
-                      } />
+                        <AuthDialog />
                     )}
-                 </div>
-              )}
+                    <SettingsDialog />
+                </div>
+            </header>
+            {/* Main Grid Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-12">
+                {/* Left Column: Tournament Banner & Quick Stats */}
+                <div className="lg:col-span-2 space-y-6">
+                    <TournamentBanner />
+                    {/* Primary Actions Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-64">
+                        <button
+                            onClick={() => setView('online_select')}
+                            className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-blue-600 p-8 text-left shadow-lg transition-all hover:shadow-primary/25 hover:scale-[1.02]"
+                        >
+                            <div className="absolute right-0 top-0 p-6 opacity-10 transition-transform group-hover:scale-110 group-hover:opacity-20">
+                                <Globe className="h-32 w-32 text-white" />
+                            </div>
+                            <div className="relative z-10 flex h-full flex-col justify-between">
+                                <div className="p-3 bg-white/10 w-fit rounded-xl backdrop-blur-sm">
+                                    <Zap className="h-6 w-6 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-3xl font-display font-bold text-white mb-1">Play Online</h3>
+                                    <p className="text-blue-100 font-medium">Ranked Competitive Matches</p>
+                                </div>
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => setView('custom_lobby')}
+                            className="group relative overflow-hidden rounded-3xl bg-slate-800 p-8 text-left shadow-lg border border-slate-700 transition-all hover:border-slate-600 hover:bg-slate-750 hover:scale-[1.02]"
+                        >
+                            <div className="absolute right-0 top-0 p-6 opacity-5 transition-transform group-hover:scale-110 group-hover:opacity-10">
+                                <Users className="h-32 w-32 text-white" />
+                            </div>
+                            <div className="relative z-10 flex h-full flex-col justify-between">
+                                <div className="p-3 bg-slate-700 w-fit rounded-xl">
+                                    <Users className="h-6 w-6 text-slate-300" />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-display font-bold text-white mb-1">Custom Lobby</h3>
+                                    <p className="text-slate-400 font-medium">Host Private Matches</p>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+                {/* Right Column: Secondary Actions */}
+                <div className="grid grid-cols-1 gap-6">
+                    <button
+                        onClick={() => setView('local_game')}
+                        className="group relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-left shadow-lg border border-slate-800 transition-all hover:border-slate-700 hover:bg-slate-800/50"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-500 group-hover:bg-emerald-500/20 transition-colors">
+                                <Target className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-display font-bold text-white">Practice</h3>
+                                <p className="text-sm text-slate-500">Hone your skills vs Bot</p>
+                            </div>
+                        </div>
+                    </button>
+                    <button
+                        onClick={() => setView('leaderboard')}
+                        className="group relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-left shadow-lg border border-slate-800 transition-all hover:border-slate-700 hover:bg-slate-800/50"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-amber-500/10 rounded-xl text-amber-500 group-hover:bg-amber-500/20 transition-colors">
+                                <BarChart2 className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-display font-bold text-white">Leaderboard</h3>
+                                <p className="text-sm text-slate-500">Global Rankings</p>
+                            </div>
+                        </div>
+                    </button>
+                    <button
+                        onClick={() => setView('ranked')}
+                        className="group relative overflow-hidden rounded-3xl bg-slate-900 p-6 text-left shadow-lg border border-slate-800 transition-all hover:border-slate-700 hover:bg-slate-800/50 flex-1"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-purple-500/10 rounded-xl text-purple-500 group-hover:bg-purple-500/20 transition-colors">
+                                <Crown className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-display font-bold text-white">My Profile</h3>
+                                <p className="text-sm text-slate-500">Stats & Progression</p>
+                            </div>
+                        </div>
+                    </button>
+                </div>
             </div>
-            {/* Tournament Banner */}
-            <div className="w-full max-w-md">
-              <TournamentBanner />
-            </div>
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-4 w-full max-w-md">
-              <button
-                onClick={() => setView('online_select')}
-                className="btn-kid-primary flex items-center justify-center gap-3 text-lg group w-full"
-              >
-                <Globe className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
-                Play Online
-              </button>
-              <button
-                onClick={() => setView('custom_lobby')}
-                className="btn-kid-secondary flex items-center justify-center gap-3 text-lg group w-full"
-              >
-                <Users className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
-                Custom Lobby
-              </button>
-              <div className="flex gap-4">
-                <button
-                    onClick={() => setView('local_game')}
-                    className="btn-kid-secondary flex-1 flex items-center justify-center gap-3 text-lg"
-                >
-                    <Crown className="w-6 h-6" />
-                    Practice
-                </button>
-                <button
-                    onClick={() => setView('ranked')}
-                    className="btn-kid-secondary flex-1 flex items-center justify-center gap-3 text-lg"
-                >
-                    <Users className="w-6 h-6" />
-                    Profile
-                </button>
-              </div>
-              <button
-                  onClick={() => setView('leaderboard')}
-                  className="btn-kid-secondary w-full flex items-center justify-center gap-3 text-lg"
-              >
-                  <BarChart2 className="w-6 h-6" />
-                  Leaderboard
-              </button>
-            </div>
-            {/* Footer Info */}
-            <div className="flex gap-8 text-sm font-bold text-slate-600 items-center">
-              <span className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                Online
-              </span>
-              <span>v1.2.2 ClashBall</span>
-            </div>
+            {/* Footer */}
+            <footer className="mt-auto pt-8 border-t border-slate-800/50 flex justify-between items-center text-sm text-slate-600 font-medium">
+                <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Servers Online</span>
+                </div>
+                <span>v1.3.0 ClashBall • Built with ❤️ by Aurelia</span>
+            </footer>
           </div>
         );
       }
@@ -300,7 +349,7 @@ export function HomePage() {
     <AppLayout container contentClassName="py-8">
       <OrientationLock />
       <div className="min-h-screen -m-8 p-8">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           {renderContent()}
         </div>
       </div>

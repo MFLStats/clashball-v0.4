@@ -11,12 +11,13 @@ import { cn } from '@/lib/utils';
 interface TournamentManagerProps {
   onExit: () => void;
   participants?: TournamentParticipant[];
+  startTime: number;
 }
 const BOT_NAMES = [
   "RoboKicker", "CircuitBreaker", "BinaryBoot", "PixelStriker",
   "CyberGoalie", "NanoNet", "MechaMessi", "DroidBeckham"
 ];
-export function TournamentManager({ onExit, participants }: TournamentManagerProps) {
+export function TournamentManager({ onExit, participants, startTime }: TournamentManagerProps) {
   const profile = useUserStore(s => s.profile);
   const [matches, setMatches] = useState<TournamentMatch[]>([]);
   const [currentRound, setCurrentRound] = useState(0); // 0, 1, 2
@@ -25,9 +26,23 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
   // Timer State
   const [roundStartTime, setRoundStartTime] = useState<number>(0);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
-  // Initialize Tournament with Seeding
-  useEffect(() => {
-    if (matches.length > 0) return;
+  const [isWaiting, setIsWaiting] = useState(false);
+  // Helper to generate placeholders
+  const generatePlaceholders = useCallback(() => {
+     const placeholders: TournamentMatch[] = [];
+     // Round 0 (Quarter Finals) - 4 matches
+     for (let i = 0; i < 4; i++) {
+         placeholders.push({ id: uuidv4(), round: 0, player1: '', player2: '' });
+     }
+     // Round 1 (Semi Finals) - 2 matches
+     for (let i = 0; i < 2; i++) {
+         placeholders.push({ id: uuidv4(), round: 1, player1: '', player2: '' });
+     }
+     // Round 2 (Final) - 1 match
+     placeholders.push({ id: uuidv4(), round: 2, player1: '', player2: '' });
+     return placeholders;
+  }, []);
+  const generateSeededBracket = useCallback(() => {
     // 1. Prepare Participants List
     let allPlayers: { name: string; rating: number }[] = [];
     if (participants && participants.length > 0) {
@@ -79,26 +94,51 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
     // Round 3 (Final) placeholder
     initialMatches.push({ id: uuidv4(), round: 2, player1: '', player2: '' });
     setMatches(initialMatches);
-    setRoundStartTime(Date.now() + 120000); // 2 minutes from now
-  }, [userTeamName, matches.length, participants, profile]);
+    // Set first round start time (10 seconds from now to give time to see bracket)
+    setRoundStartTime(Date.now() + 10000); 
+  }, [participants, profile, userTeamName]);
+  // Initialization Effect
+  useEffect(() => {
+    if (matches.length > 0) return;
+    const now = Date.now();
+    if (now < startTime) {
+        setIsWaiting(true);
+        setMatches(generatePlaceholders());
+    } else {
+        setIsWaiting(false);
+        generateSeededBracket();
+    }
+  }, [startTime, matches.length, generateSeededBracket, generatePlaceholders]);
   // Timer Logic
   useEffect(() => {
     if (tournamentState !== 'bracket') return;
     const interval = setInterval(() => {
         const now = Date.now();
-        const diff = Math.max(0, roundStartTime - now);
-        setTimeRemaining(diff);
-        if (diff <= 0 && roundStartTime > 0) {
-            const userMatch = matches.find(m => m.round === currentRound && m.isUserMatch && !m.winner);
-            if (userMatch) {
-                startUserMatch();
+        if (isWaiting) {
+            // Waiting for tournament start
+            const diff = Math.max(0, startTime - now);
+            setTimeRemaining(diff);
+            if (diff <= 0) {
+                setIsWaiting(false);
+                generateSeededBracket();
             }
-            setRoundStartTime(0);
+        } else {
+            // Waiting for round start
+            const diff = Math.max(0, roundStartTime - now);
+            setTimeRemaining(diff);
+            if (diff <= 0 && roundStartTime > 0) {
+                const userMatch = matches.find(m => m.round === currentRound && m.isUserMatch && !m.winner);
+                if (userMatch) {
+                    startUserMatch();
+                }
+                setRoundStartTime(0);
+            }
         }
     }, 1000);
     return () => clearInterval(interval);
-  }, [roundStartTime, tournamentState, matches, currentRound]);
+  }, [roundStartTime, tournamentState, matches, currentRound, isWaiting, startTime, generateSeededBracket]);
   const simulateRoundMatches = useCallback(() => {
+    if (isWaiting) return; // Don't simulate placeholders
     const roundMatches = matches.filter(m => m.round === currentRound && !m.winner);
     const updatedMatches = [...matches];
     let changed = false;
@@ -116,7 +156,7 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
     if (changed) {
         setMatches(updatedMatches);
     }
-  }, [matches, currentRound]);
+  }, [matches, currentRound, isWaiting]);
   const startUserMatch = () => {
     setTournamentState('playing');
   };
@@ -204,7 +244,7 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
           </div>
         </div>
         <div className="border-4 border-slate-800 rounded-xl overflow-hidden shadow-2xl">
-            <GameCanvas
+            <GameCanvas 
                 onGameEnd={handleUserMatchEnd}
                 winningScore={3}
                 botDifficulty={difficulty}
@@ -258,7 +298,7 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
             {timeRemaining > 0 && (
                 <div className="flex items-center gap-2 text-blue-400 font-mono font-bold animate-pulse bg-blue-900/20 px-3 py-1 rounded-full border border-blue-800/50 mt-2">
                     <Clock className="w-4 h-4" />
-                    Next Round: {formatTime(timeRemaining)}
+                    {isWaiting ? 'Tournament Starts In: ' : 'Next Round: '}{formatTime(timeRemaining)}
                 </div>
             )}
         </div>
@@ -269,12 +309,12 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
         <Bracket matches={matches} currentRound={currentRound} />
       </div>
       <div className="flex justify-center">
-        <Button
+        <Button 
             size="lg"
             className={cn(
                 "h-20 px-16 text-2xl font-bold rounded-2xl shadow-2xl transition-all duration-300",
-                timeRemaining > 0
-                    ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700"
+                timeRemaining > 0 
+                    ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700" 
                     : "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white hover:scale-105 hover:shadow-emerald-500/25 border-b-4 border-teal-800 active:border-b-0 active:translate-y-1"
             )}
             onClick={startUserMatch}
@@ -283,7 +323,7 @@ export function TournamentManager({ onExit, participants }: TournamentManagerPro
             {timeRemaining > 0 ? (
                 <span className="flex items-center gap-3">
                     <Loader2 className="w-6 h-6 animate-spin" />
-                    Starting in {formatTime(timeRemaining)}
+                    {isWaiting ? `Tournament starts in ${formatTime(timeRemaining)}` : `Round ${currentRound + 1} starts in ${formatTime(timeRemaining)}`}
                 </span>
             ) : (
                 <span className="flex items-center gap-3">

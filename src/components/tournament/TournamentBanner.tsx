@@ -49,7 +49,7 @@ export function TournamentBanner() {
             </div>
             <p className="text-indigo-200 font-medium text-sm flex items-center gap-2">
               <span className="px-2 py-0.5 bg-white/10 rounded text-xs font-bold border border-white/20">1v1</span>
-              <span>Next Round In:</span>
+              <span>Tournament Starts In:</span>
               <span className="font-mono font-bold text-white text-lg bg-black/30 px-2 rounded border border-white/10 shadow-inner">
                 {timeLeft}
               </span>
@@ -57,8 +57,8 @@ export function TournamentBanner() {
           </div>
         </div>
         {/* Right Action */}
-        <Button
-          size="lg"
+        <Button 
+          size="lg" 
           className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-300 hover:to-orange-400 text-slate-900 font-black border-b-4 border-orange-700 active:border-b-0 active:translate-y-1 transition-all shadow-lg group-hover:shadow-orange-500/50"
           onClick={(e) => {
             e.stopPropagation();

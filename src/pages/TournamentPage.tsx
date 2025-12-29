@@ -86,6 +86,7 @@ export function TournamentPage() {
         <TournamentManager
           onExit={() => setView('lobby')}
           participants={state?.participants}
+          startTime={state?.nextStartTime || Date.now()}
         />
       </AppLayout>
     );
@@ -106,7 +107,7 @@ export function TournamentPage() {
         {/* Hero Status Card */}
         <div className="relative w-full overflow-hidden rounded-3xl shadow-2xl border border-white/10 group">
           {/* Dynamic Background */}
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-900 z-0" />
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-slate-950 to-purple-900 z-0" />
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 z-0" />
           <div className="absolute -right-20 -top-20 w-96 h-96 bg-indigo-500 rounded-full blur-[100px] opacity-20 animate-pulse" />
           <div className="relative z-10 p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8">
@@ -141,12 +142,12 @@ export function TournamentPage() {
             {/* Actions */}
             <div className="flex flex-col gap-4 min-w-[200px]">
               {!isAuthenticated ? (
-                <AuthDialog
+                <AuthDialog 
                   trigger={
                     <Button size="lg" className="w-full h-14 text-lg font-bold bg-white text-indigo-950 hover:bg-indigo-50 shadow-xl shadow-indigo-900/20">
                       Sign In to Join
                     </Button>
-                  }
+                  } 
                 />
               ) : isJoined ? (
                 <>
@@ -219,7 +220,7 @@ export function TournamentPage() {
                     <div className="relative">
                       <div className="w-12 h-12 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center overflow-hidden group-hover:border-indigo-500 transition-colors">
                         {p.country ? (
-                           <img
+                           <img 
                              src={`https://flagcdn.com/w80/${p.country.toLowerCase()}.png`}
                              alt={p.country}
                              className="w-full h-full object-cover opacity-80 group-hover:opacity-100"

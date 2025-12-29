@@ -19,6 +19,7 @@ interface GameCanvasProps {
   currentUserId?: string;
   finalStats?: Record<string, PlayerMatchStats>;
   onLeave?: () => void;
+  onPlayAgain?: () => void;
 }
 export function GameCanvas({
   onGameEnd,
@@ -30,7 +31,8 @@ export function GameCanvas({
   playerNames,
   currentUserId,
   finalStats,
-  onLeave
+  onLeave,
+  onPlayAgain
 }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -690,7 +692,7 @@ export function GameCanvas({
                 score={score}
                 stats={summaryStats}
                 players={summaryPlayers}
-                onPlayAgain={!externalState ? handleReset : undefined}
+                onPlayAgain={onPlayAgain || (!externalState ? handleReset : undefined)}
                 onLeave={onLeave || (() => {})}
                 isLocal={!externalState}
             />

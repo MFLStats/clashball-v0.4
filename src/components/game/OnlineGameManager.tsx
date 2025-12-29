@@ -165,6 +165,21 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       // Force re-mount to reconnect
       window.location.reload();
   };
+  const handlePlayAgain = useCallback(() => {
+    setWinner(null);
+    setFinalStats(undefined);
+    setGameState(null);
+    setMatchInfo(null);
+    setStatus('searching');
+    if (userId && username) {
+        socketRef.current?.send({
+            type: 'join_queue',
+            mode,
+            userId,
+            username
+        });
+    }
+  }, [mode, userId, username]);
   if (status === 'connecting' || status === 'searching') {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-6 animate-fade-in">
@@ -257,6 +272,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             currentUserId={userId}
             finalStats={finalStats}
             onLeave={onExit}
+            onPlayAgain={handlePlayAgain}
         />
         {/* Chat Overlay */}
         <div className="absolute bottom-4 left-4 w-80 max-h-64 flex flex-col gap-2 z-20">

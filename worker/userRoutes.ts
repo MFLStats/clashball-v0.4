@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { Env } from './core-utils';
 import type {
-    DemoItem, ApiResponse, UserProfile, MatchResult, MatchResponse,
+    ApiResponse, UserProfile, MatchResult, MatchResponse,
     TeamProfile, AuthPayload, AuthResponse, TournamentState, LeaderboardEntry, GameMode,
     JoinTeamPayload, LobbyInfo
 } from '@shared/types';
@@ -15,41 +15,6 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         // Pass the raw request to the DO. The DO's fetch method will handle the Upgrade check
         // and acceptWebSocket call.
         return stub.fetch(c.req.raw);
-    });
-    // --- Existing Demo Routes ---
-    app.get('/api/demo', async (c) => {
-        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
-        const data = await stub.getDemoItems();
-        return c.json({ success: true, data } satisfies ApiResponse<DemoItem[]>);
-    });
-    app.get('/api/counter', async (c) => {
-        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
-        const data = await stub.getCounterValue();
-        return c.json({ success: true, data } satisfies ApiResponse<number>);
-    });
-    app.post('/api/counter/increment', async (c) => {
-        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
-        const data = await stub.increment();
-        return c.json({ success: true, data } satisfies ApiResponse<number>);
-    });
-    app.post('/api/demo', async (c) => {
-        const body = await c.req.json() as DemoItem;
-        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
-        const data = await stub.addDemoItem(body);
-        return c.json({ success: true, data } satisfies ApiResponse<DemoItem[]>);
-    });
-    app.put('/api/demo/:id', async (c) => {
-        const id = c.req.param('id');
-        const body = await c.req.json() as Partial<Omit<DemoItem, 'id'>>;
-        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
-        const data = await stub.updateDemoItem(id, body);
-        return c.json({ success: true, data } satisfies ApiResponse<DemoItem[]>);
-    });
-    app.delete('/api/demo/:id', async (c) => {
-        const id = c.req.param('id');
-        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
-        const data = await stub.deleteDemoItem(id);
-        return c.json({ success: true, data } satisfies ApiResponse<DemoItem[]>);
     });
     // --- Auth Routes ---
     app.post('/api/auth/signup', async (c) => {

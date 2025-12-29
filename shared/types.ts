@@ -20,10 +20,19 @@ export interface ModeStats {
   tier: Tier;
   division: 1 | 2 | 3;
 }
+export interface TeamProfile {
+  id: string;
+  name: string;
+  members: string[]; // User IDs
+  stats: Record<GameMode, ModeStats>;
+  createdAt: number;
+  creatorId: string;
+}
 export interface UserProfile {
   id: string;
   username: string;
   stats: Record<GameMode, ModeStats>;
+  teams: string[]; // List of Team IDs
   lastMatchTime: number;
 }
 export interface Team {
@@ -34,6 +43,7 @@ export interface Team {
 }
 export interface MatchResult {
   userId: string;
+  teamId?: string; // Optional: If playing as a team
   opponentRating: number; // For bot matches, this is the bot's rating
   result: 'win' | 'loss' | 'draw';
   timestamp: number;
@@ -45,6 +55,7 @@ export interface MatchResponse {
   newTier: Tier;
   newDivision: 1 | 2 | 3;
   mode: GameMode;
+  teamId?: string;
 }
 // --- Multiplayer Types ---
 export type WSMessage =

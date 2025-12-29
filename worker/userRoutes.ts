@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { Env } from './core-utils';
-import type { DemoItem, ApiResponse, UserProfile, MatchResult, MatchResponse } from '@shared/types';
+import type { DemoItem, ApiResponse, UserProfile, MatchResult, MatchResponse, TeamProfile } from '@shared/types';
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
     app.get('/api/test', (c) => c.json({ success: true, data: { name: 'CF Workers Demo' }}));
     // --- WebSocket Route ---
@@ -63,5 +63,26 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
         const data = await stub.processMatch(body);
         return c.json({ success: true, data } satisfies ApiResponse<MatchResponse>);
+    });
+    // --- Team Routes ---
+    app.post('/api/teams', async (c) => {
+        const { name, creatorId } = await c.req.json() as { name: string, creatorId: string };
+        if (!name || !creatorId) return c.json({ success: false, error: 'Missing required fields' }, 400);
+        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+        const data = await stub.createTeam(name, creatorId);
+        return c.json({ success: true, data } satisfies ApiResponse<TeamProfile>);
+    });
+    app.get('/api/teams/:id', async (c) => {
+        const id = c.req.param('id');
+        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+        const data = await stub.getTeam(id);
+        if (!data) return c.json({ success: false, error: 'Team not found' }, 404);
+        return c.json({ success: true, data } satisfies ApiResponse<TeamProfile>);
+    });
+    app.get('/api/users/:id/teams', async (c) => {
+        const id = c.req.param('id');
+        const stub = c.env.GlobalDurableObject.get(c.env.GlobalDurableObject.idFromName("global"));
+        const data = await stub.getUserTeams(id);
+        return c.json({ success: true, data } satisfies ApiResponse<TeamProfile[]>);
     });
 }

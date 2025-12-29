@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import type { DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage, GameMode, ModeStats } from '@shared/types';
+import type { DemoItem, UserProfile, MatchResult, MatchResponse, Tier, WSMessage, GameMode, ModeStats, TeamProfile } from '@shared/types';
 import { MOCK_ITEMS } from '@shared/mock-data';
 import { Match } from './match';
 // Glicko-2 Constants
@@ -204,6 +204,7 @@ export class GlobalDurableObject extends DurableObject {
                 '3v3': { ...defaultStats },
                 '4v4': { ...defaultStats }
             },
+            teams: [],
             lastMatchTime: Date.now()
         };
         await this.ctx.storage.put(key, newProfile);
@@ -230,16 +231,83 @@ export class GlobalDurableObject extends DurableObject {
                 '3v3': { ...defaultStats },
                 '4v4': { ...defaultStats }
             },
+            teams: profile.teams || [],
             lastMatchTime: profile.lastMatchTime || Date.now()
         };
         await this.ctx.storage.put(key, profile);
       }
+      // Migration: Ensure teams array exists
+      if (!profile.teams) {
+          profile.teams = [];
+          await this.ctx.storage.put(key, profile);
+      }
       return profile as UserProfile;
     }
+    // --- Team Methods ---
+    async createTeam(name: string, creatorId: string): Promise<TeamProfile> {
+        const teamId = crypto.randomUUID();
+        const defaultStats: ModeStats = {
+            rating: RATING_DEFAULT,
+            rd: RD_DEFAULT,
+            volatility: VOLATILITY_DEFAULT,
+            wins: 0,
+            losses: 0,
+            tier: 'Silver',
+            division: 3
+        };
+        const newTeam: TeamProfile = {
+            id: teamId,
+            name,
+            members: [creatorId],
+            stats: {
+                '1v1': { ...defaultStats },
+                '2v2': { ...defaultStats },
+                '3v3': { ...defaultStats },
+                '4v4': { ...defaultStats }
+            },
+            createdAt: Date.now(),
+            creatorId
+        };
+        // Save Team
+        await this.ctx.storage.put(`team_${teamId}`, newTeam);
+        // Update Creator's Profile
+        const userProfile = await this.getUserProfile(creatorId);
+        if (!userProfile.teams.includes(teamId)) {
+            userProfile.teams.push(teamId);
+            await this.ctx.storage.put(`user_${creatorId}`, userProfile);
+        }
+        return newTeam;
+    }
+    async getTeam(teamId: string): Promise<TeamProfile | null> {
+        return await this.ctx.storage.get<TeamProfile>(`team_${teamId}`) || null;
+    }
+    async getUserTeams(userId: string): Promise<TeamProfile[]> {
+        const profile = await this.getUserProfile(userId);
+        const teams: TeamProfile[] = [];
+        for (const teamId of profile.teams) {
+            const team = await this.getTeam(teamId);
+            if (team) teams.push(team);
+        }
+        return teams;
+    }
     async processMatch(match: MatchResult): Promise<MatchResponse> {
-      const profile = await this.getUserProfile(match.userId);
       const mode = match.mode || '1v1'; // Default to 1v1 if missing
-      const stats = profile.stats[mode];
+      let stats: ModeStats;
+      let entityKey: string;
+      let entity: UserProfile | TeamProfile;
+      // Determine if we are updating a Team or a User
+      if (match.teamId) {
+          entityKey = `team_${match.teamId}`;
+          const team = await this.getTeam(match.teamId);
+          if (!team) throw new Error("Team not found");
+          entity = team;
+          stats = team.stats[mode];
+      } else {
+          entityKey = `user_${match.userId}`;
+          const profile = await this.getUserProfile(match.userId);
+          entity = profile;
+          stats = profile.stats[mode];
+      }
       const s = match.result === 'win' ? 1 : match.result === 'loss' ? 0 : 0.5;
       // Glicko-2 Simplified Calculation
       const qa = Math.log(10) / 400;
@@ -255,18 +323,19 @@ export class GlobalDurableObject extends DurableObject {
       stats.rd = newRD;
       if (match.result === 'win') stats.wins++;
       if (match.result === 'loss') stats.losses++;
-      profile.lastMatchTime = Date.now();
       // Recalculate Tier
       const { tier, division } = this.calculateTier(stats.rating);
       stats.tier = tier;
       stats.division = division;
-      await this.ctx.storage.put(`user_${match.userId}`, profile);
+      // Save Entity
+      await this.ctx.storage.put(entityKey, entity);
       return {
         newRating: stats.rating,
         ratingChange: Math.round(ratingChange),
         newTier: tier,
         newDivision: division,
-        mode
+        mode,
+        teamId: match.teamId
       };
     }
     private calculateTier(rating: number): { tier: Tier, division: 1 | 2 | 3 } {

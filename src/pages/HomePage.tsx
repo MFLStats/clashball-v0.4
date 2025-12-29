@@ -5,7 +5,6 @@ import { Dashboard } from '@/components/ranked/Dashboard';
 import { OnlineGameManager } from '@/components/game/OnlineGameManager';
 import { TournamentManager } from '@/components/tournament/TournamentManager';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { Play, Trophy, Users, ArrowLeft, Globe, Monitor, Crown } from 'lucide-react';
 import { useUserStore } from '@/store/useUserStore';
 import { api } from '@/lib/api';
@@ -64,19 +63,19 @@ export function HomePage() {
               <Button
                 variant="ghost"
                 onClick={() => setView('lobby')}
-                className="hover:bg-slate-100 rounded-xl"
+                className="hover:bg-slate-800 text-slate-300 rounded-xl"
                 disabled={isProcessing}
               >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Lobby
               </Button>
-              <h2 className="text-xl font-display font-bold text-slate-800">
+              <h2 className="text-xl font-display font-bold text-white">
                 Practice vs Bot (1200 MMR)
               </h2>
               <div className="w-24" />
             </div>
-            <GameCanvas 
-                onGameEnd={handleLocalGameEnd} 
-                winningScore={3} 
+            <GameCanvas
+                onGameEnd={handleLocalGameEnd}
+                winningScore={3}
                 playerNames={{ red: 'You', blue: 'Bot (1200)' }}
             />
           </div>
@@ -88,11 +87,11 @@ export function HomePage() {
               <Button
                 variant="ghost"
                 onClick={() => setView('lobby')}
-                className="hover:bg-slate-100 rounded-xl"
+                className="hover:bg-slate-800 text-slate-300 rounded-xl"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Lobby
               </Button>
-              <h2 className="text-xl font-display font-bold text-slate-800">Select Game Mode</h2>
+              <h2 className="text-xl font-display font-bold text-white">Select Game Mode</h2>
               <div className="w-24" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
@@ -100,13 +99,13 @@ export function HomePage() {
                     <button
                         key={mode}
                         onClick={() => startOnlineGame(mode)}
-                        className="group relative overflow-hidden p-8 rounded-3xl bg-white border-4 border-slate-100 hover:border-blue-400 hover:shadow-lg transition-all duration-300 text-left"
+                        className="group relative overflow-hidden p-8 rounded-3xl bg-slate-900/80 border border-slate-700 hover:border-primary hover:shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all duration-300 text-left"
                     >
                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Globe className="w-24 h-24" />
+                            <Globe className="w-24 h-24 text-primary" />
                         </div>
-                        <h3 className="text-3xl font-display font-bold text-slate-800 mb-2">{mode}</h3>
-                        <p className="text-slate-500 font-medium">Ranked Competitive</p>
+                        <h3 className="text-3xl font-display font-bold text-white mb-2">{mode}</h3>
+                        <p className="text-slate-400 font-medium">Ranked Competitive</p>
                     </button>
                 ))}
             </div>
@@ -127,11 +126,11 @@ export function HomePage() {
               <Button
                 variant="ghost"
                 onClick={() => setView('lobby')}
-                className="hover:bg-slate-100 rounded-xl"
+                className="hover:bg-slate-800 text-slate-300 rounded-xl"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Lobby
               </Button>
-              <h2 className="text-xl font-display font-bold text-slate-800">Ranked Progression</h2>
+              <h2 className="text-xl font-display font-bold text-white">Ranked Progression</h2>
               <div className="w-24" />
             </div>
             <Dashboard />
@@ -145,21 +144,21 @@ export function HomePage() {
           <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-12 animate-slide-up">
             {/* Logo Area */}
             <div className="text-center space-y-4">
-              <div className="inline-block p-6 rounded-[2rem] bg-gradient-to-br from-energy to-energy-dark shadow-kid rotate-3 hover:rotate-6 transition-transform duration-300">
+              <div className="inline-block p-6 rounded-[2rem] bg-gradient-to-br from-primary to-blue-600 shadow-[0_0_40px_rgba(6,182,212,0.4)] rotate-3 hover:rotate-6 transition-transform duration-300">
                 <Trophy className="w-16 h-16 text-white drop-shadow-md" />
               </div>
-              <h1 className="text-5xl md:text-7xl font-display font-bold text-slate-800 tracking-tight">
-                KickStar <span className="text-kick-blue">League</span>
+              <h1 className="text-5xl md:text-7xl font-display font-bold text-white tracking-tight">
+                KickStar <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-500">League</span>
               </h1>
-              <p className="text-xl text-slate-500 font-medium max-w-md mx-auto">
+              <p className="text-xl text-slate-400 font-medium max-w-md mx-auto">
                 Physics-based competitive soccer. Climb the ranks and become a Master!
               </p>
               {profile && stats && (
-                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm border border-slate-200 animate-fade-in">
-                    <div className={`w-3 h-3 rounded-full ${stats.tier === 'Bronze' ? 'bg-amber-600' : 'bg-blue-500'}`} />
-                    <span className="font-bold text-slate-700">{profile.username}</span>
-                    <span className="text-slate-400">|</span>
-                    <span className="text-slate-500 font-medium">{stats.rating} MMR (1v1)</span>
+                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900/80 rounded-full shadow-sm border border-slate-700 animate-fade-in">
+                    <div className={`w-3 h-3 rounded-full ${stats.tier === 'Bronze' ? 'bg-amber-600' : 'bg-primary'}`} />
+                    <span className="font-bold text-slate-200">{profile.username}</span>
+                    <span className="text-slate-600">|</span>
+                    <span className="text-slate-400 font-medium">{stats.rating} MMR (1v1)</span>
                  </div>
               )}
             </div>
@@ -197,12 +196,12 @@ export function HomePage() {
               </div>
             </div>
             {/* Footer Info */}
-            <div className="flex gap-8 text-sm font-bold text-slate-400">
+            <div className="flex gap-8 text-sm font-bold text-slate-600">
               <span className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-400" />
+                <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_5px_#22c55e]" />
                 Online
               </span>
-              <span>v0.5.0 Beta</span>
+              <span>v0.6.0 Cyber</span>
             </div>
           </div>
         );
@@ -211,10 +210,7 @@ export function HomePage() {
   };
   return (
     <AppLayout container contentClassName="py-8">
-      <div className="min-h-screen bg-slate-50/50 -m-8 p-8">
-        <div className="absolute top-4 right-4 z-50">
-          <ThemeToggle />
-        </div>
+      <div className="min-h-screen bg-background -m-8 p-8">
         <div className="max-w-5xl mx-auto">
           {renderContent()}
         </div>

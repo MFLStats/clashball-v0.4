@@ -1,4 +1,4 @@
-import type { ApiResponse, UserProfile, MatchResult, MatchResponse } from '@shared/types';
+import type { ApiResponse, UserProfile, MatchResult, MatchResponse, TeamProfile } from '@shared/types';
 const API_BASE = '/api';
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${endpoint}`, {
@@ -18,6 +18,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ userId, username })
     }),
+  // Teams
+  createTeam: (name: string, creatorId: string) =>
+    fetchApi<TeamProfile>('/teams', {
+      method: 'POST',
+      body: JSON.stringify({ name, creatorId })
+    }),
+  getTeam: (teamId: string) =>
+    fetchApi<TeamProfile>(`/teams/${teamId}`),
+  getUserTeams: (userId: string) =>
+    fetchApi<TeamProfile[]>(`/users/${userId}/teams`),
   // Match
   reportMatch: (data: MatchResult) =>
     fetchApi<MatchResponse>('/match/end', {

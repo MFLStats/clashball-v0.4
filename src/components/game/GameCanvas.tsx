@@ -11,10 +11,10 @@ interface GameCanvasProps {
   botDifficulty?: 'easy' | 'medium' | 'hard';
   playerNames?: { red: string; blue: string };
 }
-export function GameCanvas({ 
-  onGameEnd, 
-  winningScore = 3, 
-  externalState, 
+export function GameCanvas({
+  onGameEnd,
+  winningScore = 3,
+  externalState,
   onInput,
   botDifficulty = 'medium',
   playerNames
@@ -34,7 +34,7 @@ export function GameCanvas({
       particleCount: 200,
       spread: 100,
       origin: { y: 0.6 },
-      colors: winner === 'red' ? ['#ef233c'] : ['#3a86ff']
+      colors: winner === 'red' ? ['#f43f5e'] : ['#06b6d4']
     });
     if (onGameEnd) onGameEnd(winner);
   }, [onGameEnd]);
@@ -137,7 +137,7 @@ export function GameCanvas({
                     particleCount: 100,
                     spread: 70,
                     origin: { y: 0.6 },
-                    colors: currentState.score.red > score.red ? ['#ef233c'] : ['#3a86ff']
+                    colors: currentState.score.red > score.red ? ['#f43f5e'] : ['#06b6d4']
                 });
             }
         }
@@ -155,11 +155,27 @@ export function GameCanvas({
     const scaleY = height / state.field.height;
     // Clear
     ctx.clearRect(0, 0, width, height);
-    // Draw Field (Grass)
-    ctx.fillStyle = '#52b788';
+    // Draw Field (Cyber Dark)
+    ctx.fillStyle = '#0f291e'; // Dark Grass
     ctx.fillRect(0, 0, width, height);
-    // Draw Lines
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    // Draw Grid Pattern
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.1)'; // Faint Neon Green Grid
+    ctx.lineWidth = 1;
+    const gridSize = 40 * scaleX;
+    ctx.beginPath();
+    for (let x = 0; x <= width; x += gridSize) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+    }
+    for (let y = 0; y <= height; y += gridSize) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+    }
+    ctx.stroke();
+    // Draw Lines (Glowing)
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
     ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(width/2, 0);
@@ -167,65 +183,68 @@ export function GameCanvas({
     ctx.moveTo(width/2 + 50 * scaleX, height/2);
     ctx.arc(width/2, height/2, 50 * scaleX, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.shadowBlur = 0; // Reset shadow
     // Draw Goals
     const goalH = state.field.goalHeight * scaleY;
     const goalTop = (height - goalH) / 2;
-    ctx.fillStyle = 'rgba(58, 134, 255, 0.2)';
+    // Blue Goal (Left)
+    ctx.fillStyle = 'rgba(6, 182, 212, 0.2)';
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#06b6d4';
     ctx.fillRect(0, goalTop, 40 * scaleX, goalH);
-    ctx.fillStyle = 'rgba(239, 35, 60, 0.2)';
+    // Red Goal (Right)
+    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
+    ctx.shadowColor = '#f43f5e';
     ctx.fillRect(width - 40 * scaleX, goalTop, 40 * scaleX, goalH);
+    ctx.shadowBlur = 0;
     // Draw Players
     state.players.forEach(p => {
       const x = p.pos.x * scaleX;
       const y = p.pos.y * scaleY;
       const r = p.radius * scaleX;
+      const color = p.team === 'red' ? '#f43f5e' : '#06b6d4';
       // Kick Indicator (Visual Pulse)
       if (p.isKicking) {
         ctx.beginPath();
         ctx.arc(x, y, r + 8, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.strokeStyle = `rgba(255, 255, 255, 0.8)`;
         ctx.lineWidth = 4;
         ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(x, y, r + 12, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
       }
-      // Shadow
-      ctx.beginPath();
-      ctx.arc(x + 2, y + 2, r, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      ctx.fill();
+      // Glow
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = color;
       // Body
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = p.team === 'red' ? '#ef233c' : '#3a86ff';
+      ctx.fillStyle = color;
       ctx.fill();
       // Border
       ctx.strokeStyle = 'white';
       ctx.lineWidth = 3;
       ctx.stroke();
+      ctx.shadowBlur = 0;
       // Draw Username
       ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillText(p.username, x + 1, y - r - 8);
+      ctx.fillStyle = 'black';
+      ctx.lineWidth = 3;
+      ctx.strokeText(p.username, x, y - r - 10);
       ctx.fillStyle = 'white';
-      ctx.fillText(p.username, x, y - r - 9);
+      ctx.fillText(p.username, x, y - r - 10);
     });
     // Draw Ball
     const b = state.ball;
     const bx = b.pos.x * scaleX;
     const by = b.pos.y * scaleY;
     const br = b.radius * scaleX;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = 'white';
     ctx.beginPath();
     ctx.arc(bx, by, br, 0, Math.PI * 2);
     ctx.fillStyle = 'white';
     ctx.fill();
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    ctx.shadowBlur = 0;
   };
   const handleReset = () => {
     gameStateRef.current = PhysicsEngine.createInitialState();
@@ -236,17 +255,17 @@ export function GameCanvas({
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-4xl mx-auto">
       {/* Scoreboard */}
-      <div className="flex items-center justify-between w-full px-8 py-4 bg-white rounded-2xl shadow-sm border-2 border-slate-100">
+      <div className="flex items-center justify-between w-full px-8 py-4 bg-slate-900/80 backdrop-blur rounded-2xl shadow-lg border border-slate-700">
         <div className="flex items-center gap-4">
-          <div className="w-4 h-4 rounded-full bg-red-500" />
-          <span className="text-3xl font-display font-bold text-slate-800">{score.red}</span>
+          <div className="w-4 h-4 rounded-full bg-kick-red shadow-[0_0_10px_#f43f5e]" />
+          <span className="text-3xl font-display font-bold text-white">{score.red}</span>
         </div>
         <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">
             {gameOver ? 'MATCH ENDED' : `First to ${winningScore}`}
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-3xl font-display font-bold text-slate-800">{score.blue}</span>
-          <div className="w-4 h-4 rounded-full bg-blue-500" />
+          <span className="text-3xl font-display font-bold text-white">{score.blue}</span>
+          <div className="w-4 h-4 rounded-full bg-kick-blue shadow-[0_0_10px_#06b6d4]" />
         </div>
       </div>
       {/* Game Area */}
@@ -259,12 +278,12 @@ export function GameCanvas({
         />
         {/* Game Over Overlay */}
         {gameOver && (
-            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center animate-fade-in backdrop-blur-sm z-10">
-                <Trophy className={`w-16 h-16 mb-4 ${gameOver === 'red' ? 'text-red-500' : 'text-blue-500'}`} />
-                <h2 className="text-4xl font-display font-bold text-white mb-2">
-                    {gameOver === 'red' ? 'VICTORY!' : 'DEFEAT'}
+            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center animate-fade-in backdrop-blur-sm z-10">
+                <Trophy className={`w-16 h-16 mb-4 ${gameOver === 'red' ? 'text-kick-red drop-shadow-[0_0_15px_#f43f5e]' : 'text-kick-blue drop-shadow-[0_0_15px_#06b6d4]'}`} />
+                <h2 className="text-4xl font-display font-bold text-white mb-2 tracking-wider">
+                    {gameOver === 'red' ? 'RED VICTORY' : 'BLUE VICTORY'}
                 </h2>
-                <p className="text-white/80 mb-6">Match results are being processed...</p>
+                <p className="text-slate-300 mb-6">Match results are being processed...</p>
                 <Button onClick={handleReset} variant="secondary" className="btn-kid-secondary">
                     Play Again
                 </Button>
@@ -273,16 +292,16 @@ export function GameCanvas({
         {/* Controls Overlay (Visible on Hover/Pause) */}
         {!gameOver && !externalState && (
             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button size="icon" variant="secondary" onClick={handleReset}>
+            <Button size="icon" variant="secondary" onClick={handleReset} className="bg-slate-800 text-white hover:bg-slate-700">
                 <RotateCcw className="w-4 h-4" />
             </Button>
-            <Button size="icon" variant="secondary" onClick={() => setIsPaused(!isPaused)}>
+            <Button size="icon" variant="secondary" onClick={() => setIsPaused(!isPaused)} className="bg-slate-800 text-white hover:bg-slate-700">
                 <Play className="w-4 h-4" />
             </Button>
             </div>
         )}
       </div>
-      <div className="text-sm text-slate-500 font-medium">
+      <div className="text-sm text-slate-500 font-medium font-mono">
         Controls: WASD to Move • SPACE to Kick
       </div>
     </div>

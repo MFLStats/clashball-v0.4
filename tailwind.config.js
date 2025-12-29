@@ -14,7 +14,7 @@ export default {
   				'sans-serif'
   			],
   			display: [
-  				'Fredoka', 
+  				'Fredoka',
                 'Varela Round',
   				'Cal Sans',
   				'Inter',
@@ -103,37 +103,36 @@ export default {
   				border: 'hsl(var(--sidebar-border))',
   				ring: 'hsl(var(--sidebar-ring))'
   			},
-            // KickStar Custom Palette
+            // Cyber Soccer Custom Palette
             grass: {
-                DEFAULT: '#74c69d',
-                light: '#95d5b2',
-                dark: '#52b788',
-                accent: '#40916c'
+                DEFAULT: '#0f291e', // Dark Night Turf
+                light: '#1a4031',
+                dark: '#051f15',
+                accent: '#10b981'   // Neon Green Accent
             },
             sky: {
-                DEFAULT: '#a2d2ff',
-                light: '#bde0fe',
-                dark: '#8ecae6'
+                DEFAULT: '#0f172a', // Deep Night Sky
+                light: '#1e293b',
+                dark: '#020617'
             },
             energy: {
-                DEFAULT: '#ffb703',
-                light: '#ffd60a',
-                dark: '#fb8500'
+                DEFAULT: '#facc15', // Neon Yellow
+                light: '#fde047',
+                dark: '#eab308'
             },
             kick: {
-                blue: '#3a86ff',
-                red: '#ef233c'
+                blue: '#06b6d4',    // Neon Cyan
+                red: '#f43f5e'      // Neon Pink
             }
   		},
   		boxShadow: {
   			soft: '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
-  			glow: '0 0 20px -5px rgba(99, 102, 241, 0.4)',
-  			'glow-lg': '0 0 40px -10px rgba(99, 102, 241, 0.3)',
+  			glow: '0 0 20px -5px rgba(6, 182, 212, 0.4)',
+  			'glow-lg': '0 0 40px -10px rgba(6, 182, 212, 0.3)',
+            'neon': '0 0 10px theme("colors.cyan.500")',
+            'neon-red': '0 0 10px theme("colors.rose.500")',
   			primary: '0 0 20px -5px hsl(var(--primary) / 0.4)',
-  			glass: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
-            'kid': '0 6px 0 0 rgba(0,0,0,0.15)', // 3D button effect
-            'kid-hover': '0 8px 0 0 rgba(0,0,0,0.15)',
-            'kid-active': '0 2px 0 0 rgba(0,0,0,0.15)'
+  			glass: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
   		},
   		keyframes: {
   			'fade-in': {
@@ -153,8 +152,8 @@ export default {
   				'100%': { transform: 'translateX(100%)' }
   			},
   			glow: {
-  				'0%, 100%': { boxShadow: '0 0 20px -5px rgba(99, 102, 241, 0.4)' },
-  				'50%': { boxShadow: '0 0 40px -5px rgba(99, 102, 241, 0.6)' }
+  				'0%, 100%': { boxShadow: '0 0 20px -5px rgba(6, 182, 212, 0.4)' },
+  				'50%': { boxShadow: '0 0 40px -5px rgba(6, 182, 212, 0.6)' }
   			},
   			float: {
   				'0%, 100%': { transform: 'translateY(0px)' },
@@ -186,10 +185,10 @@ export default {
   		},
   		backgroundImage: {
   			'gradient-rainbow': 'linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #f5576c 75%, #4facfe 100%)',
-  			'gradient-primary': 'linear-gradient(135deg, #667eea, #764ba2)',
-            'gradient-grass': 'linear-gradient(180deg, #74c69d 0%, #52b788 100%)',
-            'gradient-sky': 'linear-gradient(180deg, #a2d2ff 0%, #8ecae6 100%)',
-  			'gradient-mesh': 'radial-gradient(at 40% 20%, hsla(28,100%,74%,1) 0px, transparent 50%), radial-gradient(at 80% 0%, hsla(189,100%,56%,1) 0px, transparent 50%), radial-gradient(at 0% 50%, hsla(355,100%,93%,1) 0px, transparent 50%), radial-gradient(at 80% 50%, hsla(340,100%,76%,1) 0px, transparent 50%), radial-gradient(at 0% 100%, hsla(22,100%,77%,1) 0px, transparent 50%), radial-gradient(at 80% 100%, hsla(242,100%,70%,1) 0px, transparent 50%), radial-gradient(at 0% 0%, hsla(343,100%,76%,1) 0px, transparent 50%)'
+  			'gradient-primary': 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+            'gradient-grass': 'linear-gradient(180deg, #0f291e 0%, #051f15 100%)',
+            'gradient-sky': 'linear-gradient(180deg, #0f172a 0%, #020617 100%)',
+  			'gradient-mesh': 'radial-gradient(at 40% 20%, hsla(28,100%,74%,0.1) 0px, transparent 50%), radial-gradient(at 80% 0%, hsla(189,100%,56%,0.1) 0px, transparent 50%), radial-gradient(at 0% 50%, hsla(355,100%,93%,0.1) 0px, transparent 50%)'
   		}
   	}
   },

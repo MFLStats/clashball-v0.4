@@ -164,7 +164,7 @@ export type WSMessage =
   | { type: 'match_found'; matchId: string; team: 'red' | 'blue'; opponent?: string }
   | { type: 'game_state'; state: any } // Typed as 'any' here to avoid circular dependency, but effectively GameState
   | { type: 'game_events'; events: GameEvent[] }
-  | { type: 'game_over'; winner: 'red' | 'blue' }
+  | { type: 'game_over'; winner: 'red' | 'blue'; stats?: Record<string, PlayerMatchStats> }
   | { type: 'error'; message: string }
   | { type: 'ping' }
   | { type: 'pong' }

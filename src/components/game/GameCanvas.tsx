@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { PhysicsEngine, GameState } from '@shared/physics';
+import { PlayerMatchStats } from '@shared/types';
 import confetti from 'canvas-confetti';
 import { Button } from '@/components/ui/button';
-import { Play, RotateCcw, Trophy } from 'lucide-react';
+import { Play, RotateCcw } from 'lucide-react';
 import { TouchControls } from './TouchControls';
 import { SoundEngine } from '@/lib/audio';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { PostMatchSummary } from './PostMatchSummary';
 interface GameCanvasProps {
   onGameEnd?: (winner: 'red' | 'blue') => void;
   winningScore?: number;
@@ -14,6 +16,8 @@ interface GameCanvasProps {
   botDifficulty?: 'easy' | 'medium' | 'hard';
   playerNames?: { red: string; blue: string };
   currentUserId?: string;
+  finalStats?: Record<string, PlayerMatchStats>; // Stats from server
+  onLeave?: () => void; // Callback for leaving from summary
 }
 export function GameCanvas({
   onGameEnd,
@@ -22,7 +26,9 @@ export function GameCanvas({
   onInput,
   botDifficulty = 'medium',
   playerNames,
-  currentUserId
+  currentUserId,
+  finalStats,
+  onLeave
 }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -36,6 +42,8 @@ export function GameCanvas({
   });
   const lastTimeRef = useRef<number>(0);
   const latestExternalStateRef = useRef<GameState | null>(null);
+  // Local Stats Tracking
+  const localStatsRef = useRef<Record<string, PlayerMatchStats>>({});
   const [score, setScore] = useState({ red: 0, blue: 0 });
   const [isPaused, setIsPaused] = useState(false);
   const [gameOver, setGameOver] = useState<'red' | 'blue' | null>(null);
@@ -56,6 +64,21 @@ export function GameCanvas({
   useEffect(() => {
     latestExternalStateRef.current = externalState || null;
   }, [externalState]);
+  // Initialize Local Stats
+  useEffect(() => {
+    if (!externalState) {
+        // Initialize stats for p1 and p2
+        ['p1', 'p2'].forEach(id => {
+            localStatsRef.current[id] = {
+                goals: 0,
+                assists: 0,
+                ownGoals: 0,
+                isMvp: false,
+                cleanSheet: false
+            };
+        });
+    }
+  }, [externalState]);
   // Handle Game Over Logic
   const handleGameOver = useCallback((winner: 'red' | 'blue') => {
     setGameOver(winner);
@@ -68,8 +91,29 @@ export function GameCanvas({
         colors: winner === 'red' ? ['#e56e56'] : ['#5689e5']
       });
     }
+    // Calculate MVP for local game
+    if (!externalState) {
+        let maxScore = -1;
+        let mvpId = '';
+        Object.entries(localStatsRef.current).forEach(([id, stats]) => {
+            const score = (stats.goals * 10) + (stats.assists * 5) - (stats.ownGoals * 5);
+            if (score > maxScore) {
+                maxScore = score;
+                mvpId = id;
+            }
+            // Clean Sheet logic (simplified for local)
+            const player = gameStateRef.current.players.find(p => p.id === id);
+            if (player) {
+                const opponentScore = player.team === 'red' ? gameStateRef.current.score.blue : gameStateRef.current.score.red;
+                if (opponentScore === 0) stats.cleanSheet = true;
+            }
+        });
+        if (mvpId && localStatsRef.current[mvpId]) {
+            localStatsRef.current[mvpId].isMvp = true;
+        }
+    }
     if (onGameEnd) onGameEnd(winner);
-  }, [onGameEnd, particles]);
+  }, [onGameEnd, particles, externalState]);
   // Input Handling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -320,13 +364,32 @@ export function GameCanvas({
         const { state: newState, events } = PhysicsEngine.update(gameStateRef.current, dt);
         gameStateRef.current = newState;
         displayStateRef.current = newState;
-        // Play Local Sounds
+        // Play Local Sounds & Track Stats
         events.forEach(event => {
             switch (event.type) {
                 case 'kick': SoundEngine.playKick(); break;
                 case 'wall': SoundEngine.playWall(); break;
                 case 'player': SoundEngine.playPlayer(); break;
-                case 'goal': SoundEngine.playGoal(); break;
+                case 'goal': {
+                    SoundEngine.playGoal();
+                    // Track Stats
+                    if (event.team && event.scorerId) {
+                        const scorer = newState.players.find(p => p.id === event.scorerId);
+                        const stats = localStatsRef.current[event.scorerId];
+                        if (scorer && stats) {
+                            if (scorer.team === event.team) {
+                                stats.goals++;
+                            } else {
+                                stats.ownGoals++;
+                            }
+                        }
+                    }
+                    if (event.assisterId) {
+                        const stats = localStatsRef.current[event.assisterId];
+                        if (stats) stats.assists++;
+                    }
+                    break;
+                }
                 case 'whistle': SoundEngine.playWhistle(); break;
             }
         });
@@ -373,6 +436,16 @@ export function GameCanvas({
   const handleReset = () => {
     gameStateRef.current = PhysicsEngine.createInitialState();
     displayStateRef.current = PhysicsEngine.createInitialState();
+    // Reset Stats
+    ['p1', 'p2'].forEach(id => {
+        localStatsRef.current[id] = {
+            goals: 0,
+            assists: 0,
+            ownGoals: 0,
+            isMvp: false,
+            cleanSheet: false
+        };
+    });
     setScore({ red: 0, blue: 0 });
     setGameOver(null);
     setIsPaused(false);
@@ -384,6 +457,17 @@ export function GameCanvas({
     : gameStateRef.current.timeRemaining;
   const minutes = Math.floor(Math.max(0, timeRemaining) / 60);
   const seconds = Math.floor(Math.max(0, timeRemaining) % 60);
+  // Prepare data for summary
+  const summaryStats = finalStats || localStatsRef.current;
+  const summaryPlayers = externalState
+    ? externalState.players.map(p => ({ id: p.id, username: p.username, team: p.team }))
+    : gameStateRef.current.players.map(p => ({ id: p.id, username: p.username, team: p.team }));
+  // Determine user team for victory/defeat message
+  // In local mode, user is always 'red' (p1)
+  // In online mode, we need to find the user in the players list
+  const userTeam = externalState
+    ? summaryPlayers.find(p => p.id === currentUserId)?.team
+    : 'red';
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-4xl mx-auto">
       {/* Scoreboard - Clean Style */}
@@ -415,18 +499,18 @@ export function GameCanvas({
         />
         {/* Touch Controls Overlay */}
         <TouchControls onUpdate={handleTouchUpdate} />
-        {/* Game Over Overlay */}
+        {/* Post Match Summary Overlay */}
         {gameOver && (
-            <div className="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center animate-fade-in z-30">
-                <Trophy className={`w-20 h-20 mb-4 ${gameOver === 'red' ? 'text-haxball-red' : 'text-haxball-blue'}`} />
-                <h2 className="text-5xl font-display font-bold text-white mb-2 tracking-wider">
-                    {gameOver === 'red' ? 'RED VICTORY' : 'BLUE VICTORY'}
-                </h2>
-                <p className="text-slate-400 mb-8 font-medium text-lg">Match results are being processed...</p>
-                <Button onClick={handleReset} size="lg" className="btn-kid-secondary border-slate-700">
-                    Play Again
-                </Button>
-            </div>
+            <PostMatchSummary
+                winner={gameOver}
+                userTeam={userTeam}
+                score={score}
+                stats={summaryStats}
+                players={summaryPlayers}
+                onPlayAgain={!externalState ? handleReset : undefined}
+                onLeave={onLeave || (() => {})}
+                isLocal={!externalState}
+            />
         )}
         {/* Controls Overlay (Visible on Hover/Pause) */}
         {!gameOver && !externalState && (

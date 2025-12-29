@@ -148,11 +148,10 @@ export class Match {
         const stats = this.matchStats.get(mvpId);
         if (stats) stats.isMvp = true;
     }
-    // Attach stats to match result logic via callback
-    // We need to expose matchStats to the DurableObject
-    // Since onEnd signature is fixed, we'll attach it to the match object or handle it in DO via a getter?
-    // Better: Update onEnd signature in DO, but here we can just expose it as a public property
-    this.broadcast({ type: 'game_over', winner });
+    // Convert Map to Object for transmission
+    const statsObj = Object.fromEntries(this.matchStats);
+    // Broadcast Game Over with Stats
+    this.broadcast({ type: 'game_over', winner, stats: statsObj });
     this.onEnd(this.id, winner);
   }
   private broadcast(msg: WSMessage) {

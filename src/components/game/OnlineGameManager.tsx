@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameCanvas } from './GameCanvas';
 import { GameState } from '@shared/physics';
-import { WSMessage, GameMode } from '@shared/types';
+import { WSMessage, GameMode, PlayerMatchStats } from '@shared/types';
 import { useUserStore } from '@/store/useUserStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [ping, setPing] = useState<number | null>(null);
+  const [finalStats, setFinalStats] = useState<Record<string, PlayerMatchStats> | undefined>(undefined);
   const wsRef = useRef<WebSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const lastPingTimeRef = useRef<number>(0);
@@ -75,12 +76,11 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
       case 'game_over': {
         const currentTeam = matchInfoRef.current?.team;
         SoundEngine.playWhistle();
-        toast(msg.winner === currentTeam ? 'VICTORY!' : 'DEFEAT', {
-          description: `Winner: ${msg.winner.toUpperCase()}`
-        });
-        setTimeout(() => {
-            onExit();
-        }, 3000);
+        // Store stats for summary
+        if (msg.stats) {
+            setFinalStats(msg.stats);
+        }
+        // Don't auto-exit, let user view summary
         break;
       }
       case 'chat': {
@@ -111,7 +111,7 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
         break;
       }
     }
-  }, [onExit]);
+  }, []);
   // Ping Loop
   useEffect(() => {
     const interval = setInterval(() => {
@@ -235,6 +235,8 @@ export function OnlineGameManager({ mode, onExit, matchId }: OnlineGameManagerPr
             onInput={handleInput}
             winningScore={3}
             currentUserId={profile?.id}
+            finalStats={finalStats}
+            onLeave={onExit}
         />
         {/* Chat Overlay */}
         <div className="absolute bottom-4 left-4 w-80 max-h-64 flex flex-col gap-2 z-20">
